@@ -1,6 +1,7 @@
 import { loadConfig } from "./config.js";
 import { createDb, createPool } from "@kal-el/db";
 import { processDueEvents } from "./dispatcher.js";
+import { promoteScheduledArticles } from "./scheduler.js";
 
 const config = loadConfig();
 const pool = createPool(config.DATABASE_URL);
@@ -22,6 +23,10 @@ async function tick() {
     const summary = await processDueEvents(db);
     if (summary.claimed > 0) {
       console.log(`[worker] ${JSON.stringify(summary)}`);
+    }
+    const promoted = await promoteScheduledArticles(db);
+    if (promoted.promoted > 0) {
+      console.log(`[worker] scheduled publish ${JSON.stringify(promoted)}`);
     }
   } catch (err) {
     console.error("[worker] tick failed", err);
