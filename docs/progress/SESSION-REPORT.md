@@ -4,6 +4,23 @@ Date: 2026-08-14
 Branches: `main` (bootstrap) → `feat/foundation-phase-1-3`
 Start: bootstrap-only repository. No Git repository existed; `maquinanerd/kal-el` remote is empty.
 
+## Continuation (second run)
+
+Resumed from the exact repository state and advanced:
+- **Phase 7 completion**: scheduled-publish promotion in the worker (guarded
+  UPDATE + exactly-once outbox event; 3 tests).
+- **Phase 10**: `packages/importer` — WordPress pipeline (snapshot → normalize →
+  dry-run → import via REST SDK → reconcile) + Payload adapter framework; API
+  contract extended with `status`/`publishedAt`/`scheduledAt` create + externalKey
+  filter/lookup (8 tests).
+- **Phase 11**: logical backup/restore CLI + disaster-rehearsal tests (JSON
+  CLI-path round-trip); dependency upgrades (drizzle-orm 0.45.2 fixes a high
+  advisory, @fastify/swagger-ui fixes @fastify/static) → `pnpm audit` 0 known
+  vulns; global rate limiting; CI now runs audit + gitleaks.
+- **Phase 12**: `docs/FINAL-REPORT.md` (draft RC) with acceptance status and the
+  human staging/production runbook.
+- Total suite: **80 tests** green; typecheck/lint/build green.
+
 ## What was executed (roadmap order)
 
 | Item | Status | Evidence |
