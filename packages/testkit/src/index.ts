@@ -1,5 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:net";
 import type { Pool } from "pg";
 import EmbeddedPostgres from "embedded-postgres";
 import { createDb, createPool, runMigrations } from "@kal-el/db";
@@ -12,6 +13,24 @@ let embeddedUrl: string | null = null;
 let started = false;
 
 /**
+ * Find a free TCP port to avoid collisions between parallel test processes.
+ */
+async function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address();
+      if (addr && typeof addr === "object") {
+        srv.close(() => resolve(addr.port));
+      } else {
+        srv.close(() => reject(new Error("could not allocate a free port")));
+      }
+    });
+  });
+}
+
+/**
  * Integration tests need a real PostgreSQL. When `DATABASE_URL` is not set
  * (local dev without a running docker-compose), an embedded PostgreSQL is
  * started on a per-process ephemeral port and data directory. CI and prod
@@ -21,7 +40,7 @@ export async function ensureTestPostgres(): Promise<string> {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   if (started && embeddedUrl) return embeddedUrl;
 
-  const port = 55000 + (process.pid % 500);
+  const port = await freePort();
   const dir = join(tmpdir(), `kalel-test-pg-${process.pid}-${Date.now()}`);
   const instance = new EmbeddedPostgres({
     databaseDir: dir,
