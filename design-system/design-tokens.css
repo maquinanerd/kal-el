@@ -1,0 +1,57 @@
+:root {
+  --peg-canvas: #fafafa;
+  --peg-surface: #ffffff;
+  --peg-surface-subtle: #f7f7f8;
+  --peg-surface-muted: #f2f2f3;
+  --peg-border: #e5e5e7;
+  --peg-border-strong: #d5d5d8;
+  --peg-text-primary: #171719;
+  --peg-text-secondary: #5f6065;
+  --peg-text-tertiary: #8e8f94;
+  --peg-text-disabled: #b6b7bb;
+
+  --peg-success: #16a34a;
+  --peg-warning: #d97706;
+  --peg-danger: #dc2626;
+  --peg-info: #2563eb;
+
+  --peg-radius-xs: 4px;
+  --peg-radius-sm: 6px;
+  --peg-radius-md: 8px;
+  --peg-radius-lg: 12px;
+  --peg-radius-xl: 16px;
+
+  --peg-space-1: 4px;
+  --peg-space-2: 8px;
+  --peg-space-3: 12px;
+  --peg-space-4: 16px;
+  --peg-space-5: 20px;
+  --peg-space-6: 24px;
+  --peg-space-8: 32px;
+  --peg-space-10: 40px;
+  --peg-space-12: 48px;
+  --peg-space-16: 64px;
+
+  --peg-control-xs: 28px;
+  --peg-control-sm: 32px;
+  --peg-control-md: 36px;
+  --peg-control-lg: 40px;
+
+  --peg-sidebar-width: 240px;
+  --peg-rail-width: 64px;
+  --peg-topbar-height: 52px;
+  --peg-inspector-width: 336px;
+  --peg-table-row-height: 52px;
+}
+
+[data-theme='dark'] {
+  --peg-canvas: #19191b;
+  --peg-surface: #202022;
+  --peg-surface-subtle: #262629;
+  --peg-surface-muted: #2d2d30;
+  --peg-border: #353538;
+  --peg-border-strong: #454549;
+  --peg-text-primary: #f5f5f5;
+  --peg-text-secondary: #b6b6ba;
+  --peg-text-tertiary: #8c8c91;
+}

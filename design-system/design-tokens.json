@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json.schemastore.org/design-tokens.json",
+  "meta": {
+    "name": "PEG Product Design System",
+    "status": "baseline-requires-visual-calibration"
+  },
+  "color": {
+    "light": {
+      "canvas": "#FAFAFA",
+      "surface": "#FFFFFF",
+      "surfaceSubtle": "#F7F7F8",
+      "surfaceMuted": "#F2F2F3",
+      "border": "#E5E5E7",
+      "borderStrong": "#D5D5D8",
+      "textPrimary": "#171719",
+      "textSecondary": "#5F6065",
+      "textTertiary": "#8E8F94",
+      "textDisabled": "#B6B7BB"
+    },
+    "dark": {
+      "canvas": "#19191B",
+      "surface": "#202022",
+      "surfaceSubtle": "#262629",
+      "surfaceMuted": "#2D2D30",
+      "border": "#353538",
+      "borderStrong": "#454549",
+      "textPrimary": "#F5F5F5",
+      "textSecondary": "#B6B6BA",
+      "textTertiary": "#8C8C91"
+    },
+    "semantic": {
+      "success": "#16A34A",
+      "warning": "#D97706",
+      "danger": "#DC2626",
+      "info": "#2563EB"
+    }
+  },
+  "radius": {
+    "xs": 4,
+    "sm": 6,
+    "md": 8,
+    "lg": 12,
+    "xl": 16
+  },
+  "spacing": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48,
+    "16": 64
+  },
+  "controlHeight": {
+    "xs": 28,
+    "sm": 32,
+    "md": 36,
+    "lg": 40
+  },
+  "layout": {
+    "sidebar": 240,
+    "compactRail": 64,
+    "topbar": 52,
+    "inspector": 336,
+    "editorMin": 720,
+    "editorMax": 900,
+    "tableRow": 52
+  },
+  "typography": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif",
+    "display": { "fontSize": 48, "lineHeight": 56, "fontWeight": 600 },
+    "h1": { "fontSize": 36, "lineHeight": 44, "fontWeight": 600 },
+    "h2": { "fontSize": 30, "lineHeight": 38, "fontWeight": 600 },
+    "h3": { "fontSize": 24, "lineHeight": 32, "fontWeight": 600 },
+    "h4": { "fontSize": 18, "lineHeight": 26, "fontWeight": 600 },
+    "bodyLg": { "fontSize": 16, "lineHeight": 24, "fontWeight": 400 },
+    "body": { "fontSize": 14, "lineHeight": 21, "fontWeight": 400 },
+    "bodySm": { "fontSize": 13, "lineHeight": 19, "fontWeight": 400 },
+    "label": { "fontSize": 13, "lineHeight": 18, "fontWeight": 500 },
+    "caption": { "fontSize": 12, "lineHeight": 17, "fontWeight": 400 },
+    "micro": { "fontSize": 11, "lineHeight": 16, "fontWeight": 500 }
+  }
+}

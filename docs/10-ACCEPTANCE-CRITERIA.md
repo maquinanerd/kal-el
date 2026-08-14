@@ -1,0 +1,3 @@
+# Global Acceptance Criteria
+
+Kal El v1 must prove: site/user/role creation; document-first article editing; images/featured media; YouTube embed; gallery; structured article variants; categories/tags/entities; SEO editing/preview; RBAC workflow; revisions/autosave; secure preview; publish event + test frontend revalidation; MN26-like idempotent integration; duplicate-retry safety; WP import dry-run; site isolation; OpenAPI/integration tests; lint/typecheck/unit/integration/e2e/security passes; backup/restore rehearsal; PEG calibration and UI visual QA with zero P0/P1; no production deployment without human instruction.
