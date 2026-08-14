@@ -1,5 +1,18 @@
 import { createHash } from "node:crypto";
-import type { Article, ArticleSummary, Category, Tag, CreateArticleInput, CreateCategoryBody, CreateTagBody, ArticleStatus } from "@kal-el/contracts";
+import type {
+  Article,
+  ArticleSummary,
+  Author,
+  Category,
+  Tag,
+  CreateArticleInput,
+  CreateAuthorBody,
+  CreateCategoryBody,
+  CreateRedirectBody,
+  CreateTagBody,
+  Redirect,
+  ArticleStatus,
+} from "@kal-el/contracts";
 
 export type KalElClientOptions = {
   baseUrl: string;
@@ -129,12 +142,32 @@ export class KalElClient {
     return this.request("POST", `/v1/sites/${siteId}/articles/${articleId}/schedule`, { body: { scheduledAt, ...(note ? { note } : {}) } });
   }
 
+  listCategories(siteId: string): Promise<Category[]> {
+    return this.request("GET", `/v1/sites/${siteId}/categories`);
+  }
+
   createCategory(siteId: string, body: CreateCategoryBody, idempotencyKey?: string): Promise<Category> {
     return this.request("POST", `/v1/sites/${siteId}/categories`, { body, idempotencyKey });
   }
 
+  listTags(siteId: string): Promise<Tag[]> {
+    return this.request("GET", `/v1/sites/${siteId}/tags`);
+  }
+
   createTag(siteId: string, body: CreateTagBody, idempotencyKey?: string): Promise<Tag> {
     return this.request("POST", `/v1/sites/${siteId}/tags`, { body, idempotencyKey });
+  }
+
+  listAuthors(siteId: string): Promise<Author[]> {
+    return this.request("GET", `/v1/sites/${siteId}/authors`);
+  }
+
+  createAuthor(siteId: string, body: CreateAuthorBody, idempotencyKey?: string): Promise<Author> {
+    return this.request("POST", `/v1/sites/${siteId}/authors`, { body, idempotencyKey });
+  }
+
+  createRedirect(siteId: string, body: CreateRedirectBody, idempotencyKey?: string): Promise<Redirect> {
+    return this.request("POST", `/v1/sites/${siteId}/redirects`, { body, idempotencyKey });
   }
 }
 

@@ -83,6 +83,7 @@ async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
     slug: row.slug,
     excerpt: row.excerpt ?? null,
     version: row.version,
+    externalKey: row.externalKey ?? null,
     featuredMediaId: row.featuredMediaId ?? null,
     document: row.document ?? DEFAULT_DOCUMENT,
     seo: row.seo,
@@ -107,6 +108,7 @@ function summaryDto(row: ArticleRow): ArticleSummary {
     slug: row.slug,
     excerpt: row.excerpt ?? null,
     version: row.version,
+    externalKey: row.externalKey ?? null,
     featuredMediaId: row.featuredMediaId ?? null,
     authors: [],
     categories: [],
@@ -181,6 +183,10 @@ export async function createArticle(
 
   const createdBy = actorUserId(actor);
 
+  const status = body.status ?? "draft";
+  const publishedAt = body.publishedAt ? new Date(body.publishedAt) : status === "published" ? new Date() : null;
+  const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+
   const row = await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(articles)
@@ -195,6 +201,9 @@ export async function createArticle(
         seo,
         provenance: body.provenance ?? null,
         externalKey: body.externalKey ?? null,
+        status,
+        publishedAt,
+        scheduledAt,
         createdBy,
         updatedBy: createdBy,
         version: 0,
@@ -210,6 +219,21 @@ export async function createArticle(
       note: "created",
     });
 
+    // imported/published articles still emit the revalidation event (exactly-once)
+    if (status === "published" && publishedAt) {
+      await tx
+        .insert(outboxEvents)
+        .values({
+          siteId,
+          aggregateType: "article",
+          aggregateId: inserted.id,
+          eventType: "article.published",
+          payload: { articleId: inserted.id, slug, publishedAt: publishedAt.toISOString(), version: 0 },
+          idempotencyKey: `article:${inserted.id}:publish:${publishedAt.getTime()}`,
+        })
+        .onConflictDoNothing();
+    }
+
     await replaceRelations(tx as unknown as Db, inserted.id, body);
 
     await writeAudit(tx, {
@@ -219,7 +243,7 @@ export async function createArticle(
       action: "articles.create",
       objectType: "article",
       objectId: inserted.id,
-      details: { title: body.title, slug, externalKey: body.externalKey ?? null, provenance: body.provenance ?? null },
+      details: { title: body.title, slug, status, publishedAt: publishedAt?.toISOString() ?? null, externalKey: body.externalKey ?? null, provenance: body.provenance ?? null },
       ip: actor.ip ?? null,
       requestId: actor.requestId ?? null,
     });
@@ -347,6 +371,7 @@ export async function listArticles(
     authorId?: string;
     categoryId?: string;
     tagId?: string;
+    externalKey?: string;
     q?: string;
     cursor?: string;
     limit: number;
@@ -357,6 +382,7 @@ export async function listArticles(
   ];
   if (q.status) conditions.push(eq(articles.status, q.status as never));
   if (q.type) conditions.push(eq(articles.type, q.type as never));
+  if (q.externalKey) conditions.push(eq(articles.externalKey, q.externalKey));
   if (q.q) conditions.push(ilike(articles.title, `%${q.q}%`));
 
   if (q.authorId) {

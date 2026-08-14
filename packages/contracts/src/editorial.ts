@@ -80,6 +80,7 @@ export const articleSummarySchema = z.object({
   slug: z.string().max(300).nullable(),
   excerpt: z.string().max(2000).nullable(),
   version: z.number().int().nonnegative(),
+  externalKey: z.string().max(256).nullable(),
   featuredMediaId: uuidSchema.nullable(),
   authors: z.array(uuidSchema),
   categories: z.array(uuidSchema),
@@ -113,6 +114,10 @@ export const createArticleBodySchema = z.object({
   entities: z.array(uuidSchema).default([]),
   externalKey: z.string().max(256).optional(),
   provenance: provenanceSchema.optional(),
+  // Import/automation path: allow setting status and original timestamps.
+  status: articleStatusSchema.optional(),
+  publishedAt: z.string().datetime({ offset: true }).nullable().optional(),
+  scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 export const updateArticleBodySchema = z
@@ -138,6 +143,7 @@ export const articleListQuerySchema = z.object({
   authorId: uuidSchema.optional(),
   categoryId: uuidSchema.optional(),
   tagId: uuidSchema.optional(),
+  externalKey: z.string().max(256).optional(),
   q: z.string().max(200).optional(),
   cursor: z.string().max(256).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),

@@ -1,0 +1,33 @@
+{
+  "name": "@kal-el/importer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:integration": "vitest run"
+  },
+  "dependencies": {
+    "@kal-el/contracts": "workspace:*",
+    "node-html-parser": "^6.1.13"
+  },
+  "devDependencies": {
+    "@kal-el/api": "workspace:*",
+    "@kal-el/db": "workspace:*",
+    "@kal-el/sdk": "workspace:*",
+    "@kal-el/testkit": "workspace:*",
+    "@types/pg": "^8.11.10",
+    "drizzle-orm": "^0.36.4",
+    "fastify": "^5.1.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.0.0"
+  }
+}

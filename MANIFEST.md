@@ -40,6 +40,7 @@
 - `packages/design-system` — PEG implementation tokens, primitives, calibration harness.
 - `packages/events` — webhook signature (HMAC) + header contract.
 - `packages/sdk` — typed MN26/MNScr service client (idempotent, retrying).
+- `packages/importer` — WordPress/Payload import pipeline (normalize → dry-run → import → reconcile).
 
 ## Decisions & evidence
 
