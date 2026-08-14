@@ -1,0 +1,93 @@
+:root {
+  --peg-canvas: #fafafa;
+  --peg-surface: #ffffff;
+  --peg-surface-subtle: #f7f7f8;
+  --peg-surface-muted: #f2f2f3;
+  --peg-border: #e5e5e7;
+  --peg-border-strong: #d5d5d8;
+  --peg-text-primary: #171719;
+  --peg-text-secondary: #5f6065;
+  --peg-text-tertiary: #8e8f94;
+  --peg-text-disabled: #b6b7bb;
+
+  --peg-success: #16a34a;
+  --peg-warning: #d97706;
+  --peg-danger: #dc2626;
+  --peg-info: #2563eb;
+
+  /* Kal El product accent (editorial red, used with moderation) */
+  --peg-accent: #c8102e;
+  --peg-accent-hover: #b00d29;
+  --peg-accent-soft: rgba(200, 16, 46, 0.08);
+
+  --peg-focus-ring: 0 0 0 2px var(--peg-surface), 0 0 0 4px rgba(37, 99, 235, 0.45);
+
+  --peg-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --peg-font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --peg-font-display: 48px/56px 600;
+  --peg-font-h1: 36px/44px 600;
+  --peg-font-h2: 30px/38px 600;
+  --peg-font-h3: 24px/32px 600;
+  --peg-font-h4: 18px/26px 600;
+  --peg-font-body-lg: 16px/24px 400;
+  --peg-font-body: 14px/21px 400;
+  --peg-font-body-sm: 13px/19px 400;
+  --peg-font-label: 13px/18px 500;
+  --peg-font-caption: 12px/17px 400;
+  --peg-font-micro: 11px/16px 500;
+
+  --peg-space-1: 4px;
+  --peg-space-2: 8px;
+  --peg-space-3: 12px;
+  --peg-space-4: 16px;
+  --peg-space-5: 20px;
+  --peg-space-6: 24px;
+  --peg-space-8: 32px;
+  --peg-space-10: 40px;
+  --peg-space-12: 48px;
+  --peg-space-16: 64px;
+
+  --peg-radius-xs: 4px;
+  --peg-radius-sm: 6px;
+  --peg-radius-md: 8px;
+  --peg-radius-lg: 12px;
+  --peg-radius-xl: 16px;
+
+  --peg-shadow-1: 0 1px 2px rgba(23, 23, 25, 0.06), 0 2px 8px rgba(23, 23, 25, 0.06);
+  --peg-shadow-2: 0 4px 12px rgba(23, 23, 25, 0.1), 0 1px 3px rgba(23, 23, 25, 0.08);
+  --peg-shadow-3: 0 8px 28px rgba(23, 23, 25, 0.16), 0 2px 6px rgba(23, 23, 25, 0.08);
+
+  --peg-control-xs: 28px;
+  --peg-control-sm: 32px;
+  --peg-control-md: 36px;
+  --peg-control-lg: 40px;
+
+  --peg-sidebar-width: 240px;
+  --peg-rail-width: 64px;
+  --peg-topbar-height: 52px;
+  --peg-inspector-width: 336px;
+  --peg-editor-width: 840px;
+  --peg-table-row-height: 52px;
+}
+
+[data-theme="dark"] {
+  --peg-canvas: #19191b;
+  --peg-surface: #202022;
+  --peg-surface-subtle: #262629;
+  --peg-surface-muted: #2d2d30;
+  --peg-border: #353538;
+  --peg-border-strong: #454549;
+  --peg-text-primary: #f5f5f5;
+  --peg-text-secondary: #b6b6ba;
+  --peg-text-tertiary: #8c8c91;
+  --peg-text-disabled: #5a5a5f;
+
+  --peg-accent: #e6455f;
+  --peg-accent-hover: #ec5a72;
+  --peg-accent-soft: rgba(230, 69, 95, 0.14);
+
+  --peg-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --peg-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --peg-shadow-3: 0 8px 28px rgba(0, 0, 0, 0.6);
+}
