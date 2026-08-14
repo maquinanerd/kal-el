@@ -29,6 +29,7 @@
 
 - `apps/api` — Fastify REST `/v1` service (auth, admin, articles, taxonomy, audit, webhooks).
 - `apps/worker` — outbox dispatcher: webhook delivery, retry/backoff, dead-letter.
+- `apps/fixture` — reference delivery/revalidation fixture (webhook consumer + cache).
 
 ## Packages
 

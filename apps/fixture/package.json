@@ -1,30 +1,28 @@
 {
-  "name": "@kal-el/worker",
+  "name": "@kal-el/fixture",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./src/*": "./src/*"
-  },
   "scripts": {
-    "dev": "tsx watch src/worker.ts",
-    "start": "node dist/worker.js",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
     "test": "vitest run",
-    "test:integration": "vitest run"
+    "test:e2e": "vitest run"
   },
   "dependencies": {
-    "@kal-el/db": "workspace:*",
+    "@kal-el/contracts": "workspace:*",
     "@kal-el/events": "workspace:*",
-    "drizzle-orm": "^0.36.4",
-    "pg": "^8.13.1",
-    "zod": "^3.23.8"
+    "@kal-el/sdk": "workspace:*",
+    "fastify": "^5.1.0"
   },
   "devDependencies": {
+    "@kal-el/api": "workspace:*",
+    "@kal-el/db": "workspace:*",
     "@kal-el/testkit": "workspace:*",
+    "@kal-el/worker": "workspace:*",
     "@types/pg": "^8.11.10",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
