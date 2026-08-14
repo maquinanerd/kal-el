@@ -3,7 +3,7 @@ import type { Db } from "@kal-el/db";
 import { redirects } from "@kal-el/db/schema";
 import type { CreateRedirectBody } from "@kal-el/contracts";
 
-import { conflict, notFound } from "../plugins/errors.js";
+import { conflict, isUniqueViolation, notFound } from "../plugins/errors.js";
 
 function dto(row: typeof redirects.$inferSelect) {
   return {
@@ -23,7 +23,7 @@ export async function createRedirect(db: Db, siteId: string, body: CreateRedirec
     if (!row) throw new Error("createRedirect returned no row");
     return dto(row);
   } catch (err) {
-    if ((err as { code?: string }).code === "23505") {
+    if (isUniqueViolation(err)) {
       throw conflict(`source path "${body.sourcePath}" already has a redirect`, { field: "sourcePath" });
     }
     throw err;

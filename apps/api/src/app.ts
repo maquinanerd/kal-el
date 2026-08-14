@@ -36,7 +36,8 @@ export async function buildApp(opts: { connectionString: string; config: AppConf
   await app.register(cookie);
   await app.register(cors, { origin: true, credentials: true });
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(rateLimit, { global: false });
+  // global per-IP rate limit; login keeps a stricter route-level limit
+  await app.register(rateLimit, { global: true, max: 600, timeWindow: "1 minute" });
   await app.register(dbPlugin, { connectionString: opts.connectionString });
   await app.register(authPlugin);
 

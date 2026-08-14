@@ -26,6 +26,36 @@ export const unauthorized = (message = "unauthenticated") =>
 export const badRequest = (message: string, details?: Record<string, unknown>) =>
   new ApiHttpError(400, API_ERROR_CODES.VALIDATION, message, details);
 
+type PgErrorInfo = { code?: string; constraint?: string };
+
+/** Drizzle >=0.45 wraps pg errors in DrizzleQueryError; unwrap to the pg code. */
+function unwrapPgError(err: unknown): PgErrorInfo | null {
+  const e = err as { code?: string; constraint?: string; cause?: unknown };
+  if (e.code) return { code: e.code, constraint: e.constraint };
+  const cause = e.cause;
+  if (cause && typeof cause === "object") {
+    const c = cause as PgErrorInfo;
+    if (c.code) return { code: c.code, constraint: c.constraint };
+  }
+  return null;
+}
+
+export function isUniqueViolation(err: unknown): boolean {
+  return unwrapPgError(err)?.code === "23505";
+}
+
+export function isForeignKeyViolation(err: unknown): boolean {
+  return unwrapPgError(err)?.code === "23503";
+}
+
+export function isNotNullViolation(err: unknown): boolean {
+  return unwrapPgError(err)?.code === "23502";
+}
+
+export function pgConstraint(err: unknown): string | undefined {
+  return unwrapPgError(err)?.constraint;
+}
+
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((err, request, reply) => {
     const requestId = (request as { id?: string }).id ?? "unknown";
@@ -47,28 +77,28 @@ export function registerErrorHandler(app: FastifyInstance): void {
       );
     }
 
-    if (typed.code === "23505") {
+    if (isUniqueViolation(err)) {
       return reply.status(409).send(
         errorBody(API_ERROR_CODES.CONFLICT, "a resource with this identifier already exists", {
-          constraint: (err as { constraint?: string }).constraint,
+          constraint: pgConstraint(err),
           requestId,
         }),
       );
     }
 
-    if (typed.code === "23503") {
+    if (isForeignKeyViolation(err)) {
       return reply.status(400).send(
         errorBody(API_ERROR_CODES.VALIDATION, "referenced resource does not exist", {
-          constraint: (err as { constraint?: string }).constraint,
+          constraint: pgConstraint(err),
           requestId,
         }),
       );
     }
 
-    if (typed.code === "23502") {
+    if (isNotNullViolation(err)) {
       return reply.status(400).send(
         errorBody(API_ERROR_CODES.VALIDATION, "a required field is missing", {
-          constraint: (err as { constraint?: string }).constraint,
+          constraint: pgConstraint(err),
           requestId,
         }),
       );

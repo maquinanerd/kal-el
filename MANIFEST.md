@@ -44,6 +44,7 @@
 
 ## Decisions & evidence
 
-- `docs/adr/ADR-0001-..ADR-0005-*.md`
+- `docs/adr/ADR-0001-..ADR-0006-*.md`
+- `scripts/backup.ts` — `pnpm backup <backup|restore> <file.json>`
 - `docs/progress/PHASE-0-PREFLIGHT.md`
 - `docs/progress/PHASE-1-3-FOUNDATION.md`

@@ -19,7 +19,7 @@
   "dependencies": {
     "@kal-el/db": "workspace:*",
     "@kal-el/events": "workspace:*",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "^0.45.2",
     "pg": "^8.13.1",
     "zod": "^3.23.8"
   },

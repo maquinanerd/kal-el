@@ -20,13 +20,13 @@
   },
   "dependencies": {
     "@kal-el/contracts": "workspace:*",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "^0.45.2",
     "pg": "^8.13.1"
   },
   "devDependencies": {
     "@kal-el/testkit": "workspace:*",
     "@types/pg": "^8.11.10",
-    "drizzle-kit": "^0.28.1",
+    "drizzle-kit": "^0.31.0",
     "typescript": "^5.6.3",
     "vitest": "^3.0.0"
   }

@@ -14,7 +14,8 @@
     "test:unit": "pnpm -r test:unit",
     "test:integration": "pnpm -r test:integration",
     "format:check": "prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "backup": "tsx scripts/backup.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",

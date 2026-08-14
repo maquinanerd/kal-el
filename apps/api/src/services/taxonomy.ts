@@ -3,7 +3,7 @@ import type { Db } from "@kal-el/db";
 import { authors, categories, entities, sources, tags } from "@kal-el/db/schema";
 import type { CreateAuthorBody, CreateCategoryBody, CreateEntityBody, CreateSourceBody, CreateTagBody } from "@kal-el/contracts";
 
-import { conflict, notFound } from "../plugins/errors.js";
+import { conflict, isUniqueViolation, notFound } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import type { ActorRef } from "./articles.js";
 
@@ -38,7 +38,7 @@ export async function createCategory(db: Db, siteId: string, actor: ActorRef, bo
     });
     return row;
   } catch (err) {
-    if ((err as { code?: string }).code === "23505") {
+    if (isUniqueViolation(err)) {
       throw conflict(`category slug "${body.slug}" already exists`, { field: "slug" });
     }
     throw err;
@@ -78,7 +78,7 @@ export async function createTag(db: Db, siteId: string, actor: ActorRef, body: C
     });
     return row;
   } catch (err) {
-    if ((err as { code?: string }).code === "23505") {
+    if (isUniqueViolation(err)) {
       throw conflict(`tag slug "${body.slug}" already exists`, { field: "slug" });
     }
     throw err;
@@ -153,7 +153,7 @@ export async function createAuthor(db: Db, siteId: string, actor: ActorRef, body
     });
     return row;
   } catch (err) {
-    if ((err as { code?: string }).code === "23505") {
+    if (isUniqueViolation(err)) {
       throw conflict(`author slug "${body.slug}" already exists`, { field: "slug" });
     }
     throw err;

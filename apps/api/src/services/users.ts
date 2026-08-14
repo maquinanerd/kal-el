@@ -4,7 +4,7 @@ import { users } from "@kal-el/db/schema";
 import type { CreateUserBody } from "@kal-el/contracts";
 import { hashPassword } from "@kal-el/auth";
 
-import { conflict, notFound } from "../plugins/errors.js";
+import { conflict, isUniqueViolation, notFound } from "../plugins/errors.js";
 
 export function toUserDto(row: typeof users.$inferSelect) {
   return {
@@ -27,7 +27,7 @@ export async function createUser(db: Db, body: CreateUserBody) {
     if (!row) throw new Error("createUser returned no row");
     return toUserDto(row);
   } catch (err) {
-    if ((err as { code?: string }).code === "23505") {
+    if (isUniqueViolation(err)) {
       throw conflict(`email "${body.email}" is already registered`, { field: "email" });
     }
     throw err;

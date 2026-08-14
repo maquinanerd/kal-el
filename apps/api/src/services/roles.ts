@@ -3,7 +3,7 @@ import type { Db } from "@kal-el/db";
 import { permissions, rolePermissions, roles, userRoles, users } from "@kal-el/db/schema";
 import type { CreateRoleBody } from "@kal-el/contracts";
 
-import { badRequest, conflict, notFound } from "../plugins/errors.js";
+import { badRequest, conflict, isForeignKeyViolation, isUniqueViolation, notFound } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import { PERMISSIONS } from "../auth-context.js";
 
@@ -44,7 +44,7 @@ export async function createRole(
       return role.id;
     });
   } catch (err) {
-    if ((err as { code?: string }).code === "23505") {
+    if (isUniqueViolation(err)) {
       throw conflict(`role key "${body.key}" already exists`, { field: "key" });
     }
     throw err;
@@ -76,7 +76,7 @@ export async function assignRoleToUser(db: Db, userId: string, roleId: string, s
   try {
     await db.insert(userRoles).values({ userId, roleId, siteId }).onConflictDoNothing();
   } catch (err) {
-    if ((err as { code?: string }).code === "23503") {
+    if (isForeignKeyViolation(err)) {
       throw badRequest("invalid user, role or site");
     }
     throw err;
