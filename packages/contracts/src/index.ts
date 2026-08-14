@@ -5,4 +5,5 @@ export * from "./identity.js";
 export * from "./media.js";
 export * from "./seo.js";
 export * from "./editorial.js";
+export * from "./webhooks.js";
 export * from "./openapi.js";

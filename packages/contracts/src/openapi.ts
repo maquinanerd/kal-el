@@ -22,6 +22,7 @@ import { createRoleBodySchema, createServiceTokenBodySchema, createUserBodySchem
 import { mediaSchema } from "./media.js";
 import { createRedirectBodySchema, redirectSchema, seoMetadataSchema } from "./seo.js";
 import { createSiteBodySchema, siteSchema } from "./sites.js";
+import { createWebhookBodySchema, webhookDeliverySchema, webhookSchema } from "./webhooks.js";
 
 const registry = new OpenAPIRegistry();
 
@@ -63,6 +64,8 @@ registry.register("Article", articleSchema);
 registry.register("ArticleSummary", articleSummarySchema);
 registry.register("SeoMetadata", seoMetadataSchema);
 registry.register("Redirect", redirectSchema);
+registry.register("Webhook", webhookSchema);
+registry.register("WebhookDelivery", webhookDeliverySchema);
 
 function registerCorePaths() {
   registry.registerPath({
@@ -247,6 +250,17 @@ function registerCorePaths() {
       body: { content: { "application/json": { schema: createRedirectBodySchema } } },
     },
     responses: { 201: { description: "created", content: { "application/json": { schema: z.object({ data: redirectSchema }) } } } },
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/v1/admin/sites/{siteId}/webhooks",
+    summary: "Create webhook subscription",
+    request: {
+      params: z.object({ siteId: z.string().uuid() }),
+      body: { content: { "application/json": { schema: createWebhookBodySchema } } },
+    },
+    responses: { 201: { description: "created (secret returned once)", content: { "application/json": { schema: z.object({ data: webhookSchema }) } } } },
   });
 }
 

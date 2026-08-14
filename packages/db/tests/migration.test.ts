@@ -28,6 +28,8 @@ const ALL_TABLES = [
   "outbox_events",
   "idempotency_keys",
   "redirects",
+  "webhooks",
+  "webhook_deliveries",
 ];
 
 // Reverse of 0000_*.sql: reversibility is a stated engineering rule.
@@ -54,6 +56,8 @@ DROP TABLE IF EXISTS "user_roles" CASCADE;
 DROP TABLE IF EXISTS "role_permissions" CASCADE;
 DROP TABLE IF EXISTS "permissions" CASCADE;
 DROP TABLE IF EXISTS "roles" CASCADE;
+DROP TABLE IF EXISTS "webhook_deliveries" CASCADE;
+DROP TABLE IF EXISTS "webhooks" CASCADE;
 DROP TABLE IF EXISTS "users" CASCADE;
 DROP TABLE IF EXISTS "sites" CASCADE;
 DROP SCHEMA IF EXISTS drizzle CASCADE;

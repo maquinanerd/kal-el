@@ -8,6 +8,7 @@ import {
   createUserBodySchema,
   createRoleBodySchema,
   createServiceTokenBodySchema,
+  createWebhookBodySchema,
   updateSiteBodySchema,
   uuidSchema,
 } from "@kal-el/contracts";
@@ -17,6 +18,7 @@ import { getSite, listSites, createSite, updateSite } from "../services/sites.js
 import { createUser, listUsers } from "../services/users.js";
 import { createRole, listRoles, assignRoleToUser } from "../services/roles.js";
 import { createServiceToken, listServiceTokens, revokeServiceToken } from "../services/tokens.js";
+import { createWebhook, deleteWebhook, listWebhooks } from "../services/webhooks.js";
 import type { ActorContext } from "../auth-context.js";
 
 async function requireAdminPermission(app: FastifyInstance, req: FastifyRequest, permission: string): Promise<ActorContext> {
@@ -180,6 +182,28 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         const { siteId, tokenId } = req.params as { siteId: string; tokenId: string };
         if (!uuidSchema.safeParse(siteId).success || !uuidSchema.safeParse(tokenId).success) throw badRequest("invalid id");
         return { data: await revokeServiceToken(app.db, siteId, tokenId) };
+      });
+
+      adminApp.get("/sites/:siteId/webhooks", { preHandler: adminGuard(app, "tokens.manage") }, async (req) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        if (!uuidSchema.safeParse(siteId).success) throw badRequest("invalid siteId");
+        await getSite(app.db, siteId);
+        return { data: await listWebhooks(app.db, siteId) };
+      });
+
+      adminApp.post("/sites/:siteId/webhooks", { preHandler: adminGuard(app, "tokens.manage") }, async (req, reply) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        if (!uuidSchema.safeParse(siteId).success) throw badRequest("invalid siteId");
+        const parsed = createWebhookBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        const webhook = await createWebhook(app.db, siteId, parsed.data);
+        return reply.status(201).send({ data: webhook });
+      });
+
+      adminApp.delete("/sites/:siteId/webhooks/:webhookId", { preHandler: adminGuard(app, "tokens.manage") }, async (req) => {
+        const { siteId, webhookId } = req.params as { siteId: string; webhookId: string };
+        if (!uuidSchema.safeParse(siteId).success || !uuidSchema.safeParse(webhookId).success) throw badRequest("invalid id");
+        return { data: await deleteWebhook(app.db, siteId, webhookId) };
       });
     },
     { prefix: "/v1/admin" },

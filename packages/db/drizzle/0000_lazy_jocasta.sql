@@ -254,6 +254,29 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "webhook_deliveries" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"webhook_id" uuid NOT NULL,
+	"outbox_event_id" uuid NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"attempt" integer DEFAULT 0 NOT NULL,
+	"response_status" integer,
+	"error" text,
+	"next_attempt_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"delivered_at" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "webhooks" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"site_id" uuid NOT NULL,
+	"url" text NOT NULL,
+	"events" jsonb NOT NULL,
+	"secret" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "article_authors" ADD CONSTRAINT "article_authors_article_id_articles_id_fk" FOREIGN KEY ("article_id") REFERENCES "public"."articles"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
@@ -452,6 +475,24 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_webhook_id_webhooks_id_fk" FOREIGN KEY ("webhook_id") REFERENCES "public"."webhooks"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_outbox_event_id_outbox_events_id_fk" FOREIGN KEY ("outbox_event_id") REFERENCES "public"."outbox_events"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "webhooks" ADD CONSTRAINT "webhooks_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "article_revisions_article_number_unique" ON "article_revisions" USING btree ("article_id","revision_number");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "articles_site_slug_unique" ON "articles" USING btree ("site_id","slug");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "articles_site_external_key_unique" ON "articles" USING btree ("site_id","external_key");--> statement-breakpoint
@@ -476,4 +517,7 @@ CREATE INDEX IF NOT EXISTS "sessions_user_idx" ON "sessions" USING btree ("user_
 CREATE UNIQUE INDEX IF NOT EXISTS "sites_slug_unique" ON "sites" USING btree ("slug");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "sources_site_name_idx" ON "sources" USING btree ("site_id","name");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "tags_site_slug_unique" ON "tags" USING btree ("site_id","slug");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "users_email_unique" ON "users" USING btree ("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "users_email_unique" ON "users" USING btree ("email");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "webhook_deliveries_pending_idx" ON "webhook_deliveries" USING btree ("status","next_attempt_at");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "webhook_deliveries_hook_event_unique" ON "webhook_deliveries" USING btree ("webhook_id","outbox_event_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "webhooks_site_idx" ON "webhooks" USING btree ("site_id");

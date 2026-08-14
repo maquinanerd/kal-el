@@ -27,7 +27,8 @@
 
 ## Applications
 
-- `apps/api` — Fastify REST `/v1` service (auth, admin, articles, taxonomy, audit).
+- `apps/api` — Fastify REST `/v1` service (auth, admin, articles, taxonomy, audit, webhooks).
+- `apps/worker` — outbox dispatcher: webhook delivery, retry/backoff, dead-letter.
 
 ## Packages
 

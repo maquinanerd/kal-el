@@ -79,3 +79,43 @@ export const redirects = pgTable(
   },
   (t) => [uniqueIndex("redirects_site_source_unique").on(t.siteId, t.sourcePath)],
 );
+
+export const webhooks = pgTable(
+  "webhooks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    events: jsonb("events").$type<string[]>().notNull(),
+    secret: text("secret").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("webhooks_site_idx").on(t.siteId)],
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    webhookId: uuid("webhook_id")
+      .notNull()
+      .references(() => webhooks.id, { onDelete: "cascade" }),
+    outboxEventId: uuid("outbox_event_id")
+      .notNull()
+      .references(() => outboxEvents.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ["pending", "success", "failed"] }).notNull().default("pending"),
+    attempt: integer("attempt").notNull().default(0),
+    responseStatus: integer("response_status"),
+    error: text("error"),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("webhook_deliveries_pending_idx").on(t.status, t.nextAttemptAt),
+    uniqueIndex("webhook_deliveries_hook_event_unique").on(t.webhookId, t.outboxEventId),
+  ],
+);
