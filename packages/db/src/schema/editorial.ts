@@ -1,0 +1,217 @@
+import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { ArticleDocument, ArticleStatus, ArticleType, Provenance, SeoMetadata } from "@kal-el/contracts";
+
+import { media } from "./media";
+import { sites } from "./sites";
+import { users } from "./identity";
+
+export const categories = pgTable(
+  "categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    // parentId is not an FK to avoid a self-referential TS inference cycle;
+    // the createCategory service validates the parent in the same site.
+    parentId: uuid("parent_id"),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("categories_site_slug_unique").on(t.siteId, t.slug),
+    index("categories_site_parent_idx").on(t.siteId, t.parentId),
+  ],
+);
+
+export const tags = pgTable(
+  "tags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("tags_site_slug_unique").on(t.siteId, t.slug)],
+);
+
+export const entities = pgTable(
+  "entities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    type: text("type").notNull(),
+    description: text("description"),
+    externalRefs: jsonb("external_refs")
+      .$type<{ provider: string; type: string; externalId: string }[]>()
+      .notNull()
+      .default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("entities_site_type_idx").on(t.siteId, t.type)],
+);
+
+export const authors = pgTable(
+  "authors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    bio: text("bio"),
+    email: text("email"),
+    avatarMediaId: uuid("avatar_media_id").references(() => media.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("authors_site_slug_unique").on(t.siteId, t.slug)],
+);
+
+export const sources = pgTable(
+  "sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    url: text("url"),
+    kind: text("kind").notNull().default("generic"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("sources_site_name_idx").on(t.siteId, t.name)],
+);
+
+export const articles = pgTable(
+  "articles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    type: text("type", { enum: ["article", "review", "list", "video", "audio"] })
+      .$type<ArticleType>()
+      .notNull()
+      .default("article"),
+    status: text("status", { enum: ["draft", "in_review", "scheduled", "published", "blocked"] })
+      .$type<ArticleStatus>()
+      .notNull()
+      .default("draft"),
+    title: text("title").notNull(),
+    dek: text("dek"),
+    slug: text("slug"),
+    excerpt: text("excerpt"),
+    document: jsonb("document").$type<ArticleDocument>(),
+    seo: jsonb("seo").$type<SeoMetadata>().notNull().default({
+      seoTitle: null,
+      metaDescription: null,
+      canonicalUrl: null,
+      robotsIndex: "index",
+      robotsFollow: "follow",
+      socialTitle: null,
+      socialDescription: null,
+    }),
+    featuredMediaId: uuid("featured_media_id").references(() => media.id, { onDelete: "set null" }),
+    externalKey: text("external_key"),
+    provenance: jsonb("provenance").$type<Provenance>(),
+    version: integer("version").notNull().default(0),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("articles_site_slug_unique").on(t.siteId, t.slug),
+    uniqueIndex("articles_site_external_key_unique").on(t.siteId, t.externalKey),
+    index("articles_site_status_idx").on(t.siteId, t.status),
+    index("articles_site_updated_idx").on(t.siteId, t.updatedAt),
+  ],
+);
+
+export const articleRevisions = pgTable(
+  "article_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    revisionNumber: integer("revision_number").notNull(),
+    document: jsonb("document").$type<ArticleDocument>().notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("article_revisions_article_number_unique").on(t.articleId, t.revisionNumber)],
+);
+
+export const articleAuthors = pgTable(
+  "article_authors",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => authors.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.articleId, t.authorId] })],
+);
+
+export const articleCategories = pgTable(
+  "article_categories",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.articleId, t.categoryId] })],
+);
+
+export const articleTags = pgTable(
+  "article_tags",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.articleId, t.tagId] })],
+);
+
+export const articleEntities = pgTable(
+  "article_entities",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    entityId: uuid("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.articleId, t.entityId] })],
+);
+
+export type ArticleRow = typeof articles.$inferSelect;
