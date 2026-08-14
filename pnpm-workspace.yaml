@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11 build approval policy.
+strictDepBuilds: false
+allowBuilds:
+  '0': esbuild
+  '1': sharp
+  '2': '@node-rs/argon2'
+  '3': embedded-postgres
+  '4': '@embedded-postgres/windows-x64'
+  '@embedded-postgres/windows-x64': set this to true or false
+  esbuild: set this to true or false

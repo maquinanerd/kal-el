@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kalel
+          POSTGRES_PASSWORD: kalel
+          POSTGRES_DB: kalel
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U kalel -d kalel"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+        env:
+          DATABASE_URL: postgresql://kalel:kalel@localhost:5432/kalel
+      - run: pnpm build
+        env:
+          DATABASE_URL: postgresql://kalel:kalel@localhost:5432/kalel
+          APP_BASE_URL: http://localhost:3000
+          API_BASE_URL: http://localhost:3001
