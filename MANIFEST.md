@@ -37,6 +37,9 @@
 - `packages/db` — Drizzle schema, migrations, client, migration runner.
 - `packages/auth` — Argon2id, opaque tokens, RBAC helpers.
 - `packages/testkit` — embedded PostgreSQL, fresh-test-db, seed helpers.
+- `packages/design-system` — PEG implementation tokens, primitives, calibration harness.
+- `packages/events` — webhook signature (HMAC) + header contract.
+- `packages/sdk` — typed MN26/MNScr service client (idempotent, retrying).
 
 ## Decisions & evidence
 
