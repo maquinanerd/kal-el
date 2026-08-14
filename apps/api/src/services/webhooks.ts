@@ -18,7 +18,7 @@ function dto(row: typeof webhooks.$inferSelect) {
 }
 
 export async function createWebhook(db: Db, siteId: string, body: CreateWebhookBody) {
-  const secret = randomBytes(32).toString("hex");
+  const secret = body.secret ?? randomBytes(32).toString("hex");
   const [row] = await db.insert(webhooks).values({ siteId, url: body.url, events: body.events, secret }).returning();
   if (!row) throw new Error("createWebhook returned no row");
   return { ...dto(row), secret };

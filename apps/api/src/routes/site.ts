@@ -8,6 +8,7 @@ import {
   createAuthorBodySchema,
   createCategoryBodySchema,
   createEntityBodySchema,
+  createRedirectBodySchema,
   createSourceBodySchema,
   createTagBodySchema,
   idempotencyKeySchema,
@@ -43,6 +44,7 @@ import {
   listSources,
   listTags,
 } from "../services/taxonomy.js";
+import { createRedirect, deleteRedirect, listRedirects } from "../services/redirects.js";
 
 function guard(permission: string) {
   return async (req: FastifyRequest) => {
@@ -235,6 +237,24 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         const row = await createSource(app.db, siteId, req.actor as ActorRef, parsed.data);
         return reply.status(201).send({ data: row });
+      });
+
+      // ---- Redirects (SEO) ----
+      siteApp.get("/redirects", { preHandler: guard("seo.manage") }, async (req) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        return { data: await listRedirects(app.db, siteId) };
+      });
+      siteApp.post("/redirects", { preHandler: guard("seo.manage") }, async (req, reply) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        const parsed = createRedirectBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        const redirect = await createRedirect(app.db, siteId, parsed.data);
+        return reply.status(201).send({ data: redirect });
+      });
+      siteApp.delete("/redirects/:redirectId", { preHandler: guard("seo.manage") }, async (req) => {
+        const { siteId, redirectId } = req.params as { siteId: string; redirectId: string };
+        if (!uuidSchema.safeParse(redirectId).success) throw badRequest("invalid redirectId");
+        return { data: await deleteRedirect(app.db, siteId, redirectId) };
       });
 
       // ---- Audit log (site-scoped) ----

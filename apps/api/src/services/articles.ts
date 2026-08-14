@@ -13,6 +13,7 @@ import type { Article, ArticleDocument, ArticleSummary, CreateArticleBody, SeoMe
 
 import { badRequest, conflict, notFound } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
+import { upsertSlugRedirect } from "./redirects.js";
 
 export type ActorRef = {
   kind: "user" | "service";
@@ -260,7 +261,11 @@ export async function updateArticle(
 
   let slug = row.slug;
   if (body.slug && body.slug !== row.slug) {
+    const previousSlug = row.slug;
     slug = await uniqueSlug(db, siteId, body.slug);
+    if (previousSlug) {
+      await upsertSlugRedirect(db, siteId, previousSlug, slug);
+    }
   }
 
   const document = body.document ?? row.document ?? DEFAULT_DOCUMENT;
