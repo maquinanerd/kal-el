@@ -16,7 +16,9 @@
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "backup": "tsx scripts/backup.ts",
-    "migrate": "pnpm --filter @kal-el/db migrate"
+    "migrate": "pnpm --filter @kal-el/db migrate",
+    "dev:site": "pnpm --filter @kal-el/design-system dev",
+    "dev:api": "tsx scripts/dev-api.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
