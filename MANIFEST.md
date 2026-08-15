@@ -41,6 +41,7 @@
 - `packages/events` — webhook signature (HMAC) + header contract.
 - `packages/sdk` — typed MN26/MNScr service client (idempotent, retrying).
 - `packages/importer` — WordPress/Payload import pipeline (normalize → dry-run → import → reconcile).
+- `packages/editor` — editor engine prototype (TipTap vs Lexical) + ADR-0007.
 
 ## Decisions & evidence
 

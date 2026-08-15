@@ -15,7 +15,8 @@
     "test:integration": "pnpm -r test:integration",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "backup": "tsx scripts/backup.ts"
+    "backup": "tsx scripts/backup.ts",
+    "migrate": "pnpm --filter @kal-el/db migrate"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",

@@ -8,8 +8,13 @@ import { createPool } from "./client";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Folder with the generated SQL migrations. Overridable via MIGRATIONS_FOLDER
+ * so container images can carry the migration folder independently of the
+ * bundled entry point location.
+ */
 export function migrationsFolder() {
-  return path.resolve(here, "../drizzle");
+  return process.env.MIGRATIONS_FOLDER ?? path.resolve(here, "../drizzle");
 }
 
 /**

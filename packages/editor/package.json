@@ -1,0 +1,32 @@
+{
+  "name": "@kal-el/editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@kal-el/contracts": "workspace:*",
+    "@lexical/headless": "^0.21.0",
+    "@lexical/list": "^0.21.0",
+    "@lexical/rich-text": "^0.21.0",
+    "@tiptap/core": "^2.9.0",
+    "@tiptap/pm": "^2.9.0",
+    "@tiptap/starter-kit": "^2.9.0",
+    "lexical": "^0.21.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^3.0.0"
+  }
+}
