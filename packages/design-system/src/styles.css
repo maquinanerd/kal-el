@@ -1,17 +1,47 @@
 /* PEG / Kal El design system — implementation styles (prose-first, dense, border-led). */
 
 .peg-body {
-  font-family: var(--peg-font-sans);
   font: var(--peg-font-body);
   color: var(--peg-text-primary);
   background: var(--peg-canvas);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .peg-body *,
 .peg-body *::before,
 .peg-body *::after {
   box-sizing: border-box;
+}
+
+/* Base reset: form controls inherit typography and drop UA quirks */
+.peg-body button,
+.peg-body input,
+.peg-body select,
+.peg-body textarea {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.peg-body ::selection {
+  background: var(--peg-accent-soft);
+}
+
+.peg-body a {
+  color: var(--peg-info);
+  text-decoration: none;
+}
+
+.peg-body a:hover {
+  text-decoration: underline;
+}
+
+.peg-body :focus-visible {
+  outline: 2px solid var(--peg-info);
+  outline-offset: 1px;
+  border-radius: var(--peg-radius-sm);
 }
 
 .peg-btn {
@@ -27,11 +57,14 @@
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 .peg-btn:focus-visible {
   outline: none;
   box-shadow: var(--peg-focus-ring);
+}
+.peg-btn:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 .peg-btn:disabled {
   opacity: 0.5;
@@ -42,7 +75,7 @@
   color: var(--peg-canvas);
 }
 .peg-btn--primary:hover:not(:disabled) {
-  background: #000;
+  filter: brightness(0.94);
 }
 .peg-btn--secondary {
   background: var(--peg-surface);
@@ -364,8 +397,8 @@
   gap: var(--peg-space-1);
 }
 .peg-kpi__label { font: var(--peg-font-caption); color: var(--peg-text-secondary); }
-.peg-kpi__value { font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.01em; }
-.peg-kpi__delta { font: var(--peg-font-micro); font-weight: 500; }
+.peg-kpi__value { font-size: 28px; line-height: 34px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.peg-kpi__delta { font: var(--peg-font-micro); font-weight: 500; font-variant-numeric: tabular-nums; }
 .peg-kpi__delta--up { color: var(--peg-success); }
 .peg-kpi__delta--down { color: var(--peg-danger); }
 
@@ -860,6 +893,9 @@
   flex-shrink: 0;
 }
 .peg-topbar__spacer { flex: 1; }
+.peg-topbar .peg-search {
+  width: min(340px, 34vw);
+}
 .peg-save-state {
   font: var(--peg-font-caption);
   color: var(--peg-text-tertiary);
