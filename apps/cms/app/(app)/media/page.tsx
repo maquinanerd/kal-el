@@ -119,7 +119,7 @@ export default function MediaPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
             {items.map((m) => (
               <div key={m.id} className="peg-card" style={{ padding: 8 }}>
-                <button type="button" style={{ background: "none", border: 0, padding: 0, cursor: "pointer", width: "100%" }} onClick={() => router.push(`/media/${m.id}`)}>
+                <button type="button" aria-label={`Abrir ${m.filename}`} style={{ background: "none", border: 0, padding: 0, cursor: "pointer", width: "100%" }} onClick={() => router.push(`/media/${m.id}`)}>
                   <img src={m.url} alt={m.altText ?? m.filename} style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 6, display: "block" }} />
                 </button>
                 <div style={{ padding: "6px 4px", display: "flex", flexDirection: "column", gap: 4 }}>

@@ -58,6 +58,8 @@ export function MediaPicker({
             <button
               key={m.id}
               type="button"
+              aria-label={selected.has(m.id) ? `Remover ${m.filename}` : `Selecionar ${m.filename}`}
+              aria-pressed={selected.has(m.id)}
               onClick={() => toggle(m.id)}
               style={{
                 border: selected.has(m.id) ? "2px solid var(--peg-accent, #2563eb)" : "1px solid var(--peg-border-color, #e5e7eb)",
