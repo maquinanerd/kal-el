@@ -28,10 +28,68 @@ export const provenanceSchema = z
 
 /**
  * Versioned structured document schema (editor engine).
- * v1 document model: prose-first with a small set of trusted block types.
- * Renderers on consuming frontends must only trust known node types.
+ *
+ * v1 (legacy): prose-first; text blocks carry plain strings (no inline marks).
+ * v2 (canonical): text blocks carry inline content — an ordered array of text
+ * nodes with optional marks (bold/italic/code/underline/strike/link) — so rich
+ * text survives round-trip. Renderers on consuming frontends must only trust
+ * known node types and marks.
  */
-export const documentNodeSchema = z.union([
+
+export const linkHrefSchema = z
+  .string()
+  .max(2048)
+  .refine((u) => /^https?:\/\//i.test(u) || u.startsWith("/"), "link href must be an http(s) URL or an internal path");
+
+export const markSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("bold") }),
+  z.object({ type: z.literal("italic") }),
+  z.object({ type: z.literal("code") }),
+  z.object({ type: z.literal("underline") }),
+  z.object({ type: z.literal("strike") }),
+  z.object({
+    type: z.literal("link"),
+    attrs: z.object({
+      href: linkHrefSchema,
+      title: z.string().max(500).optional(),
+      internal: z.boolean().optional(),
+    }),
+  }),
+]);
+
+export const inlineNodeSchema = z.union([
+  z.object({ type: z.literal("text"), text: z.string().max(10000), marks: z.array(markSchema).max(8).default([]) }),
+  z.object({ type: z.literal("hardBreak") }),
+]);
+
+export const inlineContentSchema = z.array(inlineNodeSchema).max(2000);
+
+// Shared atom nodes (identical across document versions).
+const imageNodeSchema = z.object({
+  type: z.literal("image"),
+  attrs: z.object({
+    mediaId: uuidSchema,
+    caption: z.string().max(2000).optional(),
+    credit: z.string().max(500).optional(),
+    altText: z.string().max(500).optional(),
+  }),
+});
+const galleryNodeSchema = z.object({ type: z.literal("gallery"), attrs: z.object({ mediaIds: z.array(uuidSchema).min(1).max(50) }) });
+const embedNodeSchema = z.object({
+  type: z.literal("embed"),
+  attrs: z.object({
+    url: httpUrlSchema,
+    provider: z.string().max(64),
+    id: z.string().max(128).optional(),
+  }),
+});
+const sourceNodeSchema = z.object({
+  type: z.literal("source"),
+  attrs: z.object({ label: z.string().max(200), url: httpUrlSchema, kind: z.string().max(32).optional() }),
+});
+
+// ---- v1 (legacy, string content) ----
+export const documentV1NodeSchema = z.union([
   z.object({ type: z.literal("paragraph"), attrs: z.record(z.string(), z.unknown()).default({}), content: z.string() }),
   z.object({ type: z.literal("heading"), attrs: z.object({ level: z.number().int().min(2).max(4) }), content: z.string() }),
   z.object({ type: z.literal("quote"), attrs: z.record(z.string(), z.unknown()).default({}), content: z.string() }),
@@ -41,34 +99,40 @@ export const documentNodeSchema = z.union([
     attrs: z.object({ headers: z.array(z.string()).default([]) }),
     content: z.array(z.array(z.string())),
   }),
-  z.object({
-    type: z.literal("image"),
-    attrs: z.object({
-      mediaId: uuidSchema,
-      caption: z.string().max(2000).optional(),
-      credit: z.string().max(500).optional(),
-      altText: z.string().max(500).optional(),
-    }),
-  }),
-  z.object({ type: z.literal("gallery"), attrs: z.object({ mediaIds: z.array(uuidSchema).min(1).max(50) }) }),
-  z.object({
-    type: z.literal("embed"),
-    attrs: z.object({
-      url: httpUrlSchema,
-      provider: z.string().max(64),
-      id: z.string().max(128).optional(),
-    }),
-  }),
-  z.object({
-    type: z.literal("source"),
-    attrs: z.object({ label: z.string().max(200), url: httpUrlSchema, kind: z.string().max(32).optional() }),
-  }),
+  imageNodeSchema,
+  galleryNodeSchema,
+  embedNodeSchema,
+  sourceNodeSchema,
 ]);
 
-export const documentSchema = z.object({
+export const documentV1Schema = z.object({
   version: z.literal(1),
-  nodes: z.array(documentNodeSchema),
+  nodes: z.array(documentV1NodeSchema),
 });
+
+// ---- v2 (canonical, inline content with marks) ----
+export const documentV2NodeSchema = z.union([
+  z.object({ type: z.literal("paragraph"), attrs: z.record(z.string(), z.unknown()).default({}), content: inlineContentSchema }),
+  z.object({ type: z.literal("heading"), attrs: z.object({ level: z.number().int().min(2).max(4) }), content: inlineContentSchema }),
+  z.object({ type: z.literal("quote"), attrs: z.record(z.string(), z.unknown()).default({}), content: inlineContentSchema }),
+  z.object({ type: z.literal("list"), attrs: z.object({ ordered: z.boolean().default(false) }), content: z.array(inlineContentSchema).max(500) }),
+  z.object({
+    type: z.literal("table"),
+    attrs: z.object({ headers: z.array(z.string()).default([]) }),
+    content: z.array(z.array(inlineContentSchema).max(500)).max(500),
+  }),
+  imageNodeSchema,
+  galleryNodeSchema,
+  embedNodeSchema,
+  sourceNodeSchema,
+]);
+
+export const documentV2Schema = z.object({
+  version: z.literal(2),
+  nodes: z.array(documentV2NodeSchema),
+});
+
+export const documentSchema = z.discriminatedUnion("version", [documentV1Schema, documentV2Schema]);
 
 export const articleSummarySchema = z.object({
   id: uuidSchema,
@@ -95,7 +159,7 @@ export const articleSummarySchema = z.object({
 
 export const articleSchema = articleSummarySchema.extend({
   dek: z.string().max(600).nullable(),
-  document: documentSchema,
+  document: documentV2Schema,
   seo: seoMetadataSchema,
   provenance: provenanceSchema,
 });
@@ -259,7 +323,7 @@ export const articleRevisionSchema = z.object({
   id: uuidSchema,
   articleId: uuidSchema,
   revisionNumber: z.number().int().positive(),
-  document: documentSchema,
+  document: documentV2Schema,
   createdBy: uuidSchema.nullable(),
   note: z.string().max(500).nullable(),
   createdAt: timestampSchema,
@@ -280,7 +344,14 @@ export const scheduleArticleBodySchema = z
 
 export type ArticleType = z.infer<typeof articleTypeSchema>;
 export type ArticleStatus = z.infer<typeof articleStatusSchema>;
-export type DocumentNode = z.infer<typeof documentNodeSchema>;
+export type Mark = z.infer<typeof markSchema>;
+export type InlineNode = z.infer<typeof inlineNodeSchema>;
+export type InlineContent = z.infer<typeof inlineContentSchema>;
+export type DocumentNodeV1 = z.infer<typeof documentV1NodeSchema>;
+export type DocumentNodeV2 = z.infer<typeof documentV2NodeSchema>;
+export type DocumentNode = DocumentNodeV2;
+export type ArticleDocumentV1 = z.infer<typeof documentV1Schema>;
+export type ArticleDocumentV2 = z.infer<typeof documentV2Schema>;
 export type ArticleDocument = z.infer<typeof documentSchema>;
 export type Provenance = z.infer<typeof provenanceSchema>;
 export type Article = z.infer<typeof articleSchema>;
@@ -300,3 +371,113 @@ export type CreateAuthorBody = z.infer<typeof createAuthorBodySchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type CreateSourceBody = z.infer<typeof createSourceBodySchema>;
 export type ArticleRevision = z.infer<typeof articleRevisionSchema>;
+
+// ---- document migration (v1 <-> v2) ----
+
+/** Wrap plain text into a single markless text node. */
+export function textToInline(text: string): InlineContent {
+  return [{ type: "text", text, marks: [] }];
+}
+
+/** Flatten inline content back to plain text (hard breaks become newlines). */
+export function inlineContentToText(content: InlineContent): string {
+  return content.map((n) => (n.type === "text" ? n.text : "\n")).join("");
+}
+
+function canonicalMarkKey(m: Mark): string {
+  if (m.type === "link") {
+    return `link:${m.attrs.href}:${m.attrs.title ?? ""}:${m.attrs.internal ?? ""}`;
+  }
+  return m.type;
+}
+
+function sameMarks(a: Mark[] | undefined, b: Mark[] | undefined): boolean {
+  const la = (a ?? []).map(canonicalMarkKey).sort();
+  const lb = (b ?? []).map(canonicalMarkKey).sort();
+  if (la.length !== lb.length) return false;
+  return la.every((k, i) => k === lb[i]);
+}
+
+/**
+ * Canonicalize inline content for deterministic serialization: sort marks into
+ * a stable order and merge adjacent text nodes carrying identical marks.
+ */
+export function normalizeInlineContent(content: InlineContent): InlineContent {
+  const out: InlineContent = [];
+  for (const node of content) {
+    if (node.type === "hardBreak") {
+      out.push(node);
+      continue;
+    }
+    const marks = [...(node.marks ?? [])].sort((a, b) => canonicalMarkKey(a).localeCompare(canonicalMarkKey(b)));
+    const prev = out[out.length - 1];
+    if (prev && prev.type === "text" && sameMarks(prev.marks, marks)) {
+      prev.text += node.text;
+    } else {
+      out.push({ type: "text", text: node.text, marks });
+    }
+  }
+  return out;
+}
+
+/** Normalize every text-bearing node of a v2 document. */
+export function normalizeDocumentV2(document: ArticleDocumentV2): ArticleDocumentV2 {
+  return {
+    version: 2,
+    nodes: document.nodes.map((node) => {
+      switch (node.type) {
+        case "paragraph":
+        case "heading":
+        case "quote":
+          return { ...node, content: normalizeInlineContent(node.content) };
+        case "list":
+          return { ...node, content: node.content.map(normalizeInlineContent) };
+        case "table":
+          return { ...node, content: node.content.map((row) => row.map(normalizeInlineContent)) };
+        default:
+          return node;
+      }
+    }),
+  };
+}
+
+function migrateNodeToV2(node: DocumentNodeV1): DocumentNodeV2 {
+  switch (node.type) {
+    case "paragraph":
+    case "heading":
+    case "quote":
+      return { ...node, content: textToInline(node.content) };
+    case "list":
+      return { ...node, content: node.content.map(textToInline) };
+    case "table":
+      return { ...node, content: node.content.map((row) => row.map(textToInline)) };
+    default:
+      return node;
+  }
+}
+
+/** Upgrade a legacy v1 document (or already-v2) to the canonical v2 form. */
+export function migrateDocumentToV2(document: ArticleDocument): ArticleDocumentV2 {
+  if (document.version === 2) return normalizeDocumentV2(document);
+  return { version: 2, nodes: document.nodes.map(migrateNodeToV2) };
+}
+
+function migrateNodeToV1(node: DocumentNodeV2): DocumentNodeV1 {
+  switch (node.type) {
+    case "paragraph":
+    case "heading":
+    case "quote":
+      return { ...node, content: inlineContentToText(node.content) };
+    case "list":
+      return { ...node, content: node.content.map(inlineContentToText) };
+    case "table":
+      return { ...node, content: node.content.map((row) => row.map(inlineContentToText)) };
+    default:
+      return node;
+  }
+}
+
+/** Downgrade a v2 document to v1. Lossy: inline marks are flattened away. */
+export function migrateDocumentToV1(document: ArticleDocumentV2): ArticleDocumentV1 {
+  return { version: 1, nodes: document.nodes.map(migrateNodeToV1) };
+}

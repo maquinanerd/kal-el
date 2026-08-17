@@ -1,4 +1,5 @@
-import type { ArticleDocument, DocumentNode } from "@kal-el/contracts";
+import type { ArticleDocumentV2, DocumentNodeV2 } from "@kal-el/contracts";
+import { inlineContentToText, textToInline } from "@kal-el/contracts";
 import { createHeadlessEditor } from "@lexical/headless";
 import { $createHeadingNode, $createQuoteNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { $createListItemNode, $createListNode, ListItemNode, ListNode } from "@lexical/list";
@@ -21,25 +22,25 @@ export function buildLexicalEditor(): LexicalEditor {
 const HEADING_TAG: Record<2 | 3 | 4, "h2" | "h3" | "h4"> = { 2: "h2", 3: "h3", 4: "h4" };
 const TAG_LEVEL: Record<string, number> = { h2: 2, h3: 3, h4: 4 };
 
-export async function documentToLexical(editor: LexicalEditor, document: ArticleDocument): Promise<void> {
+export async function documentToLexical(editor: LexicalEditor, document: ArticleDocumentV2): Promise<void> {
   await editor.update(() => {
     const root = $getRoot();
     root.clear();
     for (const node of document.nodes) {
       switch (node.type) {
         case "paragraph":
-          root.append($createParagraphNode().append($createTextNode(node.content)));
+          root.append($createParagraphNode().append($createTextNode(inlineContentToText(node.content))));
           break;
         case "heading":
-          root.append($createHeadingNode(HEADING_TAG[node.attrs.level as 2 | 3 | 4]).append($createTextNode(node.content)));
+          root.append($createHeadingNode(HEADING_TAG[node.attrs.level as 2 | 3 | 4]).append($createTextNode(inlineContentToText(node.content))));
           break;
         case "quote":
-          root.append($createQuoteNode().append($createTextNode(node.content)));
+          root.append($createQuoteNode().append($createTextNode(inlineContentToText(node.content))));
           break;
         case "list": {
           const list = $createListNode(node.attrs.ordered ? "number" : "bullet");
           for (const item of node.content) {
-            list.append($createListItemNode().append($createTextNode(item)));
+            list.append($createListItemNode().append($createTextNode(inlineContentToText(item))));
           }
           root.append(list);
           break;
@@ -66,23 +67,23 @@ function textOf(node: SerializedNode): string {
   return "";
 }
 
-export function lexicalToDocument(editor: LexicalEditor): ArticleDocument {
+export function lexicalToDocument(editor: LexicalEditor): ArticleDocumentV2 {
   const state = editor.getEditorState().toJSON() as { root: { children?: SerializedNode[] } };
   const children = state.root.children ?? [];
-  const nodes: DocumentNode[] = [];
+  const nodes: DocumentNodeV2[] = [];
   for (const child of children) {
     switch (child.type) {
       case "paragraph":
-        nodes.push({ type: "paragraph", attrs: {}, content: textOf(child) });
+        nodes.push({ type: "paragraph", attrs: {}, content: textToInline(textOf(child)) });
         break;
       case "heading":
-        nodes.push({ type: "heading", attrs: { level: (TAG_LEVEL[child.tag ?? ""] ?? 2) as 2 | 3 | 4 }, content: textOf(child) });
+        nodes.push({ type: "heading", attrs: { level: (TAG_LEVEL[child.tag ?? ""] ?? 2) as 2 | 3 | 4 }, content: textToInline(textOf(child)) });
         break;
       case "quote":
-        nodes.push({ type: "quote", attrs: {}, content: textOf(child) });
+        nodes.push({ type: "quote", attrs: {}, content: textToInline(textOf(child)) });
         break;
       case "list": {
-        const items = (child.children ?? []).map(textOf);
+        const items = (child.children ?? []).map((li) => textToInline(textOf(li)));
         nodes.push({ type: "list", attrs: { ordered: child.listType === "number" }, content: items });
         break;
       }
@@ -90,9 +91,10 @@ export function lexicalToDocument(editor: LexicalEditor): ArticleDocument {
         break;
     }
   }
-  return { version: 1, nodes };
+  return { version: 2, nodes };
 }
 
 export function serializeDeterministic(editor: LexicalEditor): string {
   return JSON.stringify(editor.getEditorState().toJSON());
 }
+

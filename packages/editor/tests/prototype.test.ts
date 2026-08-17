@@ -1,22 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { documentSchema, type ArticleDocument } from "@kal-el/contracts";
+import { documentV2Schema, type ArticleDocumentV2 } from "@kal-el/contracts";
 import { documentToProseMirror, proseMirrorToDocument, serializeDeterministic as tiptapSerialize } from "../src/tiptap.js";
 import { buildLexicalEditor, documentToLexical, lexicalToDocument, serializeDeterministic as lexicalSerialize } from "../src/lexical.js";
 
-const FULL_DOC: ArticleDocument = {
-  version: 1,
+const FULL_DOC: ArticleDocumentV2 = {
+  version: 2,
   nodes: [
-    { type: "paragraph", attrs: {}, content: "Gladiador II chega aos cinemas com recorde." },
-    { type: "heading", attrs: { level: 2 }, content: "Retorno à arena" },
-    { type: "quote", attrs: {}, content: "Uma citação importante." },
-    { type: "list", attrs: { ordered: false }, content: ["Item um", "Item dois"] },
-    { type: "list", attrs: { ordered: true }, content: ["Primeiro", "Segundo"] },
+    { type: "paragraph", attrs: {}, content: [{ type: "text", text: "Gladiador II chega aos cinemas com recorde.", marks: [] }] },
+    { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Retorno à arena", marks: [] }] },
+    { type: "quote", attrs: {}, content: [{ type: "text", text: "Uma citação importante.", marks: [] }] },
+    { type: "list", attrs: { ordered: false }, content: [[{ type: "text", text: "Item um", marks: [] }], [{ type: "text", text: "Item dois", marks: [] }]] },
+    { type: "list", attrs: { ordered: true }, content: [[{ type: "text", text: "Primeiro", marks: [] }], [{ type: "text", text: "Segundo", marks: [] }]] },
     {
       type: "table",
       attrs: { headers: ["Ano"] },
       content: [
-        ["Ano", "Bilheteria"],
-        ["2000", "R$ 100 mi"],
+        [[{ type: "text", text: "Ano", marks: [] }], [{ type: "text", text: "Bilheteria", marks: [] }]],
+        [[{ type: "text", text: "2000", marks: [] }], [{ type: "text", text: "R$ 100 mi", marks: [] }]],
       ],
     },
     { type: "image", attrs: { mediaId: "11111111-1111-4111-8111-111111111111", caption: "Cartaz", credit: "Divulgação", altText: "Cartaz do filme" } },
@@ -26,9 +26,28 @@ const FULL_DOC: ArticleDocument = {
   ],
 };
 
-const TEXT_ONLY: ArticleDocument = {
-  version: 1,
-  nodes: [{ type: "paragraph", attrs: {}, content: "apenas texto" }],
+const TEXT_ONLY: ArticleDocumentV2 = {
+  version: 2,
+  nodes: [{ type: "paragraph", attrs: {}, content: [{ type: "text", text: "apenas texto", marks: [] }] }],
+};
+
+const MARKED_DOC: ArticleDocumentV2 = {
+  version: 2,
+  nodes: [
+    {
+      type: "paragraph",
+      attrs: {},
+      content: [
+        { type: "text", text: "texto com ", marks: [] },
+        { type: "text", text: "negrito", marks: [{ type: "bold" }] },
+        { type: "text", text: ", ", marks: [] },
+        { type: "text", text: "itálico", marks: [{ type: "italic" }] },
+        { type: "text", text: " e ", marks: [] },
+        { type: "text", text: "link", marks: [{ type: "link", attrs: { href: "https://example.com" } }] },
+        { type: "text", text: " combinado", marks: [{ type: "bold" }, { type: "link", attrs: { href: "/slug-interno", internal: true } }] },
+      ],
+    },
+  ],
 };
 
 describe("TipTap (ProseMirror) prototype", () => {
@@ -39,30 +58,35 @@ describe("TipTap (ProseMirror) prototype", () => {
     expect(tiptapSerialize(documentToProseMirror(FULL_DOC))).toBe(tiptapSerialize(documentToProseMirror(FULL_DOC)));
   });
 
+  it("preserves inline marks (bold, italic, link) across the round-trip", () => {
+    const back = proseMirrorToDocument(documentToProseMirror(MARKED_DOC));
+    expect(JSON.stringify(back)).toBe(JSON.stringify(MARKED_DOC));
+  });
+
   it("rejects unknown node types at the schema boundary (sanitization)", () => {
-    const doc = { version: 1, nodes: [{ type: "html", content: "<script>alert(1)</script>" }] } as unknown as ArticleDocument;
+    const doc = { version: 2, nodes: [{ type: "html", content: [{ type: "text", text: "<script>alert(1)</script>", marks: [] }] }] } as unknown as ArticleDocumentV2;
     expect(() => documentToProseMirror(doc)).toThrow();
   });
 
   it("accepts out-of-range heading levels structurally (range is enforced by the zod contract at the API boundary)", () => {
-    const doc: ArticleDocument = { version: 1, nodes: [{ type: "heading", attrs: { level: 6 }, content: "x" }] };
+    const doc: ArticleDocumentV2 = { version: 2, nodes: [{ type: "heading", attrs: { level: 6 }, content: [{ type: "text", text: "x", marks: [] }] }] };
     const pm = documentToProseMirror(doc);
     expect(pm.childCount).toBe(1);
     // zod already rejects level 6 before it ever reaches the editor
-    expect(documentSchema.safeParse(doc).success).toBe(false);
+    expect(documentV2Schema.safeParse(doc).success).toBe(false);
   });
 });
 
 describe("Lexical headless prototype", () => {
   it("round-trips the core text block set deterministically", async () => {
     const editor = buildLexicalEditor();
-    const doc: ArticleDocument = {
-      version: 1,
+    const doc: ArticleDocumentV2 = {
+      version: 2,
       nodes: [
-        { type: "paragraph", attrs: {}, content: "Olá mundo" },
-        { type: "heading", attrs: { level: 3 }, content: "Seção" },
-        { type: "quote", attrs: {}, content: "Citação" },
-        { type: "list", attrs: { ordered: true }, content: ["a", "b"] },
+        { type: "paragraph", attrs: {}, content: [{ type: "text", text: "Olá mundo", marks: [] }] },
+        { type: "heading", attrs: { level: 3 }, content: [{ type: "text", text: "Seção", marks: [] }] },
+        { type: "quote", attrs: {}, content: [{ type: "text", text: "Citação", marks: [] }] },
+        { type: "list", attrs: { ordered: true }, content: [[{ type: "text", text: "a", marks: [] }], [{ type: "text", text: "b", marks: [] }]] },
       ],
     };
     await documentToLexical(editor, doc);
@@ -81,7 +105,7 @@ describe("Lexical headless prototype", () => {
 
   it("drops unsupported node types silently (needs custom node classes)", async () => {
     const editor = buildLexicalEditor();
-    await documentToLexical(editor, { version: 1, nodes: [{ type: "image", attrs: { mediaId: "11111111-1111-4111-8111-111111111111" } }] });
+    await documentToLexical(editor, { version: 2, nodes: [{ type: "image", attrs: { mediaId: "11111111-1111-4111-8111-111111111111" } }] });
     expect(lexicalToDocument(editor).nodes.length).toBe(0);
   });
 });

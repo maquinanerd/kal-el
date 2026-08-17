@@ -17,10 +17,23 @@ describe("html → document transform", () => {
   it("converts classic WordPress HTML into intermediate nodes deterministically", () => {
     const { nodes, warnings } = htmlToIntermediate(WP_HTML);
     expect(warnings).toEqual([]);
-    expect(nodes[0]).toEqual({ type: "heading", attrs: { level: 2 }, content: "Retorno à arena" });
-    expect(nodes[1]).toEqual({ type: "paragraph", content: "Uma nova aventura de Ridley Scott." });
-    expect(nodes[2]).toEqual({ type: "quote", content: "Citação de exemplo" });
-    expect(nodes[3]).toEqual({ type: "list", attrs: { ordered: false }, content: ["Item um", "Item dois"] });
+    expect(nodes[0]).toEqual({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Retorno à arena", marks: [] }] });
+    expect(nodes[1]).toEqual({
+      type: "paragraph",
+      content: [
+        { type: "text", text: "Uma ", marks: [] },
+        { type: "text", text: "nova", marks: [{ type: "bold" }] },
+        { type: "text", text: " aventura de ", marks: [] },
+        { type: "text", text: "Ridley Scott", marks: [{ type: "link", attrs: { href: "https://example.com", internal: undefined } }] },
+        { type: "text", text: ".", marks: [] },
+      ],
+    });
+    expect(nodes[2]).toEqual({ type: "quote", content: [{ type: "text", text: "Citação de exemplo", marks: [] }] });
+    expect(nodes[3]).toEqual({
+      type: "list",
+      attrs: { ordered: false },
+      content: [[{ type: "text", text: "Item um", marks: [] }], [{ type: "text", text: "Item dois", marks: [] }]],
+    });
     expect(nodes[4]).toMatchObject({ type: "image", attrs: { sourceUrl: "https://legado.example.com/wp-content/gladiador.jpg", caption: "Cartaz oficial", altText: "Cartaz" } });
     expect(nodes[5]).toMatchObject({ type: "embed", attrs: { url: "https://www.youtube.com/embed/abc123xyz", provider: "youtube", id: "abc123xyz" } });
     // scripts and inline event handlers are gone; no node holds the script text
@@ -28,6 +41,22 @@ describe("html → document transform", () => {
     expect(flattened).not.toContain("alert(1)");
     expect(flattened).not.toContain("onclick");
     expect(nodes.some((n) => n.type === "table")).toBe(true);
+  });
+
+  it("preserves links and formatting into the v2 document", () => {
+    const { nodes } = htmlToIntermediate('<p>leia <a href="https://outro.example.com">aqui</a> e <strong>não esqueça</strong></p>');
+    const doc = finalizeDocument(nodes, new Map(), []);
+    const paragraph = doc.nodes[0];
+    expect(paragraph).toMatchObject({
+      type: "paragraph",
+      content: [
+        { type: "text", text: "leia ", marks: [] },
+        { type: "text", text: "aqui", marks: [{ type: "link", attrs: { href: "https://outro.example.com" } }] },
+        { type: "text", text: " e ", marks: [] },
+        { type: "text", text: "não esqueça", marks: [{ type: "bold" }] },
+      ],
+    });
+    expect(doc.version).toBe(2);
   });
 
   it("finalizes documents, resolving media URLs to mediaIds and dropping unmapped images", () => {

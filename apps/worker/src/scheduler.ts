@@ -4,7 +4,7 @@ import { articleRevisions, articles, outboxEvents } from "@kal-el/db/schema";
 
 export type PromoteSummary = { promoted: number };
 
-const DEFAULT_DOCUMENT = { version: 1, nodes: [] };
+const DEFAULT_DOCUMENT = { version: 2, nodes: [] };
 
 /**
  * Promote articles whose scheduled_at has arrived. Safe under concurrent

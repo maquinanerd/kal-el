@@ -62,7 +62,7 @@ describe("WordPress adapter", () => {
     expect(published?.seo?.seoTitle).toBe("Título SEO");
     expect(published?.categoryExternalIds).toEqual(["wp:cat:5"]);
     expect(published?.authorExternalIds).toEqual(["wp:author:1"]);
-    expect(published?.intermediateNodes[0]).toEqual({ type: "heading", attrs: { level: 2 }, content: "Retorno" });
+    expect(published?.intermediateNodes[0]).toEqual({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Retorno", marks: [] }] });
 
     const draft = batch.articles.find((a) => a.externalId === "wp:post:43");
     expect(draft?.status).toBe("draft");

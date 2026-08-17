@@ -37,7 +37,7 @@ describe("articles", () => {
     expect(data.title).toBe("Gladiador II chega aos cinemas");
     expect(data.slug).toBe("gladiador-ii-cinemas");
     expect(data.version).toBe(0);
-    expect(data.document).toEqual({ version: 1, nodes: [] });
+    expect(data.document).toEqual({ version: 2, nodes: [] });
     expect(data.status).toBe("draft");
     expect(data.seo.robotsIndex).toBe("index");
   });
@@ -73,7 +73,7 @@ describe("articles", () => {
       method: "PATCH",
       url: `/v1/sites/${siteId}/articles/${article.id}`,
       headers: { ...articleHeaders(), "if-match": String(article.version) },
-      payload: { title: "fresh edit", document: { version: 1, nodes: [{ type: "paragraph", content: "Olá mundo" }] } },
+      payload: { title: "fresh edit", document: { version: 2, nodes: [{ type: "paragraph", content: [{ type: "text", text: "Olá mundo", marks: [] }] }] } },
     });
     expect(ok.statusCode).toBe(200);
     expect(ok.json().data.version).toBe(article.version + 1);
@@ -94,7 +94,7 @@ describe("articles", () => {
       method: "PATCH",
       url: `/v1/sites/${siteId}/articles/${article.id}`,
       headers: { ...articleHeaders(), "if-match": String(article.version) },
-      payload: { document: { version: 1, nodes: [{ type: "heading", attrs: { level: 2 }, content: "Novo título" }] } },
+      payload: { document: { version: 2, nodes: [{ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Novo título", marks: [] }] }] } },
     });
 
     const revisions = await ctx.app.inject({

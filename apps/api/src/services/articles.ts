@@ -9,7 +9,8 @@ import {
   articleTags,
   outboxEvents,
 } from "@kal-el/db/schema";
-import type { Article, ArticleDocument, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
+import type { Article, ArticleDocumentV2, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
+import { migrateDocumentToV2 } from "@kal-el/contracts";
 
 import { badRequest, conflict, notFound } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
@@ -24,7 +25,7 @@ export type ActorRef = {
   requestId?: string;
 };
 
-const DEFAULT_DOCUMENT: ArticleDocument = { version: 1, nodes: [] };
+const DEFAULT_DOCUMENT: ArticleDocumentV2 = { version: 2, nodes: [] };
 
 export function slugify(input: string): string {
   return (
@@ -85,7 +86,7 @@ async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
     version: row.version,
     externalKey: row.externalKey ?? null,
     featuredMediaId: row.featuredMediaId ?? null,
-    document: row.document ?? DEFAULT_DOCUMENT,
+    document: row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT,
     seo: row.seo,
     provenance: row.provenance ?? null,
     ...rel,
@@ -169,7 +170,7 @@ export async function createArticle(
   }
 
   const slug = body.slug ?? (await uniqueSlug(db, siteId, slugify(body.title)));
-  const document = body.document ?? DEFAULT_DOCUMENT;
+  const document = body.document ? migrateDocumentToV2(body.document) : DEFAULT_DOCUMENT;
   const seo: SeoMetadata = {
     seoTitle: null,
     metaDescription: null,
@@ -292,7 +293,7 @@ export async function updateArticle(
     }
   }
 
-  const document = body.document ?? row.document ?? DEFAULT_DOCUMENT;
+  const document = body.document ? migrateDocumentToV2(body.document) : row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT;
   const seo = body.seo ? { ...row.seo, ...body.seo } : row.seo;
   const updatedBy = actorUserId(actor);
 
@@ -316,7 +317,7 @@ export async function updateArticle(
       .returning();
     if (!result) throw conflict("article changed concurrently");
 
-    if (body.document && JSON.stringify(body.document) !== JSON.stringify(row.document)) {
+    if (body.document && JSON.stringify(document) !== JSON.stringify(row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT)) {
       const maxRev = await tx
         .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
         .from(articleRevisions)
@@ -437,7 +438,7 @@ export async function listRevisions(db: Db, siteId: string, articleId: string) {
     id: r.id,
     articleId: r.articleId,
     revisionNumber: r.revisionNumber,
-    document: r.document,
+    document: migrateDocumentToV2(r.document),
     createdBy: r.createdBy,
     note: r.note,
     createdAt: r.createdAt.toISOString(),
@@ -478,7 +479,7 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
     await tx.insert(articleRevisions).values({
       articleId,
       revisionNumber: Number(maxRev[0]?.n ?? 0) + 1,
-      document: row.document ?? DEFAULT_DOCUMENT,
+    document: row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT,
       createdBy: updatedBy,
       note: note ?? "published",
     });

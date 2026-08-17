@@ -1,25 +1,27 @@
-import type { ArticleDocument, DocumentNode } from "@kal-el/contracts";
-import { Node, Schema, type NodeSpec } from "@tiptap/pm/model";
+import type { ArticleDocumentV2, DocumentNodeV2, InlineContent, Mark } from "@kal-el/contracts";
+import { inlineContentToText, normalizeInlineContent, textToInline } from "@kal-el/contracts";
+import { Node, Schema, type Mark as ProseMirrorMark, type MarkSpec, type NodeSpec } from "@tiptap/pm/model";
 
 /**
  * ProseMirror schema mirroring the Kal El versioned document schema
  * (packages/contracts/src/editorial.ts). The schema is the sanitizer: unknown
- * node types / attrs are rejected by `Node.fromJSON` instead of being stored.
+ * node types / marks are rejected by `Node.fromJSON` instead of being stored.
  */
 export function buildTiptapSchema(): Schema {
   const text: NodeSpec = { group: "inline" };
-  const paragraph: NodeSpec = { group: "block", content: "text*", parseDOM: [{ tag: "p" }], toDOM: () => ["p", 0] };
+  const hardBreak: NodeSpec = { inline: true, group: "inline", selectable: false, parseDOM: [{ tag: "br" }], toDOM: () => ["br"] };
+  const paragraph: NodeSpec = { group: "block", content: "inline*", parseDOM: [{ tag: "p" }], toDOM: () => ["p", 0] };
   const heading: NodeSpec = {
     group: "block",
-    content: "text*",
+    content: "inline*",
     attrs: { level: { default: 2 } },
     parseDOM: [{ tag: "h2", attrs: { level: 2 } }, { tag: "h3", attrs: { level: 3 } }, { tag: "h4", attrs: { level: 4 } }],
     toDOM: (node) => [`h${node.attrs.level as number}`, 0],
   };
-  const blockquote: NodeSpec = { group: "block", content: "text*", parseDOM: [{ tag: "blockquote" }], toDOM: () => ["blockquote", 0] };
+  const blockquote: NodeSpec = { group: "block", content: "inline*", parseDOM: [{ tag: "blockquote" }], toDOM: () => ["blockquote", 0] };
   const bulletList: NodeSpec = { group: "block", content: "listItem+", parseDOM: [{ tag: "ul" }], toDOM: () => ["ul", 0] };
   const orderedList: NodeSpec = { group: "block", content: "listItem+", parseDOM: [{ tag: "ol" }], toDOM: () => ["ol", 0] };
-  const listItem: NodeSpec = { content: "text*", parseDOM: [{ tag: "li" }], toDOM: () => ["li", 0] };
+  const listItem: NodeSpec = { content: "inline*", parseDOM: [{ tag: "li" }], toDOM: () => ["li", 0] };
   const image: NodeSpec = {
     group: "block",
     atom: true,
@@ -32,14 +34,56 @@ export function buildTiptapSchema(): Schema {
   const source: NodeSpec = { group: "block", atom: true, attrs: { label: {}, url: {}, kind: { default: null } }, toDOM: () => ["div", 0] };
   const table: NodeSpec = { group: "block", content: "tableRow+", toDOM: () => ["table", 0] };
   const tableRow: NodeSpec = { content: "tableCell+", toDOM: () => ["tr", 0] };
-  const tableCell: NodeSpec = { content: "text*", attrs: { header: { default: false } }, toDOM: (n) => [n.attrs.header ? "th" : "td", 0] };
+  const tableCell: NodeSpec = { content: "inline*", attrs: { header: { default: false } }, toDOM: (n) => [n.attrs.header ? "th" : "td", 0] };
+
+  const bold: MarkSpec = { parseDOM: [{ tag: "strong" }, { tag: "b" }], toDOM: () => ["strong", 0] };
+  const italic: MarkSpec = { parseDOM: [{ tag: "em" }, { tag: "i" }], toDOM: () => ["em", 0] };
+  const code: MarkSpec = { parseDOM: [{ tag: "code" }], toDOM: () => ["code", 0] };
+  const underline: MarkSpec = { parseDOM: [{ tag: "u" }], toDOM: () => ["u", 0] };
+  const strike: MarkSpec = { parseDOM: [{ tag: "s" }, { tag: "del" }, { tag: "strike" }], toDOM: () => ["s", 0] };
+  const link: MarkSpec = {
+    attrs: { href: {}, title: { default: null }, internal: { default: null } },
+    inclusive: false,
+    parseDOM: [
+      {
+        tag: "a[href]",
+        getAttrs: (dom) => {
+          const el = dom as { getAttribute(name: string): string | null };
+          const href = el.getAttribute("href") ?? "";
+          return { href, title: el.getAttribute("title") ?? null, internal: href.startsWith("/") ? true : null };
+        },
+      },
+    ],
+    toDOM: (mark) => {
+      const { href, title } = mark.attrs as { href: string; title: string | null };
+      return ["a", { href, ...(title ? { title } : {}) }, 0];
+    },
+  };
 
   return new Schema({
-    nodes: { doc: { content: "block+" }, text, paragraph, heading, blockquote, bulletList, orderedList, listItem, image, gallery, embed, source, table, tableRow, tableCell },
+    nodes: {
+      doc: { content: "block+" },
+      text,
+      hardBreak,
+      paragraph,
+      heading,
+      blockquote,
+      bulletList,
+      orderedList,
+      listItem,
+      image,
+      gallery,
+      embed,
+      source,
+      table,
+      tableRow,
+      tableCell,
+    },
+    marks: { bold, italic, code, underline, strike, link },
   });
 }
 
-function attrsFor(node: DocumentNode): Record<string, unknown> {
+function attrsFor(node: DocumentNodeV2): Record<string, unknown> {
   switch (node.type) {
     case "heading":
       return { level: node.attrs.level };
@@ -60,28 +104,42 @@ function attrsFor(node: DocumentNode): Record<string, unknown> {
   }
 }
 
-function proseJson(node: DocumentNode): Record<string, unknown> {
+function markToPmJson(mark: Mark): Record<string, unknown> {
+  if (mark.type === "link") {
+    return { type: "link", attrs: { href: mark.attrs.href, title: mark.attrs.title ?? null, internal: mark.attrs.internal ?? null } };
+  }
+  return { type: mark.type };
+}
+
+function inlineToPmJson(content: InlineContent): Record<string, unknown>[] {
+  return content.map((n) => {
+    if (n.type === "hardBreak") return { type: "hardBreak" };
+    return { type: "text", text: n.text, marks: n.marks.map(markToPmJson) };
+  });
+}
+
+function proseJson(node: DocumentNodeV2): Record<string, unknown> {
   switch (node.type) {
     case "paragraph":
-      return { type: "paragraph", content: [{ type: "text", text: node.content }] };
+      return { type: "paragraph", content: inlineToPmJson(node.content) };
     case "heading":
-      return { type: "heading", attrs: { level: node.attrs.level }, content: [{ type: "text", text: node.content }] };
+      return { type: "heading", attrs: { level: node.attrs.level }, content: inlineToPmJson(node.content) };
     case "quote":
-      return { type: "blockquote", content: [{ type: "text", text: node.content }] };
+      return { type: "blockquote", content: inlineToPmJson(node.content) };
     case "list":
       return {
         type: node.attrs.ordered ? "orderedList" : "bulletList",
-        content: node.content.map((item) => ({ type: "listItem", content: [{ type: "text", text: item }] })),
+        content: node.content.map((item) => ({ type: "listItem", content: inlineToPmJson(item) })),
       };
     case "table":
       return {
         type: "table",
         content: node.content.map((row, ri) => ({
           type: "tableRow",
-          content: row.map((cell, _ci) => ({
+          content: row.map((cell) => ({
             type: "tableCell",
-            attrs: { header: ri === 0 && node.attrs.headers.includes(cell) },
-            content: [{ type: "text", text: cell }],
+            attrs: { header: ri === 0 && node.attrs.headers.includes(inlineContentToText(cell)) },
+            content: inlineToPmJson(cell),
           })),
         })),
       };
@@ -96,43 +154,71 @@ function proseJson(node: DocumentNode): Record<string, unknown> {
   }
 }
 
-/** Validate + convert a Kal El document into a ProseMirror doc node. Throws on unknown/invalid nodes. */
-export function documentToProseMirror(document: ArticleDocument): Node {
+/** Validate + convert a Kal El v2 document into a ProseMirror doc node. Throws on unknown/invalid nodes. */
+export function documentToProseMirror(document: ArticleDocumentV2): Node {
   const schema = buildTiptapSchema();
   const json = { type: "doc", content: document.nodes.map(proseJson) };
   return Node.fromJSON(schema, json);
 }
 
-/** Convert a ProseMirror doc node back into a Kal El document (round-trip). */
-export function proseMirrorToDocument(node: Node): ArticleDocument {
-  const nodes: DocumentNode[] = [];
+function markFromPm(mark: ProseMirrorMark): Mark {
+  if (mark.type.name === "link") {
+    const attrs = mark.attrs as { href: string; title?: string | null; internal?: boolean | null };
+    return {
+      type: "link",
+      attrs: {
+        href: attrs.href,
+        ...(attrs.title ? { title: attrs.title } : {}),
+        ...(attrs.internal != null ? { internal: attrs.internal } : {}),
+      },
+    };
+  }
+  return { type: mark.type.name as "bold" | "italic" | "code" | "underline" | "strike" };
+}
+
+function inlineFromPm(node: Node): InlineContent {
+  const out: InlineContent = [];
+  node.forEach((child) => {
+    if (child.isText) {
+      out.push({ type: "text", text: child.text ?? "", marks: child.marks.map(markFromPm) });
+    } else if (child.type.name === "hardBreak") {
+      out.push({ type: "hardBreak" });
+    }
+  });
+  return normalizeInlineContent(out);
+}
+
+/** Convert a ProseMirror doc node back into a Kal El v2 document (round-trip). */
+export function proseMirrorToDocument(node: Node): ArticleDocumentV2 {
+  const nodes: DocumentNodeV2[] = [];
   node.forEach((child) => {
     switch (child.type.name) {
       case "paragraph":
-        nodes.push({ type: "paragraph", attrs: {}, content: child.textContent });
+        nodes.push({ type: "paragraph", attrs: {}, content: inlineFromPm(child) });
         break;
       case "heading":
-        nodes.push({ type: "heading", attrs: { level: child.attrs.level as 2 | 3 | 4 }, content: child.textContent });
+        nodes.push({ type: "heading", attrs: { level: child.attrs.level as 2 | 3 | 4 }, content: inlineFromPm(child) });
         break;
       case "blockquote":
-        nodes.push({ type: "quote", attrs: {}, content: child.textContent });
+        nodes.push({ type: "quote", attrs: {}, content: inlineFromPm(child) });
         break;
       case "bulletList":
       case "orderedList": {
-        const items: string[] = [];
-        child.forEach((li) => items.push(li.textContent));
+        const items: InlineContent[] = [];
+        child.forEach((li) => items.push(inlineFromPm(li)));
         nodes.push({ type: "list", attrs: { ordered: child.type.name === "orderedList" }, content: items });
         break;
       }
       case "table": {
-        const rows: string[][] = [];
+        const rows: InlineContent[][] = [];
         const headers: string[] = [];
         let first = true;
         child.forEach((tr) => {
-          const cells: string[] = [];
+          const cells: InlineContent[] = [];
           tr.forEach((td) => {
-            if (first && td.attrs.header) headers.push(td.textContent);
-            cells.push(td.textContent);
+            const content = inlineFromPm(td);
+            if (first && td.attrs.header) headers.push(inlineContentToText(content));
+            cells.push(content);
           });
           first = false;
           rows.push(cells);
@@ -154,9 +240,12 @@ export function proseMirrorToDocument(node: Node): ArticleDocument {
         break;
     }
   });
-  return { version: 1, nodes };
+  return { version: 2, nodes };
 }
 
 export function serializeDeterministic(node: Node): string {
   return JSON.stringify(node.toJSON());
 }
+
+// re-export for convenience (deterministic serialization of a v2 document)
+export { inlineContentToText, normalizeInlineContent, textToInline };
