@@ -108,7 +108,7 @@ export const articles = pgTable(
       .$type<ArticleType>()
       .notNull()
       .default("article"),
-    status: text("status", { enum: ["draft", "in_review", "scheduled", "published", "blocked"] })
+    status: text("status", { enum: ["draft", "in_review", "scheduled", "published", "blocked", "archived"] })
       .$type<ArticleStatus>()
       .notNull()
       .default("draft"),

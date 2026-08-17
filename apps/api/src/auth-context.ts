@@ -11,6 +11,8 @@ export const PERMISSIONS = {
   articleUpdate: "articles.update",
   articlePublish: "articles.publish",
   articleSchedule: "articles.schedule",
+  articleSubmit: "articles.submit",
+  articleApprove: "articles.approve",
   articleDelete: "articles.delete",
   categoryManage: "taxonomy.categories.manage",
   tagManage: "taxonomy.tags.manage",

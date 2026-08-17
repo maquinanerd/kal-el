@@ -2,6 +2,7 @@ import { runMigrations } from "@kal-el/db";
 import { loadConfig } from "./config.js";
 import { buildApp } from "./app.js";
 import { seedPermissions } from "./services/seed.js";
+import { ensurePresetRoles } from "./services/roles.js";
 
 const config = loadConfig();
 
@@ -12,6 +13,7 @@ if (process.env.RUN_MIGRATIONS === "true") {
 
 const app = await buildApp({ connectionString: config.DATABASE_URL, config });
 await seedPermissions(app.db);
+await ensurePresetRoles(app.db);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");

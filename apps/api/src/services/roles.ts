@@ -103,3 +103,99 @@ export async function ensureOwnerRole(db: Db): Promise<void> {
     await tx.insert(rolePermissions).values(all.map((p) => ({ roleId: role.id, permissionId: p.id })));
   });
 }
+
+const TAXONOMY = [
+  PERMISSIONS.categoryManage,
+  PERMISSIONS.tagManage,
+  PERMISSIONS.entityManage,
+  PERMISSIONS.authorManage,
+  PERMISSIONS.sourceManage,
+];
+
+const EDITORIAL_BASE = [PERMISSIONS.articleCreate, PERMISSIONS.articleRead, PERMISSIONS.articleUpdate];
+
+/**
+ * Preset editorial roles. These are global keys (siteId = null) assignable to
+ * any site via POST /v1/admin/users/:id/roles. The permission system remains
+ * flexible — custom roles can still be created per-site.
+ */
+export const PRESET_ROLES: Array<{ key: string; name: string; description: string; permissions: string[] }> = [
+  {
+    key: "owner",
+    name: "Owner",
+    description: "Full platform control",
+    permissions: Object.values(PERMISSIONS),
+  },
+  {
+    key: "admin",
+    name: "Admin",
+    description: "Full site control (no platform/system, user or role management)",
+    permissions: [
+      ...EDITORIAL_BASE,
+      PERMISSIONS.articlePublish,
+      PERMISSIONS.articleSchedule,
+      PERMISSIONS.articleSubmit,
+      PERMISSIONS.articleApprove,
+      PERMISSIONS.articleDelete,
+      ...TAXONOMY,
+      PERMISSIONS.seoManage,
+      PERMISSIONS.mediaManage,
+      PERMISSIONS.mediaRead,
+      PERMISSIONS.auditRead,
+      PERMISSIONS.siteRead,
+    ],
+  },
+  {
+    key: "editor-chefe",
+    name: "Editor chefe",
+    description: "Approves, publishes and schedules content",
+    permissions: [
+      ...EDITORIAL_BASE,
+      PERMISSIONS.articlePublish,
+      PERMISSIONS.articleSchedule,
+      PERMISSIONS.articleSubmit,
+      PERMISSIONS.articleApprove,
+      ...TAXONOMY,
+      PERMISSIONS.seoManage,
+      PERMISSIONS.mediaManage,
+      PERMISSIONS.mediaRead,
+      PERMISSIONS.auditRead,
+    ],
+  },
+  {
+    key: "editor",
+    name: "Editor",
+    description: "Edits and reviews content",
+    permissions: [
+      ...EDITORIAL_BASE,
+      PERMISSIONS.articleSubmit,
+      PERMISSIONS.articleApprove,
+      ...TAXONOMY,
+      PERMISSIONS.mediaManage,
+      PERMISSIONS.mediaRead,
+    ],
+  },
+  {
+    key: "autor",
+    name: "Autor",
+    description: "Writes and submits drafts (cannot publish)",
+    permissions: [...EDITORIAL_BASE, PERMISSIONS.articleSubmit, PERMISSIONS.mediaRead],
+  },
+];
+
+/** Create the preset roles if they do not already exist (idempotent). */
+export async function ensurePresetRoles(db: Db): Promise<void> {
+  for (const preset of PRESET_ROLES) {
+    const existing = await db.query.roles.findFirst({ where: eq(roles.key, preset.key) });
+    if (existing) continue;
+    const permRows = await db
+      .select({ id: permissions.id, key: permissions.key })
+      .from(permissions)
+      .where(inArray(permissions.key, preset.permissions));
+    await db.transaction(async (tx) => {
+      const [role] = await tx.insert(roles).values({ key: preset.key, name: preset.name, description: preset.description }).returning();
+      if (!role) return;
+      await tx.insert(rolePermissions).values(permRows.map((p) => ({ roleId: role.id, permissionId: p.id })));
+    });
+  }
+}

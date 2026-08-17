@@ -24,12 +24,17 @@ import { badRequest, notFound } from "../plugins/errors.js";
 import { requireSiteScope } from "../plugins/auth.js";
 import { idempotencyRequestHash, withIdempotency } from "../plugins/idempotency.js";
 import {
+  approveArticle,
+  archiveArticle,
   createArticle,
   getArticle,
   listArticles,
   listRevisions,
   publishArticle,
+  rejectArticle,
   scheduleArticle,
+  submitArticle,
+  unpublishArticle,
   updateArticle,
   type ActorRef,
 } from "../services/articles.js";
@@ -151,6 +156,42 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         if (Number.isNaN(scheduledAt.getTime())) throw badRequest("invalid scheduledAt");
         const article = await scheduleArticle(app.db, siteId, articleId, scheduledAt, req.actor as ActorRef, parsed.data.note);
         return { data: article };
+      });
+
+      // ---- Editorial workflow ----
+      siteApp.post("/articles/:articleId/submit", { preHandler: guard("articles.submit") }, async (req) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await submitArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+      });
+
+      siteApp.post("/articles/:articleId/approve", { preHandler: guard("articles.approve") }, async (req) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await approveArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+      });
+
+      siteApp.post("/articles/:articleId/reject", { preHandler: guard("articles.approve") }, async (req) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await rejectArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+      });
+
+      siteApp.post("/articles/:articleId/unpublish", { preHandler: guard("articles.publish") }, async (req) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await unpublishArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+      });
+
+      siteApp.post("/articles/:articleId/archive", { preHandler: guard("articles.publish") }, async (req) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await archiveArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
       });
 
       // ---- Taxonomy ----

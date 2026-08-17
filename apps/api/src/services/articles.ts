@@ -9,7 +9,7 @@ import {
   articleTags,
   outboxEvents,
 } from "@kal-el/db/schema";
-import type { Article, ArticleDocumentV2, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
+import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
 
 import { badRequest, conflict, notFound } from "../plugins/errors.js";
@@ -27,6 +27,22 @@ export type ActorRef = {
 };
 
 const DEFAULT_DOCUMENT: ArticleDocumentV2 = { version: 2, nodes: [] };
+
+const WORKFLOW_TRANSITIONS: Record<ArticleStatus, ArticleStatus[]> = {
+  draft: ["in_review", "scheduled", "published", "archived"],
+  in_review: ["draft", "blocked", "scheduled", "published", "archived"],
+  scheduled: ["published", "scheduled", "draft", "archived"],
+  published: ["draft"],
+  blocked: ["in_review", "draft", "archived"],
+  archived: [],
+};
+
+function assertTransition(from: ArticleStatus, to: ArticleStatus): void {
+  const allowed = WORKFLOW_TRANSITIONS[from] ?? [];
+  if (!allowed.includes(to)) {
+    throw conflict(`cannot transition article from "${from}" to "${to}"`);
+  }
+}
 
 export function slugify(input: string): string {
   return (
@@ -462,6 +478,7 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
   if (row.status === "published" && row.publishedAt) {
     return articleDto(db, row);
   }
+  assertTransition(row.status, "published");
 
   const publishedAt = row.publishedAt ?? new Date();
   const updatedBy = actorUserId(actor);
@@ -529,6 +546,7 @@ export async function scheduleArticle(db: Db, siteId: string, articleId: string,
   });
   if (!row) throw notFound("article not found");
   if (scheduledAt <= new Date()) throw conflict("scheduledAt must be in the future");
+  assertTransition(row.status, "scheduled");
 
   const updatedBy = actorUserId(actor);
   const updated = await db.transaction(async (tx) => {
@@ -562,4 +580,74 @@ export async function scheduleArticle(db: Db, siteId: string, articleId: string,
   });
 
   return articleDto(db, updated);
+}
+
+
+async function applyStatusTransition(
+  db: Db,
+  siteId: string,
+  articleId: string,
+  actor: ActorRef,
+  to: ArticleStatus,
+  action: string,
+  note?: string,
+  clearDates = false,
+) {
+  const row = await db.query.articles.findFirst({
+    where: and(eq(articles.id, articleId), eq(articles.siteId, siteId)),
+  });
+  if (!row) throw notFound("article not found");
+  assertTransition(row.status, to);
+
+  const updatedBy = actorUserId(actor);
+  const updated = await db.transaction(async (tx) => {
+    const [result] = await tx
+      .update(articles)
+      .set({
+        status: to,
+        publishedAt: clearDates ? null : row.publishedAt,
+        scheduledAt: clearDates ? null : row.scheduledAt,
+        updatedBy,
+        version: row.version + 1,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId)))
+      .returning();
+    if (!result) throw conflict("article changed concurrently");
+
+    await writeAudit(tx, {
+      siteId,
+      actorType: actor.kind,
+      actorId: updatedBy,
+      action,
+      objectType: "article",
+      objectId: articleId,
+      details: { from: row.status, to, note: note ?? null },
+      ip: actor.ip ?? null,
+      requestId: actor.requestId ?? null,
+    });
+    return result;
+  });
+
+  return articleDto(db, updated);
+}
+
+export async function submitArticle(db: Db, siteId: string, articleId: string, actor: ActorRef, note?: string) {
+  return applyStatusTransition(db, siteId, articleId, actor, "in_review", "articles.submit", note);
+}
+
+export async function approveArticle(db: Db, siteId: string, articleId: string, actor: ActorRef, note?: string) {
+  return applyStatusTransition(db, siteId, articleId, actor, "draft", "articles.approve", note, true);
+}
+
+export async function rejectArticle(db: Db, siteId: string, articleId: string, actor: ActorRef, note?: string) {
+  return applyStatusTransition(db, siteId, articleId, actor, "blocked", "articles.reject", note, true);
+}
+
+export async function unpublishArticle(db: Db, siteId: string, articleId: string, actor: ActorRef, note?: string) {
+  return applyStatusTransition(db, siteId, articleId, actor, "draft", "articles.unpublish", note, true);
+}
+
+export async function archiveArticle(db: Db, siteId: string, articleId: string, actor: ActorRef, note?: string) {
+  return applyStatusTransition(db, siteId, articleId, actor, "archived", "articles.archive", note, true);
 }

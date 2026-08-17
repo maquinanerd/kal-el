@@ -4,7 +4,7 @@ import { timestampSchema, uuidSchema } from "./common.js";
 
 export const articleTypeSchema = z.enum(["article", "review", "list", "video", "audio"]);
 
-export const articleStatusSchema = z.enum(["draft", "in_review", "scheduled", "published", "blocked"]);
+export const articleStatusSchema = z.enum(["draft", "in_review", "scheduled", "published", "blocked", "archived"]);
 
 export const httpUrlSchema = z
   .string()
