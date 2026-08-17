@@ -5,22 +5,9 @@ import { generateOpaqueToken, hashToken, serviceTokenPrefix } from "@kal-el/auth
 import type { CreateServiceTokenBody } from "@kal-el/contracts";
 
 import { badRequest, notFound } from "../plugins/errors.js";
+import { ALL_PERMISSIONS } from "../auth-context.js";
 
-const VALID_SCOPES = [
-  "system.manage",
-  "articles.create",
-  "articles.read",
-  "articles.update",
-  "articles.publish",
-  "articles.schedule",
-  "media.manage",
-  "seo.manage",
-  "taxonomy.categories.manage",
-  "taxonomy.tags.manage",
-  "taxonomy.entities.manage",
-  "taxonomy.authors.manage",
-  "taxonomy.sources.manage",
-];
+const VALID_SCOPES = ALL_PERMISSIONS;
 
 export async function createServiceToken(db: Db, siteId: string, body: CreateServiceTokenBody) {
   const invalid = body.scopes.filter((s) => !VALID_SCOPES.includes(s));

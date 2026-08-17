@@ -1,7 +1,18 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
 import { authors, categories, entities, sources, tags } from "@kal-el/db/schema";
-import type { CreateAuthorBody, CreateCategoryBody, CreateEntityBody, CreateSourceBody, CreateTagBody } from "@kal-el/contracts";
+import type {
+  CreateAuthorBody,
+  CreateCategoryBody,
+  CreateEntityBody,
+  CreateSourceBody,
+  CreateTagBody,
+  UpdateAuthorBody,
+  UpdateCategoryBody,
+  UpdateEntityBody,
+  UpdateSourceBody,
+  UpdateTagBody,
+} from "@kal-el/contracts";
 
 import { conflict, isUniqueViolation, notFound } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
@@ -197,6 +208,212 @@ export async function createSource(db: Db, siteId: string, actor: ActorRef, body
 export async function listSources(db: Db, siteId: string) {
   const rows = await db.select().from(sources).where(eq(sources.siteId, siteId)).orderBy(asc(sources.name));
   return rows.map((r) => ({ id: r.id, siteId: r.siteId, name: r.name, url: r.url ?? null, kind: r.kind, ...iso(r) }));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function writeUpdateAudit(
+  tx: any,
+  siteId: string,
+  actor: ActorRef,
+  action: string,
+  objectType: string,
+  objectId: string,
+  changed: string[],
+) {
+  await writeAudit(tx, {
+    siteId,
+    actorType: actor.kind,
+    actorId: actor.kind === "user" ? actor.userId ?? null : null,
+    action,
+    objectType,
+    objectId,
+    details: { changedFields: changed },
+    ip: actor.ip ?? null,
+    requestId: actor.requestId ?? null,
+  });
+}
+
+export async function updateCategory(db: Db, siteId: string, categoryId: string, actor: ActorRef, body: UpdateCategoryBody) {
+  const existing = await db.query.categories.findFirst({ where: and(eq(categories.id, categoryId), eq(categories.siteId, siteId)) });
+  if (!existing) throw notFound("category not found");
+  if (body.parentId) {
+    const parent = await db.query.categories.findFirst({ where: and(eq(categories.id, body.parentId), eq(categories.siteId, siteId)) });
+    if (!parent) throw notFound("parent category not found");
+  }
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(categories)
+      .set({
+        name: body.name ?? existing.name,
+        slug: body.slug ?? existing.slug,
+        parentId: body.parentId !== undefined ? body.parentId : existing.parentId,
+        description: body.description !== undefined ? body.description : existing.description,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(categories.id, categoryId), eq(categories.siteId, siteId)))
+      .returning();
+    if (!row) throw notFound("category not found");
+    await writeUpdateAudit(tx, siteId, actor, "categories.update", "category", categoryId, Object.keys(body));
+    return row;
+  });
+  return {
+    id: updated.id,
+    siteId: updated.siteId,
+    parentId: updated.parentId,
+    name: updated.name,
+    slug: updated.slug,
+    description: updated.description ?? null,
+    ...iso(updated),
+  };
+}
+
+export async function deleteCategory(db: Db, siteId: string, categoryId: string, actor: ActorRef) {
+  const existing = await db.query.categories.findFirst({ where: and(eq(categories.id, categoryId), eq(categories.siteId, siteId)) });
+  if (!existing) throw notFound("category not found");
+  await db.transaction(async (tx) => {
+    await tx.update(categories).set({ parentId: null }).where(and(eq(categories.siteId, siteId), eq(categories.parentId, categoryId)));
+    await tx.delete(categories).where(and(eq(categories.id, categoryId), eq(categories.siteId, siteId)));
+    await writeUpdateAudit(tx, siteId, actor, "categories.delete", "category", categoryId, []);
+  });
+  return { id: categoryId, deleted: true };
+}
+
+export async function updateTag(db: Db, siteId: string, tagId: string, actor: ActorRef, body: UpdateTagBody) {
+  const existing = await db.query.tags.findFirst({ where: and(eq(tags.id, tagId), eq(tags.siteId, siteId)) });
+  if (!existing) throw notFound("tag not found");
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(tags)
+      .set({ name: body.name ?? existing.name, slug: body.slug ?? existing.slug, updatedAt: new Date() })
+      .where(and(eq(tags.id, tagId), eq(tags.siteId, siteId)))
+      .returning();
+    if (!row) throw notFound("tag not found");
+    await writeUpdateAudit(tx, siteId, actor, "tags.update", "tag", tagId, Object.keys(body));
+    return row;
+  });
+  return { id: updated.id, siteId: updated.siteId, name: updated.name, slug: updated.slug, ...iso(updated) };
+}
+
+export async function deleteTag(db: Db, siteId: string, tagId: string, actor: ActorRef) {
+  const existing = await db.query.tags.findFirst({ where: and(eq(tags.id, tagId), eq(tags.siteId, siteId)) });
+  if (!existing) throw notFound("tag not found");
+  await db.transaction(async (tx) => {
+    await tx.delete(tags).where(and(eq(tags.id, tagId), eq(tags.siteId, siteId)));
+    await writeUpdateAudit(tx, siteId, actor, "tags.delete", "tag", tagId, []);
+  });
+  return { id: tagId, deleted: true };
+}
+
+export async function updateEntity(db: Db, siteId: string, entityId: string, actor: ActorRef, body: UpdateEntityBody) {
+  const existing = await db.query.entities.findFirst({ where: and(eq(entities.id, entityId), eq(entities.siteId, siteId)) });
+  if (!existing) throw notFound("entity not found");
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(entities)
+      .set({
+        name: body.name ?? existing.name,
+        type: body.type ?? existing.type,
+        description: body.description !== undefined ? body.description : existing.description,
+        externalRefs: body.externalRefs ?? existing.externalRefs,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(entities.id, entityId), eq(entities.siteId, siteId)))
+      .returning();
+    if (!row) throw notFound("entity not found");
+    await writeUpdateAudit(tx, siteId, actor, "entities.update", "entity", entityId, Object.keys(body));
+    return row;
+  });
+  return {
+    id: updated.id,
+    siteId: updated.siteId,
+    name: updated.name,
+    type: updated.type,
+    description: updated.description ?? null,
+    externalRefs: updated.externalRefs,
+    ...iso(updated),
+  };
+}
+
+export async function deleteEntity(db: Db, siteId: string, entityId: string, actor: ActorRef) {
+  const existing = await db.query.entities.findFirst({ where: and(eq(entities.id, entityId), eq(entities.siteId, siteId)) });
+  if (!existing) throw notFound("entity not found");
+  await db.transaction(async (tx) => {
+    await tx.delete(entities).where(and(eq(entities.id, entityId), eq(entities.siteId, siteId)));
+    await writeUpdateAudit(tx, siteId, actor, "entities.delete", "entity", entityId, []);
+  });
+  return { id: entityId, deleted: true };
+}
+
+export async function updateAuthor(db: Db, siteId: string, authorId: string, actor: ActorRef, body: UpdateAuthorBody) {
+  const existing = await db.query.authors.findFirst({ where: and(eq(authors.id, authorId), eq(authors.siteId, siteId)) });
+  if (!existing) throw notFound("author not found");
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(authors)
+      .set({
+        name: body.name ?? existing.name,
+        slug: body.slug ?? existing.slug,
+        bio: body.bio !== undefined ? body.bio : existing.bio,
+        email: body.email !== undefined ? body.email : existing.email,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(authors.id, authorId), eq(authors.siteId, siteId)))
+      .returning();
+    if (!row) throw notFound("author not found");
+    await writeUpdateAudit(tx, siteId, actor, "authors.update", "author", authorId, Object.keys(body));
+    return row;
+  });
+  return {
+    id: updated.id,
+    siteId: updated.siteId,
+    name: updated.name,
+    slug: updated.slug,
+    bio: updated.bio ?? null,
+    email: updated.email ?? null,
+    avatarMediaId: updated.avatarMediaId ?? null,
+    ...iso(updated),
+  };
+}
+
+export async function deleteAuthor(db: Db, siteId: string, authorId: string, actor: ActorRef) {
+  const existing = await db.query.authors.findFirst({ where: and(eq(authors.id, authorId), eq(authors.siteId, siteId)) });
+  if (!existing) throw notFound("author not found");
+  await db.transaction(async (tx) => {
+    await tx.delete(authors).where(and(eq(authors.id, authorId), eq(authors.siteId, siteId)));
+    await writeUpdateAudit(tx, siteId, actor, "authors.delete", "author", authorId, []);
+  });
+  return { id: authorId, deleted: true };
+}
+
+export async function updateSource(db: Db, siteId: string, sourceId: string, actor: ActorRef, body: UpdateSourceBody) {
+  const existing = await db.query.sources.findFirst({ where: and(eq(sources.id, sourceId), eq(sources.siteId, siteId)) });
+  if (!existing) throw notFound("source not found");
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(sources)
+      .set({
+        name: body.name ?? existing.name,
+        url: body.url !== undefined ? body.url : existing.url,
+        kind: body.kind ?? existing.kind,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(sources.id, sourceId), eq(sources.siteId, siteId)))
+      .returning();
+    if (!row) throw notFound("source not found");
+    await writeUpdateAudit(tx, siteId, actor, "sources.update", "source", sourceId, Object.keys(body));
+    return row;
+  });
+  return { id: updated.id, siteId: updated.siteId, name: updated.name, url: updated.url ?? null, kind: updated.kind, ...iso(updated) };
+}
+
+export async function deleteSource(db: Db, siteId: string, sourceId: string, actor: ActorRef) {
+  const existing = await db.query.sources.findFirst({ where: and(eq(sources.id, sourceId), eq(sources.siteId, siteId)) });
+  if (!existing) throw notFound("source not found");
+  await db.transaction(async (tx) => {
+    await tx.delete(sources).where(and(eq(sources.id, sourceId), eq(sources.siteId, siteId)));
+    await writeUpdateAudit(tx, siteId, actor, "sources.delete", "source", sourceId, []);
+  });
+  return { id: sourceId, deleted: true };
 }
 
 

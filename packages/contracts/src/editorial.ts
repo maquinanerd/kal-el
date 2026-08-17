@@ -321,6 +321,53 @@ export const createSourceBodySchema = z
   })
   .strict();
 
+export const updateCategoryBodySchema = z
+  .object({
+    name: categorySchema.shape.name.optional(),
+    slug: categorySchema.shape.slug.optional(),
+    parentId: uuidSchema.nullable().optional(),
+    description: z.string().max(1000).nullable().optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
+
+export const updateTagBodySchema = z
+  .object({
+    name: tagSchema.shape.name.optional(),
+    slug: tagSchema.shape.slug.optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
+
+export const updateEntityBodySchema = z
+  .object({
+    name: entitySchema.shape.name.optional(),
+    type: entitySchema.shape.type.optional(),
+    description: z.string().max(2000).nullable().optional(),
+    externalRefs: entitySchema.shape.externalRefs.optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
+
+export const updateAuthorBodySchema = z
+  .object({
+    name: authorSchema.shape.name.optional(),
+    slug: authorSchema.shape.slug.optional(),
+    bio: z.string().max(2000).nullable().optional(),
+    email: z.string().email().nullable().optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
+
+export const updateSourceBodySchema = z
+  .object({
+    name: sourceSchema.shape.name.optional(),
+    url: z.string().url().max(2048).nullable().optional(),
+    kind: sourceSchema.shape.kind.optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
+
 export const articleRevisionSchema = z.object({
   id: uuidSchema,
   articleId: uuidSchema,
@@ -364,14 +411,19 @@ export type UpdateArticleBody = z.infer<typeof updateArticleBodySchema>;
 export type UpdateArticleInput = z.input<typeof updateArticleBodySchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type CreateCategoryBody = z.infer<typeof createCategoryBodySchema>;
+export type UpdateCategoryBody = z.infer<typeof updateCategoryBodySchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type CreateTagBody = z.infer<typeof createTagBodySchema>;
+export type UpdateTagBody = z.infer<typeof updateTagBodySchema>;
 export type Entity = z.infer<typeof entitySchema>;
 export type CreateEntityBody = z.infer<typeof createEntityBodySchema>;
+export type UpdateEntityBody = z.infer<typeof updateEntityBodySchema>;
 export type Author = z.infer<typeof authorSchema>;
 export type CreateAuthorBody = z.infer<typeof createAuthorBodySchema>;
+export type UpdateAuthorBody = z.infer<typeof updateAuthorBodySchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type CreateSourceBody = z.infer<typeof createSourceBodySchema>;
+export type UpdateSourceBody = z.infer<typeof updateSourceBodySchema>;
 export type ArticleRevision = z.infer<typeof articleRevisionSchema>;
 
 // ---- document migration (v1 <-> v2) ----

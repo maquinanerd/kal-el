@@ -119,9 +119,10 @@ describe("media subsystem", () => {
       headers: { Cookie: ownerSession.cookieHeader },
     });
     expect(list.statusCode).toBe(200);
-    const items = list.json().data as { id: string }[];
-    expect(items.length).toBe(1);
-    const id = items[0]?.id;
+    const page = list.json().data as { items: { id: string }[]; total: number };
+    expect(page.total).toBe(1);
+    expect(page.items.length).toBe(1);
+    const id = page.items[0]?.id;
 
     const detail = await ctx.app.inject({
       method: "GET",

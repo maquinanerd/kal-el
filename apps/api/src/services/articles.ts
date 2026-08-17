@@ -12,7 +12,7 @@ import {
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
 
-import { badRequest, conflict, notFound } from "../plugins/errors.js";
+import { badRequest, conflict, forbidden, notFound } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import { upsertSlugRedirect } from "./redirects.js";
 import { assertMediaInSite, collectDocumentMediaIds } from "./media.js";
@@ -291,11 +291,23 @@ export async function updateArticle(
   actor: ActorRef,
   body: UpdateArticleBody,
   expectedVersion?: number,
+  opts: { requireOwnership?: boolean } = {},
 ) {
   const row = await db.query.articles.findFirst({
     where: and(eq(articles.id, articleId), eq(articles.siteId, siteId)),
   });
   if (!row) throw notFound("article not found");
+
+  if (opts.requireOwnership && actor.kind === "user") {
+    const userId = actor.userId ?? null;
+    const isCreator = row.createdBy === userId;
+    const isListedAuthor =
+      userId != null &&
+      (await db.query.articleAuthors.findFirst({ where: and(eq(articleAuthors.articleId, articleId), eq(articleAuthors.authorId, userId)) })) != null;
+    if (!isCreator && !isListedAuthor) {
+      throw forbidden("you can only edit your own articles");
+    }
+  }
 
   if (expectedVersion !== undefined && row.version !== expectedVersion) {
     throw conflict("version mismatch: the article was modified by another actor", {

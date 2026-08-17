@@ -15,7 +15,12 @@ import {
   publishArticleBodySchema,
   scheduleArticleBodySchema,
   updateArticleBodySchema,
+  updateAuthorBodySchema,
+  updateCategoryBodySchema,
+  updateEntityBodySchema,
   updateMediaBodySchema,
+  updateSourceBodySchema,
+  updateTagBodySchema,
   uuidSchema,
 } from "@kal-el/contracts";
 
@@ -44,14 +49,25 @@ import {
   createEntity,
   createSource,
   createTag,
+  deleteAuthor,
+  deleteCategory,
+  deleteEntity,
+  deleteSource,
+  deleteTag,
   listAuthors,
   listCategories,
   listEntities,
   listSources,
   listTags,
+  updateAuthor,
+  updateCategory,
+  updateEntity,
+  updateSource,
+  updateTag,
 } from "../services/taxonomy.js";
 import { createRedirect, deleteRedirect, listRedirects } from "../services/redirects.js";
 import { deleteMedia, getMedia, listMedia, updateMedia, uploadMedia } from "../services/media.js";
+import { siteStats } from "../services/stats.js";
 
 function guard(permission: string) {
   return async (req: FastifyRequest) => {
@@ -131,7 +147,15 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
           if (!Number.isInteger(expectedVersion)) throw badRequest("invalid If-Match header");
         }
 
-        const article = await updateArticle(app.db, siteId, articleId, actor, parsed.data, expectedVersion);
+        const ctx = req.actor;
+        if (!ctx) throw badRequest("actor missing");
+        const privileged =
+          ctx.kind === "service" ||
+          (ctx.kind === "user" &&
+            (ctx.permissions.has("articles.publish") || ctx.permissions.has("articles.approve") || ctx.permissions.has("articles.schedule")));
+        const requireOwnership = ctx.kind === "user" && !privileged;
+
+        const article = await updateArticle(app.db, siteId, articleId, actor, parsed.data, expectedVersion, { requireOwnership });
         return reply.send({ data: article });
       });
 
@@ -288,6 +312,72 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(201).send({ data: row });
       });
 
+      // ---- Taxonomy update/delete ----
+      siteApp.patch("/categories/:id", { preHandler: guard("taxonomy.categories.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("category not found");
+        const parsed = updateCategoryBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await updateCategory(app.db, siteId, id, req.actor as ActorRef, parsed.data) };
+      });
+      siteApp.delete("/categories/:id", { preHandler: guard("taxonomy.categories.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("category not found");
+        return { data: await deleteCategory(app.db, siteId, id, req.actor as ActorRef) };
+      });
+
+      siteApp.patch("/tags/:id", { preHandler: guard("taxonomy.tags.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("tag not found");
+        const parsed = updateTagBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await updateTag(app.db, siteId, id, req.actor as ActorRef, parsed.data) };
+      });
+      siteApp.delete("/tags/:id", { preHandler: guard("taxonomy.tags.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("tag not found");
+        return { data: await deleteTag(app.db, siteId, id, req.actor as ActorRef) };
+      });
+
+      siteApp.patch("/entities/:id", { preHandler: guard("taxonomy.entities.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("entity not found");
+        const parsed = updateEntityBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await updateEntity(app.db, siteId, id, req.actor as ActorRef, parsed.data) };
+      });
+      siteApp.delete("/entities/:id", { preHandler: guard("taxonomy.entities.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("entity not found");
+        return { data: await deleteEntity(app.db, siteId, id, req.actor as ActorRef) };
+      });
+
+      siteApp.patch("/authors/:id", { preHandler: guard("taxonomy.authors.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("author not found");
+        const parsed = updateAuthorBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await updateAuthor(app.db, siteId, id, req.actor as ActorRef, parsed.data) };
+      });
+      siteApp.delete("/authors/:id", { preHandler: guard("taxonomy.authors.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("author not found");
+        return { data: await deleteAuthor(app.db, siteId, id, req.actor as ActorRef) };
+      });
+
+      siteApp.patch("/sources/:id", { preHandler: guard("taxonomy.sources.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("source not found");
+        const parsed = updateSourceBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await updateSource(app.db, siteId, id, req.actor as ActorRef, parsed.data) };
+      });
+      siteApp.delete("/sources/:id", { preHandler: guard("taxonomy.sources.manage") }, async (req) => {
+        const { siteId, id } = req.params as { siteId: string; id: string };
+        if (!uuidSchema.safeParse(id).success) throw notFound("source not found");
+        return { data: await deleteSource(app.db, siteId, id, req.actor as ActorRef) };
+      });
+
       // ---- Redirects (SEO) ----
       siteApp.get("/redirects", { preHandler: guard("seo.manage") }, async (req) => {
         const siteId = (req.params as { siteId: string }).siteId;
@@ -309,8 +399,11 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
       // ---- Media ----
       siteApp.get("/media", { preHandler: guard("media.read") }, async (req) => {
         const siteId = (req.params as { siteId: string }).siteId;
-        const limit = req.query && typeof req.query === "object" && "limit" in req.query ? Number((req.query as { limit?: string }).limit) : 100;
-        return { data: await listMedia(app.db, siteId, app.config.API_BASE_URL, Number.isFinite(limit) ? limit : 100) };
+        const query = req.query as { q?: string; limit?: string; offset?: string } | undefined;
+        const q = typeof query?.q === "string" && query.q.length > 0 ? query.q : undefined;
+        const limit = query?.limit ? Number(query.limit) : undefined;
+        const offset = query?.offset ? Number(query.offset) : undefined;
+        return { data: await listMedia(app.db, siteId, app.config.API_BASE_URL, { q, limit, offset }) };
       });
 
       siteApp.post("/media", { preHandler: guard("media.manage") }, async (req, reply) => {
@@ -356,6 +449,12 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const { siteId, mediaId } = req.params as { siteId: string; mediaId: string };
         if (!uuidSchema.safeParse(mediaId).success) throw notFound("media not found");
         return { data: await deleteMedia(app.db, app.storage, siteId, mediaId, req.actor as ActorRef) };
+      });
+
+      // ---- Site stats (dashboard, real data) ----
+      siteApp.get("/stats", { preHandler: guard("articles.read") }, async (req) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        return { data: await siteStats(app.db, siteId) };
       });
 
       // ---- Audit log (site-scoped) ----

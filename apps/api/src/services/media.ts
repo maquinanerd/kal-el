@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { imageSize } from "image-size";
@@ -123,14 +123,35 @@ export async function uploadMedia(
   return mediaDto(row, opts.baseUrl);
 }
 
-export async function listMedia(db: Db, siteId: string, baseUrl: string, limit = 100) {
-  const rows = await db
-    .select()
-    .from(media)
-    .where(eq(media.siteId, siteId))
-    .orderBy(desc(media.createdAt), desc(media.id))
-    .limit(Math.min(Math.max(limit, 1), 200));
-  return rows.map((r) => mediaDto(r, baseUrl));
+export async function listMedia(
+  db: Db,
+  siteId: string,
+  baseUrl: string,
+  opts: { q?: string; limit?: number; offset?: number } = {},
+) {
+  const limit = Math.min(Math.max(opts.limit ?? 60, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const conditions: (ReturnType<typeof eq> | ReturnType<typeof ilike>)[] = [eq(media.siteId, siteId)];
+  if (opts.q) conditions.push(ilike(media.filename, `%${opts.q}%`));
+
+  const [rows, total] = await Promise.all([
+    db
+      .select()
+      .from(media)
+      .where(and(...conditions))
+      .orderBy(desc(media.createdAt), desc(media.id))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(media)
+      .where(and(...conditions)),
+  ]);
+
+  return {
+    items: rows.map((r) => mediaDto(r, baseUrl)),
+    total: Number(total[0]?.n ?? 0),
+  };
 }
 
 export async function getMedia(db: Db, siteId: string, mediaId: string, baseUrl: string) {
