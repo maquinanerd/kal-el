@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Alert, Badge, Button, Input, PageHead, Textarea } from "@kal-el/design-system";
+import { Alert, Badge, Button, Input, Modal, PageHead, Search, Select, Textarea } from "@kal-el/design-system";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import { useAuth } from "../../../../lib/auth";
 import {
@@ -10,6 +10,7 @@ import {
   articleAction,
   getArticle,
   getPreviewUrl,
+  listArticles,
   listAuthors,
   listCategories,
   listEntities,
@@ -103,6 +104,13 @@ export default function ArticlePage() {
   const [slug, setSlug] = useState("");
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDesc, setSeoDesc] = useState("");
+  const [canonical, setCanonical] = useState("");
+  const [robotsIndex, setRobotsIndex] = useState("index");
+  const [robotsFollow, setRobotsFollow] = useState("follow");
+  const [socialTitle, setSocialTitle] = useState("");
+  const [socialDesc, setSocialDesc] = useState("");
+  const [socialImageId, setSocialImageId] = useState("");
+  const [primaryCategoryId, setPrimaryCategoryId] = useState("");
   const [featuredMediaId, setFeaturedMediaId] = useState("");
   const [doc, setDoc] = useState<ArticleDocumentV2>(EMPTY_DOC);
   const [version, setVersion] = useState(0);
@@ -122,8 +130,9 @@ export default function ArticlePage() {
   const [selEntities, setSelEntities] = useState<Set<string>>(new Set());
   const [selAuthors, setSelAuthors] = useState<Set<string>>(new Set());
 
-  const [mediaPicker, setMediaPicker] = useState<"image" | "gallery" | "featured" | null>(null);
+  const [mediaPicker, setMediaPicker] = useState<"image" | "gallery" | "featured" | "social" | null>(null);
   const [compareRevision, setCompareRevision] = useState<ArticleRevision | null>(null);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
 
   const loadedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,6 +147,13 @@ export default function ArticlePage() {
         setSlug(a.slug ?? "");
         setSeoTitle(a.seo?.seoTitle ?? "");
         setSeoDesc(a.seo?.metaDescription ?? "");
+        setCanonical(a.seo?.canonicalUrl ?? "");
+        setRobotsIndex(a.seo?.robotsIndex ?? "index");
+        setRobotsFollow(a.seo?.robotsFollow ?? "follow");
+        setSocialTitle(a.seo?.socialTitle ?? "");
+        setSocialDesc(a.seo?.socialDescription ?? "");
+        setSocialImageId(a.seo?.socialImageMediaId ?? "");
+        setPrimaryCategoryId(a.seo?.primaryCategoryId ?? "");
         setFeaturedMediaId(a.featuredMediaId ?? "");
         setDoc((a.document as ArticleDocumentV2) ?? EMPTY_DOC);
         setVersion(a.version);
@@ -167,7 +183,17 @@ export default function ArticlePage() {
           dek: dek || null,
           slug: slug || null,
           document: doc,
-          seo: { seoTitle: seoTitle || null, metaDescription: seoDesc || null },
+          seo: {
+            seoTitle: seoTitle || null,
+            metaDescription: seoDesc || null,
+            canonicalUrl: canonical || null,
+            robotsIndex,
+            robotsFollow,
+            socialTitle: socialTitle || null,
+            socialDescription: socialDesc || null,
+            socialImageMediaId: socialImageId || null,
+            primaryCategoryId: primaryCategoryId || null,
+          },
           featuredMediaId: featuredMediaId || null,
           categories: [...selCats],
           tags: [...selTags],
@@ -182,7 +208,7 @@ export default function ArticlePage() {
         setSaveState("error");
       }
     },
-    [activeSiteId, params.id, title, dek, slug, doc, seoTitle, seoDesc, featuredMediaId, selCats, selTags, selEntities, selAuthors, version],
+    [activeSiteId, params.id, title, dek, slug, doc, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, selCats, selTags, selEntities, selAuthors, version],
   );
 
   const scheduleSave = useCallback(() => {
@@ -245,6 +271,7 @@ export default function ArticlePage() {
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <Badge tone="neutral">{status}</Badge>
         <Button size="sm" variant="secondary" onClick={() => void openPreview()}>Preview</Button>
+        <Button size="sm" variant="secondary" onClick={() => setLinkPickerOpen(true)}>Link interno</Button>
         {WORKFLOW_ACTIONS[status]?.map((a) => (
           <Button key={a.key} size="sm" variant={a.variant} onClick={() => void doAction(a.key)}>{a.label}</Button>
         ))}
@@ -265,12 +292,40 @@ export default function ArticlePage() {
           />
         </div>
 
-        <aside style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+        <aside style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="peg-card">
             <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <Input label="Slug" value={slug} onChange={(e) => { setSlug(e.target.value); scheduleSave(); }} />
               <Input label="SEO — título" value={seoTitle} onChange={(e) => { setSeoTitle(e.target.value); scheduleSave(); }} />
               <Textarea label="SEO — meta descrição" rows={3} value={seoDesc} onChange={(e) => { setSeoDesc(e.target.value); scheduleSave(); }} />
+              <Input label="Canonical (URL)" value={canonical} onChange={(e) => { setCanonical(e.target.value); scheduleSave(); }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <Select label="Robots index" value={robotsIndex} onChange={(e) => { setRobotsIndex(e.target.value); scheduleSave(); }}>
+                  <option value="index">index</option>
+                  <option value="noindex">noindex</option>
+                </Select>
+                <Select label="Robots follow" value={robotsFollow} onChange={(e) => { setRobotsFollow(e.target.value); scheduleSave(); }}>
+                  <option value="follow">follow</option>
+                  <option value="nofollow">nofollow</option>
+                </Select>
+              </div>
+              <Input label="Social — título" value={socialTitle} onChange={(e) => { setSocialTitle(e.target.value); scheduleSave(); }} />
+              <Textarea label="Social — descrição" rows={2} value={socialDesc} onChange={(e) => { setSocialDesc(e.target.value); scheduleSave(); }} />
+              <div>
+                <span className="peg-field__label">Social — imagem</span>
+                {socialImageId ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="peg-table__muted">{socialImageId.slice(0, 8)}…</span>
+                    <Button size="xs" variant="secondary" onClick={() => setMediaPicker("social")}>Trocar</Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={() => setMediaPicker("social")}>Selecionar</Button>
+                )}
+              </div>
+              <Select label="Categoria primária" value={primaryCategoryId} onChange={(e) => { setPrimaryCategoryId(e.target.value); scheduleSave(); }}>
+                <option value="">—</option>
+                {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
               <div>
                 <span className="peg-field__label">Imagem de destaque</span>
                 {featuredMediaId ? (
@@ -282,6 +337,24 @@ export default function ArticlePage() {
                   <Button size="sm" variant="secondary" onClick={() => setMediaPicker("featured")}>Selecionar</Button>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="peg-card">
+            <div className="peg-card__header"><h3 className="peg-card__title">SERP preview</h3></div>
+            <div className="peg-card__body" style={{ fontFamily: "Arial, sans-serif" }}>
+              <div style={{ color: "#1a0dab", fontSize: 18, lineHeight: 1.2 }}>{seoTitle || title || "Título da página"}</div>
+              <div style={{ color: "#006621", fontSize: 13 }}>{canonical || `https://exemplo.com/${slug || "slug"}`}</div>
+              <div style={{ color: "#545454", fontSize: 13 }}>{seoDesc || "Descrição aparece aqui."}</div>
+            </div>
+          </div>
+
+          <div className="peg-card">
+            <div className="peg-card__header"><h3 className="peg-card__title">Social preview</h3></div>
+            <div className="peg-card__body" style={{ borderLeft: "3px solid #e5e7eb", paddingLeft: 10 }}>
+              <div style={{ fontSize: 13, color: "#777", textTransform: "uppercase" }}>kalel.app</div>
+              <div style={{ fontWeight: 600 }}>{socialTitle || seoTitle || title}</div>
+              <div style={{ color: "#555", fontSize: 13 }}>{socialDesc || seoDesc || ""}</div>
             </div>
           </div>
 
@@ -345,11 +418,52 @@ export default function ArticlePage() {
             editorRef.current?.insertGallery(ids);
           } else if (mediaPicker === "image") {
             editorRef.current?.insertImage(ids[0] ?? "");
+          } else if (mediaPicker === "social") {
+            setSocialImageId(ids[0] ?? "");
+            scheduleSave();
           }
           setMediaPicker(null);
         }}
       />
+
+      <InternalLinkPicker
+        open={linkPickerOpen}
+        onClose={() => setLinkPickerOpen(false)}
+        onSelect={(href) => {
+          editorRef.current?.insertLink(href);
+          setLinkPickerOpen(false);
+        }}
+      />
     </>
+  );
+}
+
+function InternalLinkPicker({ open, onClose, onSelect }: { open: boolean; onClose: () => void; onSelect: (href: string) => void }) {
+  const { activeSiteId } = useAuth();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<{ id: string; title: string; slug: string | null }[]>([]);
+
+  useEffect(() => {
+    if (!open || !activeSiteId) return;
+    listArticles(activeSiteId, { q: q || undefined }).then((p) => setResults(p.items.map((a) => ({ id: a.id, title: a.title, slug: a.slug })))).catch(() => {});
+  }, [open, activeSiteId, q]);
+
+  if (!open) return null;
+
+  return (
+    <Modal title="Link interno" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 360 }}>
+        <Search placeholder="Buscar artigo…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 280, overflowY: "auto" }}>
+          {results.length === 0 && <p className="peg-table__muted">Nenhum artigo.</p>}
+          {results.map((r) => (
+            <button key={r.id} type="button" style={{ background: "none", border: 0, textAlign: "left", padding: "6px 8px", cursor: "pointer", borderRadius: 6, font: "inherit" }} onClick={() => r.slug && onSelect(`/${r.slug}`)}>
+              {r.title} <span className="peg-table__muted">/ {r.slug}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

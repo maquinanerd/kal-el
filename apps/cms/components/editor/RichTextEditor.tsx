@@ -22,6 +22,7 @@ export type RichTextEditorHandle = {
   insertEmbed: (url: string) => void;
   insertTable: () => void;
   insertSource: (label: string, url: string) => void;
+  insertLink: (href: string) => void;
 };
 
 type Props = {
@@ -114,6 +115,17 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
       const view = viewRef.current;
       if (!view) return;
       insertAtom(view, "source", { label, url, kind: "external" });
+    },
+    insertLink: (href) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const { state } = view;
+      const markType = state.schema.marks.link;
+      const { from, to } = state.selection;
+      let tr = state.tr.removeMark(from, to, markType);
+      tr = tr.addMark(from, to, markType.create({ href }));
+      view.dispatch(tr);
+      view.focus();
     },
   }));
 

@@ -11,6 +11,8 @@ export const seoMetadataSchema = z.object({
   robotsFollow: robotsFollowSchema.default("follow"),
   socialTitle: z.string().max(160).nullable(),
   socialDescription: z.string().max(320).nullable(),
+  socialImageMediaId: z.string().uuid().nullable().optional(),
+  primaryCategoryId: z.string().uuid().nullable().optional(),
 });
 
 export const redirectKindSchema = z.enum(["301", "302"]);

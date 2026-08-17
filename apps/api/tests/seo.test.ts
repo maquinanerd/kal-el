@@ -106,4 +106,30 @@ describe("editorial SEO", () => {
     expect(updated.json().data.seo.robotsIndex).toBe("noindex");
     expect(updated.json().data.seo.canonicalUrl).toBe("https://portal.example.com/seo-meta");
   });
+
+  it("validates social image and primary category are site-scoped", async () => {
+    const created = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles`,
+      headers: headers(),
+      payload: { title: "SEO social", slug: "seo-social" },
+    });
+    const article = created.json().data;
+
+    const badPrimary = await ctx.app.inject({
+      method: "PATCH",
+      url: `/v1/sites/${siteId}/articles/${article.id}`,
+      headers: { ...headers(), "if-match": String(article.version) },
+      payload: { seo: { primaryCategoryId: "11111111-1111-4111-8111-111111111111" } },
+    });
+    expect(badPrimary.statusCode).toBe(400);
+
+    const badSocial = await ctx.app.inject({
+      method: "PATCH",
+      url: `/v1/sites/${siteId}/articles/${article.id}`,
+      headers: { ...headers(), "if-match": String(article.version) },
+      payload: { seo: { socialImageMediaId: "11111111-1111-4111-8111-111111111111" } },
+    });
+    expect(badSocial.statusCode).toBe(400);
+  });
 });

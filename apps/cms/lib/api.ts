@@ -91,7 +91,17 @@ export type ArticleDetail = {
   tags: string[];
   entities: string[];
   document: { version: number; nodes: unknown[] };
-  seo: { seoTitle: string | null; metaDescription: string | null; canonicalUrl: string | null; robotsIndex: string; robotsFollow: string };
+  seo: {
+    seoTitle: string | null;
+    metaDescription: string | null;
+    canonicalUrl: string | null;
+    robotsIndex: string;
+    robotsFollow: string;
+    socialTitle?: string | null;
+    socialDescription?: string | null;
+    socialImageMediaId?: string | null;
+    primaryCategoryId?: string | null;
+  };
   updatedAt: string;
   publishedAt: string | null;
 };

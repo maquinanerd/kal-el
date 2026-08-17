@@ -7,6 +7,7 @@ import {
   articleRevisions,
   articles,
   articleTags,
+  categories,
   outboxEvents,
 } from "@kal-el/db/schema";
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
@@ -42,6 +43,12 @@ function assertTransition(from: ArticleStatus, to: ArticleStatus): void {
   if (!allowed.includes(to)) {
     throw conflict(`cannot transition article from "${from}" to "${to}"`);
   }
+}
+
+async function assertPrimaryCategoryInSite(db: Db, siteId: string, categoryId?: string | null): Promise<void> {
+  if (!categoryId) return;
+  const row = await db.query.categories.findFirst({ where: and(eq(categories.id, categoryId), eq(categories.siteId, siteId)) });
+  if (!row) throw badRequest("primary category does not belong to this site", { categoryId });
 }
 
 export function slugify(input: string): string {
@@ -196,6 +203,8 @@ export async function createArticle(
     robotsFollow: "follow",
     socialTitle: null,
     socialDescription: null,
+    socialImageMediaId: null,
+    primaryCategoryId: null,
     ...(body.seo ?? {}),
   };
 
@@ -206,7 +215,8 @@ export async function createArticle(
   const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
   const featuredMediaId = body.featuredMediaId ?? null;
 
-  await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : [])]);
+  await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : []), ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : [])]);
+  await assertPrimaryCategoryInSite(db, siteId, seo.primaryCategoryId);
 
   const row = await db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -331,7 +341,8 @@ export async function updateArticle(
   const updatedBy = actorUserId(actor);
   const featuredMediaId = body.featuredMediaId !== undefined ? body.featuredMediaId : row.featuredMediaId;
 
-  await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : [])]);
+  await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : []), ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : [])]);
+  await assertPrimaryCategoryInSite(db, siteId, seo.primaryCategoryId);
 
   const updated = await db.transaction(async (tx) => {
     const [result] = await tx
