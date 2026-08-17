@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { timestampSchema, uuidSchema } from "./common.js";
+import { timestampSchema, uuidSchema } from "./common";
 
 export const siteStatusSchema = z.enum(["active", "inactive"]);
 
@@ -27,7 +27,7 @@ export const updateSiteBodySchema = z
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
 
-import { createUserBodySchema } from "./identity.js";
+import { createUserBodySchema } from "./identity";
 
 export const initBootstrapBodySchema = z
   .object({

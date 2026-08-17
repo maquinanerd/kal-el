@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { timestampSchema, uuidSchema } from "./common.js";
+import { timestampSchema, uuidSchema } from "./common";
 
 export const webhookEventSchema = z.enum(["article.published", "article.scheduled", "article.updated"]);
 

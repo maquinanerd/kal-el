@@ -1,4 +1,4 @@
-import { apiErrorSchema } from "./common.js";
+import { apiErrorSchema } from "./common";
 
 export const API_ERROR_CODES = {
   VALIDATION: "VALIDATION_ERROR",

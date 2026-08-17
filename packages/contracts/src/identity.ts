@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { timestampSchema, uuidSchema } from "./common.js";
+import { timestampSchema, uuidSchema } from "./common";
 
 export const userStatusSchema = z.enum(["active", "invited", "disabled"]);
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { seoMetadataSchema } from "./seo.js";
-import { timestampSchema, uuidSchema } from "./common.js";
+import { seoMetadataSchema } from "./seo";
+import { timestampSchema, uuidSchema } from "./common";
 
 export const articleTypeSchema = z.enum(["article", "review", "list", "video", "audio"]);
 

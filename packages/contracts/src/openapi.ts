@@ -2,7 +2,7 @@ import { OpenAPIRegistry, OpenApiGeneratorV3, extendZodWithOpenApi } from "@aste
 import { z } from "zod";
 
 extendZodWithOpenApi(z);
-import { apiErrorSchema } from "./common.js";
+import { apiErrorSchema } from "./common";
 import {
   articleSchema,
   articleSummarySchema,
@@ -17,12 +17,12 @@ import {
   entitySchema,
   tagSchema,
   updateArticleBodySchema,
-} from "./editorial.js";
-import { createRoleBodySchema, createServiceTokenBodySchema, createUserBodySchema, loginBodySchema } from "./identity.js";
-import { mediaSchema } from "./media.js";
-import { createRedirectBodySchema, redirectSchema, seoMetadataSchema } from "./seo.js";
-import { createSiteBodySchema, siteSchema } from "./sites.js";
-import { createWebhookBodySchema, webhookDeliverySchema, webhookSchema } from "./webhooks.js";
+} from "./editorial";
+import { createRoleBodySchema, createServiceTokenBodySchema, createUserBodySchema, loginBodySchema } from "./identity";
+import { mediaSchema } from "./media";
+import { createRedirectBodySchema, redirectSchema, seoMetadataSchema } from "./seo";
+import { createSiteBodySchema, siteSchema } from "./sites";
+import { createWebhookBodySchema, webhookDeliverySchema, webhookSchema } from "./webhooks";
 
 const registry = new OpenAPIRegistry();
 

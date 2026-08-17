@@ -17,8 +17,8 @@ function csrfToken(): string {
   return m ? decodeURIComponent(m[1]) : "";
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
+async function request<T>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
+  const headers: Record<string, string> = { ...extraHeaders };
   if (body !== undefined) headers["content-type"] = "application/json";
   if (method !== "GET" && method !== "HEAD") {
     const csrf = csrfToken();
@@ -74,10 +74,40 @@ export function listArticles(siteId: string, q?: string): Promise<ArticlePage> {
   return request<ArticlePage>("GET", `/v1/sites/${siteId}/articles${suffix}`);
 }
 
+export type ArticleDetail = {
+  id: string;
+  title: string;
+  dek: string | null;
+  slug: string | null;
+  status: ArticleStatus;
+  version: number;
+  excerpt: string | null;
+  featuredMediaId: string | null;
+  document: { version: number; nodes: unknown[] };
+  seo: { seoTitle: string | null; metaDescription: string | null; canonicalUrl: string | null; robotsIndex: string; robotsFollow: string };
+  updatedAt: string;
+  publishedAt: string | null;
+};
+
+export type ArticleRevision = { id: string; revisionNumber: number; document: { version: number; nodes: unknown[] }; note: string | null; createdAt: string };
+
 export function createArticle(siteId: string, body: { title: string; slug?: string }): Promise<ArticleSummary & { id: string }> {
   return request("POST", `/v1/sites/${siteId}/articles`, body);
 }
 
-export function getArticle(siteId: string, articleId: string): Promise<ArticleSummary & { document?: unknown; seo?: unknown }> {
+export function getArticle(siteId: string, articleId: string): Promise<ArticleDetail> {
   return request("GET", `/v1/sites/${siteId}/articles/${articleId}`);
+}
+
+export function updateArticle(
+  siteId: string,
+  articleId: string,
+  body: Record<string, unknown>,
+  ifMatch: number,
+): Promise<ArticleDetail> {
+  return request("PATCH", `/v1/sites/${siteId}/articles/${articleId}`, body, { "if-match": String(ifMatch) });
+}
+
+export function listRevisions(siteId: string, articleId: string): Promise<ArticleRevision[]> {
+  return request("GET", `/v1/sites/${siteId}/articles/${articleId}/revisions`);
 }

@@ -6,3 +6,72 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* --- RichText editor (ProseMirror) --- */
+.peg-editor {
+  border: var(--peg-border);
+  border-radius: var(--peg-radius-md, 8px);
+  background: var(--peg-surface, #fff);
+}
+.peg-editor__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: var(--peg-border);
+  flex-wrap: wrap;
+}
+.peg-editor__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--peg-text-secondary, #555);
+  cursor: pointer;
+  font: inherit;
+}
+.peg-editor__btn:hover {
+  background: var(--peg-surface-hover, #f3f4f6);
+  color: var(--peg-text-primary, #111);
+}
+.peg-editor__sep {
+  width: 1px;
+  height: 18px;
+  background: var(--peg-border-color, #e5e7eb);
+  margin: 0 4px;
+}
+.peg-editor__surface {
+  min-height: 320px;
+  padding: 16px 20px;
+  outline: none;
+}
+.peg-editor__surface .ProseMirror {
+  min-height: 288px;
+  outline: none;
+  font: var(--peg-font-body);
+  color: var(--peg-text-primary, #111);
+  line-height: 1.7;
+}
+.peg-editor__surface .ProseMirror p { margin: 0 0 0.6em; }
+.peg-editor__surface .ProseMirror h2 { margin: 1.2em 0 0.4em; font-size: 1.5em; }
+.peg-editor__surface .ProseMirror h3 { margin: 1em 0 0.3em; font-size: 1.25em; }
+.peg-editor__surface .ProseMirror h4 { margin: 1em 0 0.3em; font-size: 1.1em; }
+.peg-editor__surface .ProseMirror blockquote {
+  margin: 0.8em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--peg-accent, #2563eb);
+  color: var(--peg-text-secondary, #555);
+}
+.peg-editor__surface .ProseMirror ul, .peg-editor__surface .ProseMirror ol { margin: 0.6em 0; padding-left: 1.5em; }
+.peg-editor__surface .ProseMirror code {
+  font-family: var(--peg-font-mono, monospace);
+  background: var(--peg-surface-hover, #f3f4f6);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.peg-editor__surface .ProseMirror a { color: var(--peg-accent, #2563eb); text-decoration: underline; }
