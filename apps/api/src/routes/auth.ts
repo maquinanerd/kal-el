@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Db } from "@kal-el/db";
 import { users, sites, userRoles, sessions, roles, permissions, rolePermissions, serviceTokens } from "@kal-el/db/schema";
@@ -109,6 +109,32 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const user = await app.db.query.users.findFirst({ where: eq(users.id, sessionByToken.userId) });
     if (!user) throw unauthorized();
     return { data: { kind: "user", user: toUserDto(user), sessionId: sessionByToken.id } };
+  });
+
+  app.get("/v1/me/sites", async (req) => {
+    const credentials = req.credentials;
+    if (!credentials || credentials.kind !== "session") throw unauthorized();
+    const session = await app.db.query.sessions.findFirst({
+      where: eq(sessions.tokenHash, hashToken(credentials.token)),
+    });
+    if (!session || session.expiresAt < new Date()) throw unauthorized("session expired");
+    const memberships = await app.db
+      .selectDistinct({ siteId: userRoles.siteId })
+      .from(userRoles)
+      .where(eq(userRoles.userId, session.userId));
+    const ids = memberships.map((m) => m.siteId);
+    if (ids.length === 0) return { data: [] };
+    const rows = await app.db.select().from(sites).where(inArray(sites.id, ids));
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        status: r.status,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+      })),
+    };
   });
 
   app.post("/v1/bootstrap/init", async (req, reply) => {

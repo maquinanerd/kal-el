@@ -69,6 +69,23 @@ describe("auth", () => {
     expect(res.json().data.user.email).toBe("owner@kalel.test");
   });
 
+  it("lists the sites the user belongs to via /me/sites", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/v1/me/sites",
+      headers: { Cookie: session.cookieHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    const sites = res.json().data as { id: string; slug: string }[];
+    expect(sites.length).toBeGreaterThanOrEqual(1);
+    expect(sites.some((s) => s.slug === "portal-a")).toBe(true);
+  });
+
+  it("requires a session for /me/sites", async () => {
+    const res = await ctx.app.inject({ method: "GET", url: "/v1/me/sites" });
+    expect(res.statusCode).toBe(401);
+  });
+
   it("rejects mutating requests without the CSRF header", async () => {
     const res = await ctx.app.inject({
       method: "POST",

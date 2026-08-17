@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { IconChevronLeft, IconChevronRight } from "../icons.js";
+import { IconChevronLeft, IconChevronRight } from "../icons";
 
 export type Column<T> = {
   key: string;

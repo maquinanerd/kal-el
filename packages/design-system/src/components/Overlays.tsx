@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { IconCheck } from "../icons.js";
+import { IconCheck } from "../icons";
 
 export type Account = {
   id: string;

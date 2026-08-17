@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
-import { IconCheck, IconSearch } from "../icons.js";
+import { IconCheck, IconSearch } from "../icons";
 
 export type FieldShellProps = {
   label?: string;
