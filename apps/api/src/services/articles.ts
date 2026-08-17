@@ -15,6 +15,7 @@ import { migrateDocumentToV2 } from "@kal-el/contracts";
 import { badRequest, conflict, notFound } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import { upsertSlugRedirect } from "./redirects.js";
+import { assertMediaInSite, collectDocumentMediaIds } from "./media.js";
 
 export type ActorRef = {
   kind: "user" | "service";
@@ -187,6 +188,9 @@ export async function createArticle(
   const status = body.status ?? "draft";
   const publishedAt = body.publishedAt ? new Date(body.publishedAt) : status === "published" ? new Date() : null;
   const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+  const featuredMediaId = body.featuredMediaId ?? null;
+
+  await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : [])]);
 
   const row = await db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -202,6 +206,7 @@ export async function createArticle(
         seo,
         provenance: body.provenance ?? null,
         externalKey: body.externalKey ?? null,
+        featuredMediaId,
         status,
         publishedAt,
         scheduledAt,
@@ -296,6 +301,9 @@ export async function updateArticle(
   const document = body.document ? migrateDocumentToV2(body.document) : row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT;
   const seo = body.seo ? { ...row.seo, ...body.seo } : row.seo;
   const updatedBy = actorUserId(actor);
+  const featuredMediaId = body.featuredMediaId !== undefined ? body.featuredMediaId : row.featuredMediaId;
+
+  await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : [])]);
 
   const updated = await db.transaction(async (tx) => {
     const [result] = await tx
@@ -309,6 +317,7 @@ export async function updateArticle(
         document,
         seo,
         provenance: body.provenance !== undefined ? body.provenance : row.provenance,
+        featuredMediaId,
         updatedBy,
         version: row.version + 1,
         updatedAt: new Date(),

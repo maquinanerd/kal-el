@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   authorManage: "taxonomy.authors.manage",
   sourceManage: "taxonomy.sources.manage",
   mediaManage: "media.manage",
+  mediaRead: "media.read",
   seoManage: "seo.manage",
   auditRead: "audit.read",
 } as const;

@@ -178,6 +178,7 @@ export const createArticleBodySchema = z.object({
   entities: z.array(uuidSchema).default([]),
   externalKey: z.string().max(256).optional(),
   provenance: provenanceSchema.optional(),
+  featuredMediaId: uuidSchema.nullable().optional(),
   // Import/automation path: allow setting status and original timestamps.
   // Enforced by articles.publish / articles.schedule at the route level.
   status: articleStatusSchema.optional(),
@@ -199,6 +200,7 @@ export const updateArticleBodySchema = z
     tags: z.array(uuidSchema).optional(),
     entities: z.array(uuidSchema).optional(),
     provenance: provenanceSchema.optional(),
+    featuredMediaId: uuidSchema.nullable().optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });

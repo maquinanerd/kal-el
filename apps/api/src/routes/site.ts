@@ -15,6 +15,7 @@ import {
   publishArticleBodySchema,
   scheduleArticleBodySchema,
   updateArticleBodySchema,
+  updateMediaBodySchema,
   uuidSchema,
 } from "@kal-el/contracts";
 
@@ -45,6 +46,7 @@ import {
   listTags,
 } from "../services/taxonomy.js";
 import { createRedirect, deleteRedirect, listRedirects } from "../services/redirects.js";
+import { deleteMedia, getMedia, listMedia, updateMedia, uploadMedia } from "../services/media.js";
 
 function guard(permission: string) {
   return async (req: FastifyRequest) => {
@@ -261,6 +263,58 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const { siteId, redirectId } = req.params as { siteId: string; redirectId: string };
         if (!uuidSchema.safeParse(redirectId).success) throw badRequest("invalid redirectId");
         return { data: await deleteRedirect(app.db, siteId, redirectId) };
+      });
+
+      // ---- Media ----
+      siteApp.get("/media", { preHandler: guard("media.read") }, async (req) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        const limit = req.query && typeof req.query === "object" && "limit" in req.query ? Number((req.query as { limit?: string }).limit) : 100;
+        return { data: await listMedia(app.db, siteId, app.config.API_BASE_URL, Number.isFinite(limit) ? limit : 100) };
+      });
+
+      siteApp.post("/media", { preHandler: guard("media.manage") }, async (req, reply) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        const part = await req.file();
+        if (!part) throw badRequest("file is required");
+        const data = await part.toBuffer();
+        const mediaRow = await uploadMedia(
+          app.db,
+          app.storage,
+          siteId,
+          req.actor as ActorRef,
+          { filename: part.filename || "file", mimeType: part.mimetype || "application/octet-stream", data },
+          { maxBytes: app.config.MEDIA_MAX_BYTES, baseUrl: app.config.API_BASE_URL },
+        );
+        return reply.status(201).send({ data: mediaRow });
+      });
+
+      siteApp.get("/media/:mediaId", { preHandler: guard("media.read") }, async (req) => {
+        const { siteId, mediaId } = req.params as { siteId: string; mediaId: string };
+        if (!uuidSchema.safeParse(mediaId).success) throw notFound("media not found");
+        return { data: await getMedia(app.db, siteId, mediaId, app.config.API_BASE_URL) };
+      });
+
+      siteApp.get("/media/:mediaId/file", { preHandler: guard("media.read") }, async (req, reply) => {
+        const { siteId, mediaId } = req.params as { siteId: string; mediaId: string };
+        if (!uuidSchema.safeParse(mediaId).success) throw notFound("media not found");
+        const mediaRow = await getMedia(app.db, siteId, mediaId, app.config.API_BASE_URL);
+        const buf = await app.storage.get(mediaRow.storageKey);
+        if (!buf) throw notFound("media not found");
+        return reply.type(mediaRow.mimeType).send(buf);
+      });
+
+      siteApp.patch("/media/:mediaId", { preHandler: guard("media.manage") }, async (req) => {
+        const { siteId, mediaId } = req.params as { siteId: string; mediaId: string };
+        if (!uuidSchema.safeParse(mediaId).success) throw notFound("media not found");
+        const parsed = updateMediaBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        return { data: await updateMedia(app.db, siteId, mediaId, req.actor as ActorRef, parsed.data, app.config.API_BASE_URL) };
+      });
+
+      siteApp.delete("/media/:mediaId", { preHandler: guard("media.manage") }, async (req) => {
+        const { siteId, mediaId } = req.params as { siteId: string; mediaId: string };
+        if (!uuidSchema.safeParse(mediaId).success) throw notFound("media not found");
+        return { data: await deleteMedia(app.db, app.storage, siteId, mediaId, req.actor as ActorRef) };
       });
 
       // ---- Audit log (site-scoped) ----

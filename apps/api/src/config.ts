@@ -14,6 +14,9 @@ const envSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   BOOTSTRAP_TOKEN: z.string().optional(),
+  MEDIA_STORAGE_PROVIDER: z.enum(["local"]).default("local"),
+  MEDIA_LOCAL_PATH: z.string().min(1).default("./uploads"),
+  MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

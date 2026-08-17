@@ -15,9 +15,6 @@ export type IntermediateNode =
 
 export type HtmlParseResult = { nodes: IntermediateNode[]; warnings: string[] };
 
-const BLOCK_ALLOWED = new Set(["p", "h2", "h3", "h4", "blockquote", "ul", "ol", "table", "img", "figure", "iframe", "video"]);
-const INLINE_TEXT = new Set(["a", "strong", "em", "b", "i", "span", "br", "code", "s", "u", "mark", "del", "strike"]);
-
 function safeUrl(raw: string | undefined): string | null {
   if (!raw) return null;
   const value = raw.trim();
