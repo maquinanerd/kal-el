@@ -2,24 +2,99 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Badge, Button, Input, PageHead, Textarea } from "@kal-el/design-system";
+import { Alert, Badge, Button, Input, PageHead, Textarea } from "@kal-el/design-system";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import { useAuth } from "../../../../lib/auth";
-import { ApiError, getArticle, listRevisions, updateArticle, type ArticleDetail, type ArticleRevision } from "../../../../lib/api";
-import { RichTextEditor } from "../../../../components/editor/RichTextEditor";
+import {
+  ApiError,
+  articleAction,
+  getArticle,
+  listAuthors,
+  listCategories,
+  listEntities,
+  listRevisions,
+  listTags,
+  updateArticle,
+  type ArticleDetail,
+  type ArticleRevision,
+  type ArticleStatus,
+  type Author,
+  type Category,
+  type Entity,
+  type Tag,
+} from "../../../../lib/api";
+import { RichTextEditor, type RichTextEditorHandle } from "../../../../components/editor/RichTextEditor";
+import { MediaPicker } from "../../../../components/MediaPicker";
 
 const EMPTY_DOC: ArticleDocumentV2 = { version: 2, nodes: [] };
+const SAVE_LABEL: Record<string, string> = { idle: "", saving: "Salvando…", saved: "Salvo", error: "Erro ao salvar" };
 
-const SAVE_LABEL: Record<string, string> = {
-  idle: "",
-  saving: "Salvando…",
-  saved: "Salvo",
-  error: "Erro ao salvar",
+function docToText(doc: { version: number; nodes: unknown[] }): string {
+  const lines: string[] = [];
+  for (const raw of doc.nodes ?? []) {
+    const n = raw as { type: string; content?: unknown; attrs?: Record<string, unknown> };
+    switch (n.type) {
+      case "paragraph":
+      case "heading":
+      case "quote":
+        lines.push(inlineToText(n.content));
+        break;
+      case "list": {
+        for (const item of (n.content as unknown[]) ?? []) lines.push(`• ${inlineToText(item)}`);
+        break;
+      }
+      case "image":
+        lines.push(`[imagem: ${(n.attrs?.mediaId as string)?.slice(0, 8)}…]`);
+        break;
+      case "gallery":
+        lines.push(`[galeria: ${(n.attrs?.mediaIds as string[])?.length ?? 0} imagens]`);
+        break;
+      case "embed":
+        lines.push(`[embed: ${n.attrs?.url}]`);
+        break;
+      case "source":
+        lines.push(`[fonte: ${n.attrs?.label}]`);
+        break;
+      case "table":
+        lines.push("[tabela]");
+        break;
+      default:
+        break;
+    }
+  }
+  return lines.join("\n");
+}
+
+function inlineToText(content: unknown): string {
+  if (!Array.isArray(content)) return String(content ?? "");
+  return content
+    .map((node) => {
+      const n = node as { type: string; text?: string };
+      return n.type === "text" ? (n.text ?? "") : n.type === "hardBreak" ? "\n" : "";
+    })
+    .join("");
+}
+
+const WORKFLOW_ACTIONS: Partial<Record<ArticleStatus, { key: string; label: string; variant: "primary" | "secondary" | "destructive" }[]>> = {
+  draft: [
+    { key: "submit", label: "Enviar p/ revisão", variant: "primary" },
+    { key: "publish", label: "Publicar", variant: "secondary" },
+    { key: "schedule", label: "Agendar", variant: "secondary" },
+  ],
+  in_review: [
+    { key: "approve", label: "Aprovar", variant: "primary" },
+    { key: "reject", label: "Rejeitar", variant: "destructive" },
+    { key: "publish", label: "Publicar", variant: "secondary" },
+  ],
+  scheduled: [{ key: "publish", label: "Publicar agora", variant: "primary" }],
+  published: [{ key: "unpublish", label: "Despublicar", variant: "destructive" }],
+  blocked: [{ key: "submit", label: "Reenviar", variant: "primary" }],
 };
 
 export default function ArticlePage() {
   const params = useParams<{ id: string }>();
   const { activeSiteId } = useAuth();
+  const editorRef = useRef<RichTextEditorHandle>(null);
 
   const [article, setArticle] = useState<ArticleDetail | null>(null);
   const [title, setTitle] = useState("");
@@ -30,10 +105,24 @@ export default function ArticlePage() {
   const [featuredMediaId, setFeaturedMediaId] = useState("");
   const [doc, setDoc] = useState<ArticleDocumentV2>(EMPTY_DOC);
   const [version, setVersion] = useState(0);
+  const [status, setStatus] = useState<ArticleStatus>("draft");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [revisions, setRevisions] = useState<ArticleRevision[]>([]);
   const [editorKey, setEditorKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const [cats, setCats] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [authors, setAuthors] = useState<Author[]>([]);
+  const [selCats, setSelCats] = useState<Set<string>>(new Set());
+  const [selTags, setSelTags] = useState<Set<string>>(new Set());
+  const [selEntities, setSelEntities] = useState<Set<string>>(new Set());
+  const [selAuthors, setSelAuthors] = useState<Set<string>>(new Set());
+
+  const [mediaPicker, setMediaPicker] = useState<"image" | "gallery" | "featured" | null>(null);
+  const [compareRevision, setCompareRevision] = useState<ArticleRevision | null>(null);
 
   const loadedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -51,38 +140,49 @@ export default function ArticlePage() {
         setFeaturedMediaId(a.featuredMediaId ?? "");
         setDoc((a.document as ArticleDocumentV2) ?? EMPTY_DOC);
         setVersion(a.version);
+        setStatus(a.status);
+        setSelCats(new Set(a.categories ?? []));
+        setSelTags(new Set(a.tags ?? []));
+        setSelEntities(new Set(a.entities ?? []));
+        setSelAuthors(new Set(a.authors ?? []));
         loadedRef.current = true;
       })
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Falha ao carregar"));
 
-    listRevisions(activeSiteId, params.id)
-      .then(setRevisions)
-      .catch(() => {});
+    listRevisions(activeSiteId, params.id).then(setRevisions).catch(() => {});
+    listCategories(activeSiteId).then(setCats).catch(() => {});
+    listTags(activeSiteId).then(setTags).catch(() => {});
+    listEntities(activeSiteId).then(setEntities).catch(() => {});
+    listAuthors(activeSiteId).then(setAuthors).catch(() => {});
   }, [activeSiteId, params.id]);
 
-  const save = useCallback(async () => {
-    if (!activeSiteId || !loadedRef.current) return;
-    setSaveState("saving");
-    try {
-      const updated = await updateArticle(
-        activeSiteId,
-        params.id,
-        {
+  const save = useCallback(
+    async (overrides?: Partial<Record<string, unknown>>) => {
+      if (!activeSiteId || !loadedRef.current) return;
+      setSaveState("saving");
+      try {
+        const body: Record<string, unknown> = {
           title,
           dek: dek || null,
           slug: slug || null,
           document: doc,
           seo: { seoTitle: seoTitle || null, metaDescription: seoDesc || null },
           featuredMediaId: featuredMediaId || null,
-        },
-        version,
-      );
-      setVersion(updated.version);
-      setSaveState("saved");
-    } catch {
-      setSaveState("error");
-    }
-  }, [activeSiteId, params.id, title, dek, slug, doc, seoTitle, seoDesc, featuredMediaId, version]);
+          categories: [...selCats],
+          tags: [...selTags],
+          entities: [...selEntities],
+          authors: [...selAuthors],
+          ...overrides,
+        };
+        const updated = await updateArticle(activeSiteId, params.id, body, version);
+        setVersion(updated.version);
+        setSaveState("saved");
+      } catch {
+        setSaveState("error");
+      }
+    },
+    [activeSiteId, params.id, title, dek, slug, doc, seoTitle, seoDesc, featuredMediaId, selCats, selTags, selEntities, selAuthors, version],
+  );
 
   const scheduleSave = useCallback(() => {
     setSaveState("idle");
@@ -94,23 +194,48 @@ export default function ArticlePage() {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  async function doAction(action: string) {
+    if (!activeSiteId) return;
+    setActionError(null);
+    try {
+      const updated = await articleAction(activeSiteId, params.id, action);
+      setStatus(updated.status);
+      setVersion(updated.version);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? (err.status === 403 ? "Sem permissão para esta ação" : err.message) : "Falha na ação");
+    }
+  }
+
   function restore(revision: ArticleRevision) {
     setDoc((revision.document as ArticleDocumentV2) ?? EMPTY_DOC);
     setEditorKey((k) => k + 1);
-    setSaveState("idle");
-    void save();
+    void save({ document: revision.document });
   }
 
-  if (loadError) {
-    return <p className="peg-field__error">{loadError}</p>;
+  function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    scheduleSave();
   }
+
+  if (loadError) return <p className="peg-field__error">{loadError}</p>;
 
   return (
     <>
-      <PageHead
-        title={article?.title ?? "Carregando…"}
-        description={saveState ? SAVE_LABEL[saveState] : "Editor de artigo"}
-      />
+      <PageHead title={article?.title ?? "Carregando…"} description={saveState ? SAVE_LABEL[saveState] : "Editor"} />
+
+      {actionError && <Alert tone="danger">{actionError}</Alert>}
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        <Badge tone="neutral">{status}</Badge>
+        {WORKFLOW_ACTIONS[status]?.map((a) => (
+          <Button key={a.key} size="sm" variant={a.variant} onClick={() => void doAction(a.key)}>{a.label}</Button>
+        ))}
+      </div>
 
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -119,30 +244,40 @@ export default function ArticlePage() {
 
           <RichTextEditor
             key={editorKey}
+            ref={editorRef}
             document={doc}
-            onChange={(next) => {
-              setDoc(next);
-              scheduleSave();
-            }}
+            onChange={(next) => { setDoc(next); scheduleSave(); }}
+            onRequestImage={() => setMediaPicker("image")}
+            onRequestGallery={() => setMediaPicker("gallery")}
           />
         </div>
 
-        <aside style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="peg-card">
-            <div className="peg-card__body">
-              <div className="peg-field__label">Status</div>
-              <Badge tone="neutral">{article?.status ?? "…"}</Badge>
-              <div className="peg-field__label" style={{ marginTop: 12 }}>Versão</div>
-              <span className="peg-table__muted">v{version}</span>
-            </div>
-          </div>
-
+        <aside style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="peg-card">
             <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <Input label="Slug" value={slug} onChange={(e) => { setSlug(e.target.value); scheduleSave(); }} />
               <Input label="SEO — título" value={seoTitle} onChange={(e) => { setSeoTitle(e.target.value); scheduleSave(); }} />
               <Textarea label="SEO — meta descrição" rows={3} value={seoDesc} onChange={(e) => { setSeoDesc(e.target.value); scheduleSave(); }} />
-              <Input label="Imagem de destaque (mediaId)" value={featuredMediaId} onChange={(e) => { setFeaturedMediaId(e.target.value); scheduleSave(); }} />
+              <div>
+                <span className="peg-field__label">Imagem de destaque</span>
+                {featuredMediaId ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="peg-table__muted">{featuredMediaId.slice(0, 8)}…</span>
+                    <Button size="xs" variant="secondary" onClick={() => setMediaPicker("featured")}>Trocar</Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={() => setMediaPicker("featured")}>Selecionar</Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="peg-card">
+            <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <CheckboxGroup label="Categorias" items={cats.map((c) => ({ id: c.id, name: c.name }))} selected={selCats} onToggle={(id) => toggleSet(setSelCats, id)} />
+              <CheckboxGroup label="Tags" items={tags.map((t) => ({ id: t.id, name: t.name }))} selected={selTags} onToggle={(id) => toggleSet(setSelTags, id)} />
+              <CheckboxGroup label="Entidades" items={entities.map((e) => ({ id: e.id, name: e.name }))} selected={selEntities} onToggle={(id) => toggleSet(setSelEntities, id)} />
+              <CheckboxGroup label="Autores" items={authors.map((a) => ({ id: a.id, name: a.name }))} selected={selAuthors} onToggle={(id) => toggleSet(setSelAuthors, id)} />
             </div>
           </div>
 
@@ -153,16 +288,71 @@ export default function ArticlePage() {
               {revisions.map((r) => (
                 <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <span>
-                    <span className="peg-table__muted">r{r.revisionNumber}</span>{" "}
-                    {new Date(r.createdAt).toLocaleString("pt-BR")}
+                    <span className="peg-table__muted">r{r.revisionNumber}</span> {new Date(r.createdAt).toLocaleString("pt-BR")}
                   </span>
-                  <Button size="xs" variant="secondary" onClick={() => restore(r)}>Restaurar</Button>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <Button size="xs" variant="secondary" onClick={() => setCompareRevision(r)}>Comparar</Button>
+                    <Button size="xs" variant="secondary" onClick={() => restore(r)}>Restaurar</Button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </aside>
       </div>
+
+      {compareRevision && (
+        <div className="peg-card" style={{ marginTop: 16 }}>
+          <div className="peg-card__header">
+            <h3 className="peg-card__title">Comparar r{compareRevision.revisionNumber} com o atual</h3>
+            <Button size="xs" variant="secondary" onClick={() => setCompareRevision(null)}>Fechar</Button>
+          </div>
+          <div className="peg-card__body" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <span className="peg-field__label">Revisão r{compareRevision.revisionNumber}</span>
+              <pre style={{ whiteSpace: "pre-wrap", font: "var(--peg-font-body)", background: "var(--peg-surface-hover, #f9fafb)", padding: 8, borderRadius: 6 }}>{docToText(compareRevision.document)}</pre>
+            </div>
+            <div>
+              <span className="peg-field__label">Atual</span>
+              <pre style={{ whiteSpace: "pre-wrap", font: "var(--peg-font-body)", background: "var(--peg-surface-hover, #f9fafb)", padding: 8, borderRadius: 6 }}>{docToText(doc)}</pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <MediaPicker
+        open={mediaPicker !== null}
+        multiple={mediaPicker === "gallery"}
+        onClose={() => setMediaPicker(null)}
+        onSelect={(ids) => {
+          if (mediaPicker === "featured") {
+            setFeaturedMediaId(ids[0] ?? "");
+            scheduleSave();
+          } else if (mediaPicker === "gallery") {
+            editorRef.current?.insertGallery(ids);
+          } else if (mediaPicker === "image") {
+            editorRef.current?.insertImage(ids[0] ?? "");
+          }
+          setMediaPicker(null);
+        }}
+      />
     </>
+  );
+}
+
+function CheckboxGroup({ label, items, selected, onToggle }: { label: string; items: { id: string; name: string }[]; selected: Set<string>; onToggle: (id: string) => void }) {
+  return (
+    <div>
+      <span className="peg-field__label">{label}</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 140, overflowY: "auto" }}>
+        {items.length === 0 && <span className="peg-table__muted">—</span>}
+        {items.map((it) => (
+          <label key={it.id} className="peg-checkbox" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="checkbox" checked={selected.has(it.id)} onChange={() => onToggle(it.id)} />
+            <span>{it.name}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
