@@ -12,24 +12,29 @@ export const siteSchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createSiteBodySchema = z.object({
-  slug: siteSchema.shape.slug,
-  name: siteSchema.shape.name,
-});
+export const createSiteBodySchema = z
+  .object({
+    slug: siteSchema.shape.slug,
+    name: siteSchema.shape.name,
+  })
+  .strict();
 
 export const updateSiteBodySchema = z
   .object({
     name: siteSchema.shape.name.optional(),
     status: siteStatusSchema.optional(),
   })
+  .strict()
   .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
 
 import { createUserBodySchema } from "./identity.js";
 
-export const initBootstrapBodySchema = z.object({
-  site: createSiteBodySchema,
-  user: createUserBodySchema,
-});
+export const initBootstrapBodySchema = z
+  .object({
+    site: createSiteBodySchema,
+    user: createUserBodySchema,
+  })
+  .strict();
 
 export type Site = z.infer<typeof siteSchema>;
 export type CreateSiteBody = z.infer<typeof createSiteBodySchema>;

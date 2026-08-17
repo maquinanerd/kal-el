@@ -68,6 +68,11 @@ describe("article body schemas", () => {
     expect(updateArticleBodySchema.safeParse({}).success).toBe(false);
   });
 
+  it("rejects unknown fields (strict mutation schemas)", () => {
+    expect(updateArticleBodySchema.safeParse({ title: "x", status: "in_review" }).success).toBe(false);
+    expect(createArticleBodySchema.safeParse({ title: "x", unknownField: 1 }).success).toBe(false);
+  });
+
   it("normalizes list query defaults", () => {
     const parsed = articleListQuerySchema.safeParse({});
     expect(parsed.success).toBe(true);

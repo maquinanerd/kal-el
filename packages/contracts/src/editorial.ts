@@ -115,10 +115,11 @@ export const createArticleBodySchema = z.object({
   externalKey: z.string().max(256).optional(),
   provenance: provenanceSchema.optional(),
   // Import/automation path: allow setting status and original timestamps.
+  // Enforced by articles.publish / articles.schedule at the route level.
   status: articleStatusSchema.optional(),
   publishedAt: z.string().datetime({ offset: true }).nullable().optional(),
   scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
-});
+}).strict();
 
 export const updateArticleBodySchema = z
   .object({
@@ -135,6 +136,7 @@ export const updateArticleBodySchema = z
     entities: z.array(uuidSchema).optional(),
     provenance: provenanceSchema.optional(),
   })
+  .strict()
   .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
 
 export const articleListQuerySchema = z.object({
@@ -160,12 +162,14 @@ export const categorySchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createCategoryBodySchema = z.object({
-  name: categorySchema.shape.name,
-  slug: categorySchema.shape.slug,
-  parentId: uuidSchema.nullable().optional(),
-  description: z.string().max(1000).nullable().optional(),
-});
+export const createCategoryBodySchema = z
+  .object({
+    name: categorySchema.shape.name,
+    slug: categorySchema.shape.slug,
+    parentId: uuidSchema.nullable().optional(),
+    description: z.string().max(1000).nullable().optional(),
+  })
+  .strict();
 
 export const tagSchema = z.object({
   id: uuidSchema,
@@ -176,10 +180,12 @@ export const tagSchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createTagBodySchema = z.object({
-  name: tagSchema.shape.name,
-  slug: tagSchema.shape.slug,
-});
+export const createTagBodySchema = z
+  .object({
+    name: tagSchema.shape.name,
+    slug: tagSchema.shape.slug,
+  })
+  .strict();
 
 export const entitySchema = z.object({
   id: uuidSchema,
@@ -201,12 +207,14 @@ export const entitySchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createEntityBodySchema = z.object({
-  name: entitySchema.shape.name,
-  type: entitySchema.shape.type,
-  description: z.string().max(2000).nullable().optional(),
-  externalRefs: entitySchema.shape.externalRefs,
-});
+export const createEntityBodySchema = z
+  .object({
+    name: entitySchema.shape.name,
+    type: entitySchema.shape.type,
+    description: z.string().max(2000).nullable().optional(),
+    externalRefs: entitySchema.shape.externalRefs,
+  })
+  .strict();
 
 export const authorSchema = z.object({
   id: uuidSchema,
@@ -220,12 +228,14 @@ export const authorSchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createAuthorBodySchema = z.object({
-  name: authorSchema.shape.name,
-  slug: authorSchema.shape.slug,
-  bio: z.string().max(2000).nullable().optional(),
-  email: z.string().email().nullable().optional(),
-});
+export const createAuthorBodySchema = z
+  .object({
+    name: authorSchema.shape.name,
+    slug: authorSchema.shape.slug,
+    bio: z.string().max(2000).nullable().optional(),
+    email: z.string().email().nullable().optional(),
+  })
+  .strict();
 
 export const sourceSchema = z.object({
   id: uuidSchema,
@@ -237,11 +247,13 @@ export const sourceSchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createSourceBodySchema = z.object({
-  name: sourceSchema.shape.name,
-  url: z.string().url().max(2048).nullable().optional(),
-  kind: sourceSchema.shape.kind,
-});
+export const createSourceBodySchema = z
+  .object({
+    name: sourceSchema.shape.name,
+    url: z.string().url().max(2048).nullable().optional(),
+    kind: sourceSchema.shape.kind,
+  })
+  .strict();
 
 export const articleRevisionSchema = z.object({
   id: uuidSchema,
@@ -253,14 +265,18 @@ export const articleRevisionSchema = z.object({
   createdAt: timestampSchema,
 });
 
-export const publishArticleBodySchema = z.object({
-  note: z.string().max(500).optional(),
-});
+export const publishArticleBodySchema = z
+  .object({
+    note: z.string().max(500).optional(),
+  })
+  .strict();
 
-export const scheduleArticleBodySchema = z.object({
-  scheduledAt: z.string().datetime({ offset: true }),
-  note: z.string().max(500).optional(),
-});
+export const scheduleArticleBodySchema = z
+  .object({
+    scheduledAt: z.string().datetime({ offset: true }),
+    note: z.string().max(500).optional(),
+  })
+  .strict();
 
 export type ArticleType = z.infer<typeof articleTypeSchema>;
 export type ArticleStatus = z.infer<typeof articleStatusSchema>;

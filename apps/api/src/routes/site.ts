@@ -78,6 +78,12 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const siteId = (req.params as { siteId: string }).siteId;
         const parsed = createArticleBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        // R0.1: creating directly into a published/scheduled state is a privileged
+        // transition and must not be reachable with articles.create alone.
+        const wantsPublished = parsed.data.status === "published" || parsed.data.publishedAt != null;
+        const wantsScheduled = parsed.data.status === "scheduled" || parsed.data.scheduledAt != null;
+        if (wantsPublished) permissionDenied(req, "articles.publish");
+        if (wantsScheduled) permissionDenied(req, "articles.schedule");
         const actor = req.actor as ActorRef;
         const key = req.headers["idempotency-key"];
 

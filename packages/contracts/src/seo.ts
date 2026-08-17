@@ -23,11 +23,13 @@ export const redirectSchema = z.object({
   kind: redirectKindSchema,
 });
 
-export const createRedirectBodySchema = z.object({
-  sourcePath: redirectSchema.shape.sourcePath,
-  targetPath: redirectSchema.shape.targetPath,
-  kind: redirectKindSchema.default("301"),
-});
+export const createRedirectBodySchema = z
+  .object({
+    sourcePath: redirectSchema.shape.sourcePath,
+    targetPath: redirectSchema.shape.targetPath,
+    kind: redirectKindSchema.default("301"),
+  })
+  .strict();
 
 export type SeoMetadata = z.infer<typeof seoMetadataSchema>;
 export type Redirect = z.infer<typeof redirectSchema>;

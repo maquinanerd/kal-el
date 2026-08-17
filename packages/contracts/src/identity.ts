@@ -12,16 +12,20 @@ export const userSchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createUserBodySchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(120),
-  password: z.string().min(12).max(128),
-});
+export const createUserBodySchema = z
+  .object({
+    email: z.string().email(),
+    name: z.string().min(1).max(120),
+    password: z.string().min(12).max(128),
+  })
+  .strict();
 
-export const loginBodySchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
+export const loginBodySchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  })
+  .strict();
 
 export const roleSchema = z.object({
   id: uuidSchema,
@@ -31,12 +35,14 @@ export const roleSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-export const createRoleBodySchema = z.object({
-  key: roleSchema.shape.key,
-  name: roleSchema.shape.name,
-  description: z.string().max(500).optional(),
-  permissions: z.array(z.string().min(1).max(80)).min(1),
-});
+export const createRoleBodySchema = z
+  .object({
+    key: roleSchema.shape.key,
+    name: roleSchema.shape.name,
+    description: z.string().max(500).optional(),
+    permissions: z.array(z.string().min(1).max(80)).min(1),
+  })
+  .strict();
 
 export const permissionKeySchema = z.string().min(1).max(80);
 
@@ -50,11 +56,13 @@ export const serviceTokenSchema = z.object({
   createdAt: timestampSchema,
 });
 
-export const createServiceTokenBodySchema = z.object({
-  name: serviceTokenSchema.shape.name,
-  scopes: z.array(z.string().min(1).max(80)).min(1),
-  expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
-});
+export const createServiceTokenBodySchema = z
+  .object({
+    name: serviceTokenSchema.shape.name,
+    scopes: z.array(z.string().min(1).max(80)).min(1),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+  })
+  .strict();
 
 export const sessionSchema = z.object({
   id: uuidSchema,

@@ -210,7 +210,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   );
 }
 
-const zAssignRole = z.object({
-  roleId: z.string().uuid(),
-  siteId: z.string().uuid(),
-});
+const zAssignRole = z
+  .object({
+    roleId: z.string().uuid(),
+    siteId: z.string().uuid(),
+  })
+  .strict();

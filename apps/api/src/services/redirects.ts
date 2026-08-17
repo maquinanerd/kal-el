@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
 import { redirects } from "@kal-el/db/schema";
 import type { CreateRedirectBody } from "@kal-el/contracts";
@@ -36,8 +36,13 @@ export async function listRedirects(db: Db, siteId: string) {
 }
 
 export async function deleteRedirect(db: Db, siteId: string, redirectId: string) {
-  const [row] = await db.delete(redirects).where(eq(redirects.id, redirectId)).returning();
-  if (!row || row.siteId !== siteId) throw notFound("redirect not found");
+  // Delete must be scoped by (id, site_id) in the query itself so a caller from
+  // another site can never destroy a row that is not theirs.
+  const [row] = await db
+    .delete(redirects)
+    .where(and(eq(redirects.id, redirectId), eq(redirects.siteId, siteId)))
+    .returning();
+  if (!row) throw notFound("redirect not found");
   return { id: row.id, deleted: true };
 }
 

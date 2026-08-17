@@ -91,7 +91,7 @@ describe("WordPress import through the REST API", () => {
       headers: { Cookie: session.cookieHeader, "x-kal-el-csrf": session.csrf },
       payload: {
         name: "importer",
-        scopes: ["articles.create", "articles.read", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage", "seo.manage"],
+        scopes: ["articles.create", "articles.read", "articles.publish", "articles.schedule", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage", "seo.manage"],
       },
     });
     const token = tokenRes.json().data.token as string;

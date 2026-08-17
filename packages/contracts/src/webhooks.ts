@@ -12,16 +12,18 @@ export const webhookSchema = z.object({
   updatedAt: timestampSchema,
 });
 
-export const createWebhookBodySchema = z.object({
-  url: z
-    .string()
-    .url()
-    .max(2048)
-    .refine((u) => /^https?:\/\//i.test(u), "only http(s) URLs are allowed"),
-  events: z.array(webhookEventSchema).min(1),
-  // optional subscriber-supplied signing secret; generated if omitted
-  secret: z.string().min(16).max(128).optional(),
-});
+export const createWebhookBodySchema = z
+  .object({
+    url: z
+      .string()
+      .url()
+      .max(2048)
+      .refine((u) => /^https?:\/\//i.test(u), "only http(s) URLs are allowed"),
+    events: z.array(webhookEventSchema).min(1),
+    // optional subscriber-supplied signing secret; generated if omitted
+    secret: z.string().min(16).max(128).optional(),
+  })
+  .strict();
 
 export const webhookDeliverySchema = z.object({
   id: uuidSchema,
