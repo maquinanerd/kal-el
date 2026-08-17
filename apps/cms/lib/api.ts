@@ -123,6 +123,10 @@ export function articleAction(siteId: string, articleId: string, action: string)
   return request("POST", `/v1/sites/${siteId}/articles/${articleId}/${action}`, {});
 }
 
+export function getPreviewUrl(siteId: string, articleId: string): Promise<{ url: string }> {
+  return request("POST", `/v1/sites/${siteId}/articles/${articleId}/preview`, {});
+}
+
 // ---- media ----
 export type MediaItem = {
   id: string;

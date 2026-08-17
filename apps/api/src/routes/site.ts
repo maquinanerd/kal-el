@@ -68,6 +68,7 @@ import {
 import { createRedirect, deleteRedirect, listRedirects } from "../services/redirects.js";
 import { deleteMedia, getMedia, listMedia, updateMedia, uploadMedia } from "../services/media.js";
 import { siteStats } from "../services/stats.js";
+import { createPreviewToken } from "../services/preview.js";
 
 function guard(permission: string) {
   return async (req: FastifyRequest) => {
@@ -216,6 +217,12 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         return { data: await archiveArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+      });
+
+      siteApp.post("/articles/:articleId/preview", { preHandler: guard("articles.read") }, async (req) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        const token = createPreviewToken(app.config.SESSION_SECRET, siteId, articleId);
+        return { data: { url: `${app.config.API_BASE_URL}/v1/preview/${token}` } };
       });
 
       // ---- Taxonomy ----

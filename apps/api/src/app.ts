@@ -20,6 +20,7 @@ import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { adminRoutes } from "./routes/admin.js";
 import { siteRoutes } from "./routes/site.js";
+import { previewRoutes } from "./routes/preview.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -33,6 +34,7 @@ export async function buildApp(opts: { connectionString: string; config: AppConf
     logger: opts.logger ?? false,
     genReqId: () => requestId(),
     bodyLimit: 5 * 1024 * 1024,
+    maxParamLength: 1024,
   });
   app.decorate("config", opts.config);
   app.decorate("storage", createStorageProvider(opts.config));
@@ -54,6 +56,7 @@ export async function buildApp(opts: { connectionString: string; config: AppConf
   await app.register(authRoutes);
   await app.register(adminRoutes);
   await app.register(siteRoutes);
+  await app.register(previewRoutes);
 
   return app;
 }

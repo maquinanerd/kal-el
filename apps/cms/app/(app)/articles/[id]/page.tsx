@@ -9,6 +9,7 @@ import {
   ApiError,
   articleAction,
   getArticle,
+  getPreviewUrl,
   listAuthors,
   listCategories,
   listEntities,
@@ -206,6 +207,17 @@ export default function ArticlePage() {
     }
   }
 
+  async function openPreview() {
+    if (!activeSiteId) return;
+    setActionError(null);
+    try {
+      const { url } = await getPreviewUrl(activeSiteId, params.id);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Falha ao abrir preview");
+    }
+  }
+
   function restore(revision: ArticleRevision) {
     setDoc((revision.document as ArticleDocumentV2) ?? EMPTY_DOC);
     setEditorKey((k) => k + 1);
@@ -232,6 +244,7 @@ export default function ArticlePage() {
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <Badge tone="neutral">{status}</Badge>
+        <Button size="sm" variant="secondary" onClick={() => void openPreview()}>Preview</Button>
         {WORKFLOW_ACTIONS[status]?.map((a) => (
           <Button key={a.key} size="sm" variant={a.variant} onClick={() => void doAction(a.key)}>{a.label}</Button>
         ))}
