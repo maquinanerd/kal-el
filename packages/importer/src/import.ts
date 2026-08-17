@@ -1,6 +1,6 @@
 import type { KalElClient } from "@kal-el/sdk";
 import { finalizeDocument } from "./html.js";
-import type { ImportBatch, NormalizedAuthor, NormalizedTaxonomy } from "./types.js";
+import type { ImportBatch, NormalizedAuthor, NormalizedMedia, NormalizedTaxonomy } from "./types.js";
 
 export type ImportReport = {
   source: { categories: number; tags: number; authors: number; media: number; articles: number; redirects: number };
@@ -70,7 +70,7 @@ export async function importBatch(
   client: KalElClient,
   siteId: string,
   batch: ImportBatch,
-  opts: { externalKeyPrefix?: string } = {},
+  opts: { externalKeyPrefix?: string; fetchMedia?: (media: NormalizedMedia) => Promise<{ data: Buffer; mimeType: string }> } = {},
 ): Promise<ImportReport> {
   const prefix = opts.externalKeyPrefix ?? "imp";
   const report: ImportReport = {
@@ -98,11 +98,22 @@ export async function importBatch(
   await ensureTags(client, siteId, batch.tags, report, tagMap);
   await ensureAuthors(client, siteId, batch.authors, report, authorMap);
 
-  // media binaries are deferred until the StorageProvider (Phase 5); metadata is counted
-  report.mediaPending = batch.media.length;
-
-  // media source URLs are not yet importable → image nodes will be dropped
+  // media: when a fetchMedia provider is given, download + upload binaries so
+  // image/gallery nodes and featured images survive the import.
   const urlToMediaId = new Map<string, string>();
+  if (opts.fetchMedia) {
+    for (const m of batch.media) {
+      try {
+        const { data, mimeType } = await opts.fetchMedia(m);
+        const uploaded = await client.uploadMedia(siteId, m.filename, data, mimeType);
+        urlToMediaId.set(m.url, uploaded.id);
+        report.imported.media++;
+      } catch (err) {
+        report.warnings.push(`media failed: ${m.url} (${err instanceof Error ? err.message : String(err)})`);
+      }
+    }
+  }
+  report.mediaPending = batch.media.length - report.imported.media;
 
   for (const article of batch.articles) {
     const externalKey = `${prefix}:${article.externalId}`;
@@ -118,6 +129,8 @@ export async function importBatch(
     const tagIds = article.tagExternalIds.map((e) => tagMap.get(externalSuffix(e))).filter((id): id is string => Boolean(id));
     const authorIds = article.authorExternalIds.map((e) => authorMap.get(externalSuffix(e))).filter((id): id is string => Boolean(id));
 
+    const featuredMediaId = article.featuredMediaExternalId ? urlToMediaId.get(batch.media.find((m) => m.externalId === article.featuredMediaExternalId)?.url ?? "") : undefined;
+
     const document = finalizeDocument(article.intermediateNodes, urlToMediaId, report.warnings);
 
     const created = await client.createArticle(siteId, {
@@ -132,6 +145,7 @@ export async function importBatch(
       categories: categoryIds,
       tags: tagIds,
       authors: authorIds,
+      featuredMediaId,
       externalKey,
       provenance: {
         system: batch.sourceName.toLowerCase(),

@@ -1,6 +1,8 @@
 import type { ArticleStatus, ArticleType } from "@kal-el/contracts";
 import { emptyBatch, type ImportBatch, type NormalizedArticle, type NormalizedMedia, type NormalizedTaxonomy } from "./types.js";
 import { htmlToIntermediate } from "./html.js";
+import { lexicalToIntermediate } from "./lexical.js";
+import type { LexicalRoot } from "./lexical.js";
 
 /**
  * Payload importer framework (ADR-0006). Payload exports are project-specific,
@@ -65,6 +67,15 @@ function slugify(name: string): string {
   );
 }
 
+function idsOf(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => (typeof v === "object" && v ? String((v as Record<string, unknown>).id ?? (v as Record<string, unknown>).value ?? "") : String(v))).filter(Boolean);
+  }
+  if (typeof value === "string" && value.length > 0) return [value];
+  if (typeof value === "number") return [String(value)];
+  return [];
+}
+
 export class PayloadAdapter {
   constructor(private readonly fieldMap: PayloadFieldMap = defaultFieldMap) {}
 
@@ -96,7 +107,7 @@ export class PayloadAdapter {
       const id = idOf(at(doc, fm.id));
       const title = str(at(doc, fm.title));
       if (!title) continue;
-      const content = str(at(doc, fm.content)) ?? "";
+      const contentRaw = at(doc, fm.content);
       const statusRaw = str(at(doc, fm.status)) ?? "draft";
       const publishedAt = str(at(doc, fm.publishedAt));
       const status: ArticleStatus = statusRaw === "published" ? "published" : statusRaw === "scheduled" ? "scheduled" : "draft";
@@ -106,18 +117,29 @@ export class PayloadAdapter {
       const seoTitle = typeof at(doc, seoMap?.title) === "string" ? (at(doc, seoMap?.title) as string) : undefined;
       const seoDesc = typeof at(doc, seoMap?.description) === "string" ? (at(doc, seoMap?.description) as string) : undefined;
 
+      // Payload richtext is Lexical JSON; fall back to HTML when a string is given.
+      const isLexical = typeof contentRaw === "object" && contentRaw !== null;
+      const intermediateNodes = isLexical
+        ? lexicalToIntermediate((contentRaw as { root?: LexicalRoot }).root ?? (contentRaw as LexicalRoot))
+        : htmlToIntermediate(typeof contentRaw === "string" ? contentRaw : "").nodes;
+
+      const author = at(doc, fm.author);
+      const authorIds = idsOf(author).map((x) => `pl:author:${x}`);
+      const categoryIds = idsOf(at(doc, fm.categories)).map((x) => `pl:cat:${x}`);
+      const tagIds = idsOf(at(doc, fm.tags)).map((x) => `pl:tag:${x}`);
+
       const article: NormalizedArticle = {
         externalId: `pl:post:${id || title}`,
         type,
         title,
         slug: str(at(doc, fm.slug)) ?? slugify(title),
         excerpt: str(at(doc, fm.excerpt)),
-        intermediateNodes: htmlToIntermediate(content).nodes,
+        intermediateNodes,
         status,
         publishedAt,
-        authorExternalIds: [],
-        categoryExternalIds: [],
-        tagExternalIds: [],
+        authorExternalIds: authorIds,
+        categoryExternalIds: categoryIds,
+        tagExternalIds: tagIds,
         seo: { seoTitle, metaDescription: seoDesc },
         externalUrl: "",
       };

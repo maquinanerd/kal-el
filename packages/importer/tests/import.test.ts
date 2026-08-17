@@ -91,7 +91,7 @@ describe("WordPress import through the REST API", () => {
       headers: { Cookie: session.cookieHeader, "x-kal-el-csrf": session.csrf },
       payload: {
         name: "importer",
-        scopes: ["articles.create", "articles.read", "articles.publish", "articles.schedule", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage", "seo.manage"],
+        scopes: ["articles.create", "articles.read", "articles.publish", "articles.schedule", "media.manage", "media.read", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage", "seo.manage"],
       },
     });
     const token = tokenRes.json().data.token as string;
@@ -105,13 +105,15 @@ describe("WordPress import through the REST API", () => {
 
   it("imports a WordPress snapshot, preserving status/dates and emitting revalidation", async () => {
     const batch = normalizeWordPress(readWordPressSnapshot(SNAPSHOT));
-    const report = await importBatch(client, siteId, batch, { externalKeyPrefix: "imp" });
+    const fetchMedia = async () => ({ data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), mimeType: "image/jpeg" });
+    const report = await importBatch(client, siteId, batch, { externalKeyPrefix: "imp", fetchMedia });
 
     expect(report.imported.articles).toBe(2);
     expect(report.imported.categories).toBe(1);
     expect(report.imported.tags).toBe(1);
     expect(report.imported.authors).toBe(1);
-    expect(report.mediaPending).toBe(1);
+    expect(report.imported.media).toBe(1);
+    expect(report.mediaPending).toBe(0);
 
     const published = await client.listArticles(siteId, { externalKey: "imp:wp:post:42" });
     expect(published.items.length).toBe(1);
@@ -122,9 +124,9 @@ describe("WordPress import through the REST API", () => {
     expect(new Date(full.publishedAt!).getTime()).toBe(new Date("2024-11-15T10:00:00Z").getTime());
     expect(full.seo.seoTitle).toBe("Título SEO");
     expect(full.provenance?.sources?.[0]?.externalId).toBe("wp:post:42");
-    // image node was dropped (media pending), heading+paragraph remain
-    expect(full.document.nodes.every((n) => n.type !== "image")).toBe(true);
-    expect(full.document.nodes.length).toBe(2);
+    // image node is preserved via uploaded media
+    expect(full.document.nodes.some((n) => n.type === "image")).toBe(true);
+    expect(full.featuredMediaId).toBeTruthy();
 
     const events = await db.select().from(outboxEvents).where(eq(outboxEvents.aggregateType, "article"));
     expect(events.filter((e) => e.eventType === "article.published").length).toBe(1);
