@@ -116,6 +116,7 @@ export default function ArticlePage() {
   const [version, setVersion] = useState(0);
   const [status, setStatus] = useState<ArticleStatus>("draft");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<ArticleRevision[]>([]);
   const [editorKey, setEditorKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -136,6 +137,8 @@ export default function ArticlePage() {
 
   const loadedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRef = useRef({ title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version });
+  draftRef.current = { title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version };
 
   useEffect(() => {
     if (!activeSiteId) return;
@@ -176,39 +179,42 @@ export default function ArticlePage() {
   const save = useCallback(
     async (overrides?: Partial<Record<string, unknown>>) => {
       if (!activeSiteId || !loadedRef.current) return;
+      const s = draftRef.current;
       setSaveState("saving");
       try {
         const body: Record<string, unknown> = {
-          title,
-          dek: dek || null,
-          slug: slug || null,
-          document: doc,
+          title: s.title,
+          dek: s.dek || null,
+          slug: s.slug || null,
+          document: s.doc,
           seo: {
-            seoTitle: seoTitle || null,
-            metaDescription: seoDesc || null,
-            canonicalUrl: canonical || null,
-            robotsIndex,
-            robotsFollow,
-            socialTitle: socialTitle || null,
-            socialDescription: socialDesc || null,
-            socialImageMediaId: socialImageId || null,
-            primaryCategoryId: primaryCategoryId || null,
+            seoTitle: s.seoTitle || null,
+            metaDescription: s.seoDesc || null,
+            canonicalUrl: s.canonical || null,
+            robotsIndex: s.robotsIndex,
+            robotsFollow: s.robotsFollow,
+            socialTitle: s.socialTitle || null,
+            socialDescription: s.socialDesc || null,
+            socialImageMediaId: s.socialImageId || null,
+            primaryCategoryId: s.primaryCategoryId || null,
           },
-          featuredMediaId: featuredMediaId || null,
-          categories: [...selCats],
-          tags: [...selTags],
-          entities: [...selEntities],
-          authors: [...selAuthors],
+          featuredMediaId: s.featuredMediaId || null,
+          categories: [...s.selCats],
+          tags: [...s.selTags],
+          entities: [...s.selEntities],
+          authors: [...s.selAuthors],
           ...overrides,
         };
-        const updated = await updateArticle(activeSiteId, params.id, body, version);
+        const updated = await updateArticle(activeSiteId, params.id, body, s.version);
         setVersion(updated.version);
         setSaveState("saved");
-      } catch {
+        setSaveError(null);
+      } catch (err) {
         setSaveState("error");
+        setSaveError(err instanceof ApiError ? `${err.status}: ${err.message}` : String(err));
       }
     },
-    [activeSiteId, params.id, title, dek, slug, doc, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, selCats, selTags, selEntities, selAuthors, version],
+    [activeSiteId, params.id],
   );
 
   const scheduleSave = useCallback(() => {
@@ -267,6 +273,7 @@ export default function ArticlePage() {
       <PageHead title={article?.title ?? "Carregando…"} description={saveState ? SAVE_LABEL[saveState] : "Editor"} />
 
       {actionError && <Alert tone="danger">{actionError}</Alert>}
+      {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <Badge tone="neutral">{status}</Badge>
@@ -283,7 +290,7 @@ export default function ArticlePage() {
           <Input label="Subtítulo (dek)" value={dek} onChange={(e) => { setDek(e.target.value); scheduleSave(); }} />
 
           <RichTextEditor
-            key={editorKey}
+            key={`${article?.id ?? "loading"}-${editorKey}`}
             ref={editorRef}
             document={doc}
             onChange={(next) => { setDoc(next); scheduleSave(); }}

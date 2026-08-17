@@ -196,7 +196,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         if (!uuidSchema.safeParse(siteId).success) throw badRequest("invalid siteId");
         const parsed = createWebhookBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const webhook = await createWebhook(app.db, siteId, parsed.data);
+        const webhook = await createWebhook(app.db, siteId, parsed.data, { allowPrivate: app.config.NODE_ENV !== "production" });
         return reply.status(201).send({ data: webhook });
       });
 

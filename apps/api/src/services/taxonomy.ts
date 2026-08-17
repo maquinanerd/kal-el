@@ -211,15 +211,7 @@ export async function listSources(db: Db, siteId: string) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function writeUpdateAudit(
-  tx: any,
-  siteId: string,
-  actor: ActorRef,
-  action: string,
-  objectType: string,
-  objectId: string,
-  changed: string[],
-) {
+async function writeUpdateAudit(tx: any, siteId: string, actor: ActorRef, action: string, objectType: string, objectId: string, changed: string[]) {
   await writeAudit(tx, {
     siteId,
     actorType: actor.kind,

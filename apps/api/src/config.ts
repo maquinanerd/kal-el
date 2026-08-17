@@ -13,6 +13,11 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((v) => v === "true"),
+  CORS_ORIGINS: z.string().default(""),
+  ENABLE_DOCS: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
   BOOTSTRAP_TOKEN: z.string().optional(),
   MEDIA_STORAGE_PROVIDER: z.enum(["local"]).default("local"),
   MEDIA_LOCAL_PATH: z.string().min(1).default("./uploads"),
@@ -26,5 +31,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (!parsed.success) {
     throw new Error(`Invalid environment configuration: ${JSON.stringify(parsed.error.flatten().fieldErrors)}`);
   }
-  return parsed.data;
+  const config = parsed.data;
+
+  // Production guards: fail fast instead of deploying a misconfigured instance.
+  if (config.NODE_ENV === "production") {
+    if (!config.COOKIE_SECURE) {
+      throw new Error("COOKIE_SECURE must be 'true' in production");
+    }
+    if (config.SESSION_SECRET === "development-only-secret") {
+      throw new Error("SESSION_SECRET must be set to a strong random value in production");
+    }
+  }
+  return config;
+}
+
+/** Comma-separated allow-list of CORS origins (falls back to APP_BASE_URL). */
+export function corsOrigins(config: AppConfig): string[] {
+  const raw = config.CORS_ORIGINS.trim();
+  if (raw.length > 0) return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return [config.APP_BASE_URL];
 }

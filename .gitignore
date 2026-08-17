@@ -19,3 +19,5 @@ uploads/
 tmp/
 *.zip
 *.tsbuildinfo
+test-results/
+playwright-report/

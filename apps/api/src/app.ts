@@ -11,6 +11,7 @@ import { buildOpenApiDocument } from "@kal-el/contracts";
 import { requestId } from "@kal-el/auth";
 
 import type { AppConfig } from "./config.js";
+import { corsOrigins } from "./config.js";
 import type { StorageProvider } from "./storage/provider.js";
 import { createStorageProvider } from "./storage/index.js";
 import { registerErrorHandler } from "./plugins/errors.js";
@@ -41,7 +42,12 @@ export async function buildApp(opts: { connectionString: string; config: AppConf
   registerErrorHandler(app);
 
   await app.register(cookie);
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, {
+    origin: corsOrigins(opts.config),
+    credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["content-type", "authorization", "x-kal-el-csrf", "if-match", "idempotency-key"],
+  });
   await app.register(helmet, { contentSecurityPolicy: false });
   // global per-IP rate limit; login keeps a stricter route-level limit
   await app.register(rateLimit, { global: true, max: 600, timeWindow: "1 minute" });
@@ -50,7 +56,10 @@ export async function buildApp(opts: { connectionString: string; config: AppConf
   await app.register(authPlugin);
 
   await app.register(swagger, { openapi: buildOpenApiDocument() as never });
-  await app.register(swaggerUi, { routePrefix: "/docs" });
+  // Swagger UI is opt-in; disabled by default in production.
+  if (opts.config.ENABLE_DOCS || opts.config.NODE_ENV !== "production") {
+    await app.register(swaggerUi, { routePrefix: "/docs" });
+  }
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
