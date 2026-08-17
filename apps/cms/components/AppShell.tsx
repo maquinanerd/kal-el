@@ -55,6 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     {
       label: "Administração",
       items: [
+        { id: "sites", label: "Sites", icon: <IconHome />, active: is("/sites"), onClick: () => router.push("/sites") },
         { id: "users", label: "Usuários", icon: <IconUsers />, active: is("/users"), onClick: () => router.push("/users") },
         { id: "roles", label: "Papéis", icon: <IconUsers />, active: is("/roles"), onClick: () => router.push("/roles") },
         { id: "tokens", label: "Service tokens", icon: <IconBolt />, active: is("/tokens"), onClick: () => router.push("/tokens") },
