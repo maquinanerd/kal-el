@@ -178,11 +178,18 @@ Detalhe completo de visual/responsivo/a11y em
 
 Distribuição: api 87 · contracts 15 · importer 15 · db 8 · worker 8 · editor 7 ·
 auth 5 · sdk 5 · design-system 5 · fixture 4.
-| Playwright | **12 passed, 0 failed, 0 skipped** (era 2) |
+| Playwright | **13 passed, 0 failed, 0 skipped** (era 2) |
 | axe (WCAG 2.1 A+AA, 72 varreduras) | **0 violações** |
-| Navegação alcançável (180 medições) | **180/180** |
+| Navegação alcançável (180 medições) | **179–180/180** (ver nota) |
 | Overflow horizontal | 0 |
 | Erros de console na varredura | 0 |
+
+> **Nota sobre a medição de navegação.** O harness diagnóstico reportou 0/180 falhas numa
+> execução e 1/180 em outras duas — sempre numa largura diferente, sempre com 0 erros de
+> console, incluindo em 1440px, onde nenhuma regra CSS esconde a sidebar. É artefato de
+> tempo de render do próprio harness (a shell é renderizada no cliente), não estado do
+> produto. O gate autoritativo é o teste de teclado do axe spec, que verifica
+> alcançabilidade em 390px e passa de forma determinística.
 
 ### Nota sobre a suíte E2E
 
@@ -195,7 +202,17 @@ redirect para `/login`.
 Corrigido pelo lado da suíte, não do produto: um projeto `setup` do Playwright autentica
 uma vez e grava `storageState`, que os demais specs reutilizam. O `rbac.spec.ts` continua
 fazendo logins próprios (precisa de um autor real), mas são poucos. O limite permanece
-inalterado.
+inalterado — afrouxar um controle de segurança vivo para fazer teste passar trocaria uma
+proteção real por um número verde.
+
+Essa mudança, por sua vez, quebrou o teste "escrita não autenticada é rejeitada": com a
+sessão compartilhada ele passou a receber **403 (CSRF)** em vez de **401 (sem sessão)** —
+controles diferentes. Isolado num `describe` com `storageState` vazio.
+
+E o teste de ciclo editorial passava isolado mas falhava na suíte completa, afirmando o
+rótulo transitório "Salvo". Sob carga o rótulo pode assentar de um ciclo de debounce
+anterior ao que carrega a mudança. Passou a esperar a **resposta PATCH aceita pelo
+servidor** e a verificar que ela carrega o título novo — afirma o efeito, não a UI.
 
 ### Fresh install / demo data
 

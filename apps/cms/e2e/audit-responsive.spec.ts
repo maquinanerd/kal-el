@@ -191,6 +191,7 @@ test("collect responsive/visual evidence for every surface", async ({ browser })
         await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
         // the shell is client-rendered: measuring before it mounts yields phantom failures
         if (surface.id !== "login") {
+          await page.waitForSelector(".peg-sidebar", { state: "attached", timeout: 20_000 }).catch(() => {});
           await page.waitForSelector(".peg-topbar", { state: "attached", timeout: 20_000 }).catch(() => {});
         }
         await page.waitForTimeout(600);

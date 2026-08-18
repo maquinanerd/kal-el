@@ -18,7 +18,14 @@ test.describe("editorial lifecycle", () => {
     await editor.click();
     await page.keyboard.type("Texto real escrito pelo E2E.");
 
-    // wait for autosave
+    // Wait for the autosave PATCH the server actually accepted, not for the transient
+    // "Salvo" label. Under load the label can settle from an earlier debounce cycle,
+    // which made this reload before the write landed.
+    const saved = await page.waitForResponse(
+      (r) => r.request().method() === "PATCH" && /\/articles\//.test(r.url()) && r.status() < 300,
+      { timeout: 20_000 },
+    );
+    expect((await saved.json()).data.title, "the accepted write must carry the new title").toBe(unique);
     await expect(page.getByText("Salvo")).toBeVisible({ timeout: 15_000 });
 
     // reload and confirm persistence
@@ -27,13 +34,19 @@ test.describe("editorial lifecycle", () => {
     await expect(editor).toContainText("Texto real escrito pelo E2E.");
   });
 
-  test("an unauthenticated write is rejected", async ({ request }) => {
+  // no storageState: the whole point is that the caller has no session. With the shared
+  // session applied this returned 403 (CSRF) instead of 401, which is a different control.
+  test.describe("without a session", () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+
     // Narrow by design: this only proves the auth gate. Real role enforcement - what an
     // author can and cannot do once logged in - is covered in rbac.spec.ts, which
     // provisions an actual author. (This test used to be labelled as the RBAC proof.)
-    const res = await request.post("http://localhost:3101/v1/sites/00000000-0000-0000-0000-000000000000/articles", {
-      data: { title: "x", status: "published" },
+    test("an unauthenticated write is rejected", async ({ request }) => {
+      const res = await request.post("http://localhost:3101/v1/sites/00000000-0000-0000-0000-000000000000/articles", {
+        data: { title: "x", status: "published" },
+      });
+      expect(res.status()).toBe(401);
     });
-    expect(res.status()).toBe(401);
   });
 });
