@@ -69,10 +69,12 @@ export type ImportBatch = {
   media: NormalizedMedia[];
   articles: NormalizedArticle[];
   redirects: NormalizedRedirect[];
+  /** Constructs the adapter could not represent. Merged into the import report. */
+  warnings: string[];
 };
 
 export function emptyBatch(sourceName: string): ImportBatch {
-  return { sourceName, users: [], categories: [], tags: [], authors: [], media: [], articles: [], redirects: [] };
+  return { sourceName, users: [], categories: [], tags: [], authors: [], media: [], articles: [], redirects: [], warnings: [] };
 }
 
 export function batchCounts(batch: ImportBatch) {

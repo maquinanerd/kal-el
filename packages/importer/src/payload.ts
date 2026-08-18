@@ -120,7 +120,7 @@ export class PayloadAdapter {
       // Payload richtext is Lexical JSON; fall back to HTML when a string is given.
       const isLexical = typeof contentRaw === "object" && contentRaw !== null;
       const intermediateNodes = isLexical
-        ? lexicalToIntermediate((contentRaw as { root?: LexicalRoot }).root ?? (contentRaw as LexicalRoot))
+        ? lexicalToIntermediate((contentRaw as { root?: LexicalRoot }).root ?? (contentRaw as LexicalRoot), batch.warnings)
         : htmlToIntermediate(typeof contentRaw === "string" ? contentRaw : "").nodes;
 
       const author = at(doc, fm.author);

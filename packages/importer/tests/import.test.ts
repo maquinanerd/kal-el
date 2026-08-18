@@ -128,6 +128,14 @@ describe("WordPress import through the REST API", () => {
     expect(full.document.nodes.some((n) => n.type === "image")).toBe(true);
     expect(full.featuredMediaId).toBeTruthy();
 
+    // Relations must actually be ATTACHED, not merely created. The taxonomy lookup was
+    // keyed by slug while articles reference taxonomy by external id, so every category,
+    // tag and author silently fell out of `.filter(Boolean)` on every imported article.
+    expect(full.categories.length, "imported article must keep its categories").toBeGreaterThan(0);
+    expect(full.tags.length, "imported article must keep its tags").toBeGreaterThan(0);
+    expect(full.authors.length, "imported article must keep its authors").toBeGreaterThan(0);
+    expect(report.warnings.filter((w) => /reference dropped/.test(w))).toEqual([]);
+
     const events = await db.select().from(outboxEvents).where(eq(outboxEvents.aggregateType, "article"));
     expect(events.filter((e) => e.eventType === "article.published").length).toBe(1);
   });

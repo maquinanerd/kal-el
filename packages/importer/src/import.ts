@@ -15,50 +15,68 @@ function slugToId<T extends { id: string; slug: string }>(rows: T[]): Map<string
   return new Map(rows.map((r) => [r.slug, r.id]));
 }
 
-function externalSuffix(externalId: string): string {
-  const idx = externalId.lastIndexOf(":");
-  return idx === -1 ? externalId : externalId.slice(idx + 1);
+/**
+ * Resolution maps for a taxonomy kind.
+ *
+ * `bySlug` answers "does this row already exist here?" (Kal El rows carry no external
+ * id, so slug is the only stable join back to the source).
+ *
+ * `byExternalId` answers "which Kal El id does this source reference point at?" and is
+ * what article relations are resolved through. Articles reference taxonomy by the
+ * source's external id (`wp:cat:5`), never by slug, so resolving relations through
+ * `bySlug` silently drops every category, tag and author on every article.
+ */
+type Resolver = { bySlug: Map<string, string>; byExternalId: Map<string, string> };
+
+function resolver(rows: { id: string; slug: string }[]): Resolver {
+  return { bySlug: slugToId(rows), byExternalId: new Map() };
 }
 
-async function ensureCategories(client: KalElClient, siteId: string, items: NormalizedTaxonomy[], report: ImportReport, map: Map<string, string>): Promise<void> {
+async function ensureTaxonomyRows<T extends { externalId: string; name: string; slug: string }>(
+  items: T[],
+  res: Resolver,
+  report: ImportReport,
+  label: "categories" | "tags" | "authors",
+  create: (item: T) => Promise<{ id: string; slug: string }>,
+): Promise<void> {
+  for (const item of items) {
+    const known = res.bySlug.get(item.slug);
+    if (known) {
+      res.byExternalId.set(item.externalId, known);
+      continue;
+    }
+    try {
+      const created = await create(item);
+      res.bySlug.set(created.slug, created.id);
+      res.byExternalId.set(item.externalId, created.id);
+      report.imported[label]++;
+    } catch (err) {
+      // Never silent: an unresolvable taxonomy row means articles lose that relation.
+      report.warnings.push(
+        `${label} not resolved: ${item.slug} (${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
+  }
+}
+
+async function ensureCategories(client: KalElClient, siteId: string, items: NormalizedTaxonomy[], report: ImportReport, res: Resolver): Promise<void> {
   // parents first so hierarchies exist
   const ordered = [...items].sort((a, b) => (a.parentExternalId ? 1 : 0) - (b.parentExternalId ? 1 : 0));
-  for (const item of ordered) {
-    if (map.has(item.slug)) continue;
-    try {
-      const created = await client.createCategory(siteId, { name: item.name, slug: item.slug });
-      map.set(created.slug, created.id);
-      report.imported.categories++;
-    } catch {
-      // duplicate slug raced; a later list refresh will pick it up
-    }
-  }
+  await ensureTaxonomyRows(ordered, res, report, "categories", (item) =>
+    client.createCategory(siteId, { name: item.name, slug: item.slug }),
+  );
 }
 
-async function ensureTags(client: KalElClient, siteId: string, items: NormalizedTaxonomy[], report: ImportReport, map: Map<string, string>): Promise<void> {
-  for (const item of items) {
-    if (map.has(item.slug)) continue;
-    try {
-      const created = await client.createTag(siteId, { name: item.name, slug: item.slug });
-      map.set(created.slug, created.id);
-      report.imported.tags++;
-    } catch {
-      // raced
-    }
-  }
+async function ensureTags(client: KalElClient, siteId: string, items: NormalizedTaxonomy[], report: ImportReport, res: Resolver): Promise<void> {
+  await ensureTaxonomyRows(items, res, report, "tags", (item) =>
+    client.createTag(siteId, { name: item.name, slug: item.slug }),
+  );
 }
 
-async function ensureAuthors(client: KalElClient, siteId: string, items: NormalizedAuthor[], report: ImportReport, map: Map<string, string>): Promise<void> {
-  for (const item of items) {
-    if (map.has(item.slug)) continue;
-    try {
-      const created = await client.createAuthor(siteId, { name: item.name, slug: item.slug, email: item.email });
-      map.set(created.slug, created.id);
-      report.imported.authors++;
-    } catch {
-      // raced
-    }
-  }
+async function ensureAuthors(client: KalElClient, siteId: string, items: NormalizedAuthor[], report: ImportReport, res: Resolver): Promise<void> {
+  await ensureTaxonomyRows(items, res, report, "authors", (item) =>
+    client.createAuthor(siteId, { name: item.name, slug: item.slug, email: item.email }),
+  );
 }
 
 /**
@@ -84,19 +102,25 @@ export async function importBatch(
     },
     imported: { categories: 0, tags: 0, authors: 0, articles: 0, redirects: 0, media: 0 },
     existing: { categories: 0, tags: 0, authors: 0, articles: 0 },
-    warnings: [],
+    // adapter-level losses (unsupported richtext nodes, etc.) surface in the same report
+    warnings: [...(batch.warnings ?? [])],
     articleIds: [],
     mediaPending: 0,
   };
 
-  const categoryMap = slugToId(await client.listCategories(siteId));
-  const tagMap = slugToId(await client.listTags(siteId));
-  const authorMap = slugToId(await client.listAuthors(siteId));
-  report.existing = { categories: categoryMap.size, tags: tagMap.size, authors: authorMap.size, articles: 0 };
+  const categories = resolver(await client.listCategories(siteId));
+  const tags = resolver(await client.listTags(siteId));
+  const authors = resolver(await client.listAuthors(siteId));
+  report.existing = {
+    categories: categories.bySlug.size,
+    tags: tags.bySlug.size,
+    authors: authors.bySlug.size,
+    articles: 0,
+  };
 
-  await ensureCategories(client, siteId, batch.categories, report, categoryMap);
-  await ensureTags(client, siteId, batch.tags, report, tagMap);
-  await ensureAuthors(client, siteId, batch.authors, report, authorMap);
+  await ensureCategories(client, siteId, batch.categories, report, categories);
+  await ensureTags(client, siteId, batch.tags, report, tags);
+  await ensureAuthors(client, siteId, batch.authors, report, authors);
 
   // media: when a fetchMedia provider is given, download + upload binaries so
   // image/gallery nodes and featured images survive the import.
@@ -125,9 +149,19 @@ export async function importBatch(
       continue;
     }
 
-    const categoryIds = article.categoryExternalIds.map((e) => categoryMap.get(externalSuffix(e))).filter((id): id is string => Boolean(id));
-    const tagIds = article.tagExternalIds.map((e) => tagMap.get(externalSuffix(e))).filter((id): id is string => Boolean(id));
-    const authorIds = article.authorExternalIds.map((e) => authorMap.get(externalSuffix(e))).filter((id): id is string => Boolean(id));
+    const resolveRelation = (externalIds: string[], res: Resolver, kind: string): string[] => {
+      const ids: string[] = [];
+      for (const e of externalIds) {
+        const id = res.byExternalId.get(e);
+        if (id) ids.push(id);
+        else report.warnings.push(`${kind} reference dropped on "${article.slug}": ${e} not in batch`);
+      }
+      return ids;
+    };
+
+    const categoryIds = resolveRelation(article.categoryExternalIds, categories, "category");
+    const tagIds = resolveRelation(article.tagExternalIds, tags, "tag");
+    const authorIds = resolveRelation(article.authorExternalIds, authors, "author");
 
     const featuredMediaId = article.featuredMediaExternalId ? urlToMediaId.get(batch.media.find((m) => m.externalId === article.featuredMediaExternalId)?.url ?? "") : undefined;
 
