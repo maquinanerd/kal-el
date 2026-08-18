@@ -27,7 +27,7 @@ import {
 import { permissionDenied } from "../auth-context.js";
 import { badRequest, notFound } from "../plugins/errors.js";
 import { requireSiteScope } from "../plugins/auth.js";
-import { idempotencyRequestHash, withIdempotency } from "../plugins/idempotency.js";
+import { idempotencyRequestHash, respondIdempotent, withIdempotency } from "../plugins/idempotency.js";
 import {
   approveArticle,
   archiveArticle,
@@ -279,8 +279,11 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const siteId = (req.params as { siteId: string }).siteId;
         const parsed = createEntityBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const row = await createEntity(app.db, siteId, req.actor as ActorRef, parsed.data);
-        return reply.status(201).send({ data: row });
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 201,
+          body: { data: await createEntity(tx as unknown as Db, siteId, actor, parsed.data) },
+        }));
       });
 
       siteApp.get("/authors", { preHandler: guard("taxonomy.authors.manage") }, async (req) => {
@@ -315,8 +318,11 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const siteId = (req.params as { siteId: string }).siteId;
         const parsed = createSourceBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const row = await createSource(app.db, siteId, req.actor as ActorRef, parsed.data);
-        return reply.status(201).send({ data: row });
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 201,
+          body: { data: await createSource(tx as unknown as Db, siteId, actor, parsed.data) },
+        }));
       });
 
       // ---- Taxonomy update/delete ----
@@ -418,15 +424,20 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const part = await req.file();
         if (!part) throw badRequest("file is required");
         const data = await part.toBuffer();
-        const mediaRow = await uploadMedia(
-          app.db,
-          app.storage,
-          siteId,
-          req.actor as ActorRef,
-          { filename: part.filename || "file", mimeType: part.mimetype || "application/octet-stream", data },
-          { maxBytes: app.config.MEDIA_MAX_BYTES, baseUrl: app.config.API_BASE_URL },
-        );
-        return reply.status(201).send({ data: mediaRow });
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 201,
+          body: {
+            data: await uploadMedia(
+              tx as unknown as Db,
+              app.storage,
+              siteId,
+              actor,
+              { filename: part.filename || "file", mimeType: part.mimetype || "application/octet-stream", data },
+              { maxBytes: app.config.MEDIA_MAX_BYTES, baseUrl: app.config.API_BASE_URL },
+            ),
+          },
+        }));
       });
 
       siteApp.get("/media/:mediaId", { preHandler: guard("media.read") }, async (req) => {

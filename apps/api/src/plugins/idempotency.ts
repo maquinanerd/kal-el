@@ -3,13 +3,25 @@ import { and, eq, sql } from "drizzle-orm";
 import { idempotencyKeys } from "@kal-el/db/schema";
 import type { FastifyRequest } from "fastify";
 
-import { conflict } from "./errors.js";
+import { badRequest, conflict } from "./errors.js";
+import { idempotencyKeySchema } from "@kal-el/contracts";
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Canonical JSON: object keys sorted, so a retry that re-serialises the same payload in a
+ * different key order is recognised as the same request instead of 409-ing.
+ */
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
+}
+
 export function idempotencyRequestHash(req: FastifyRequest): string {
   return createHash("sha256")
-    .update(`${req.method}\n${req.url}\n${JSON.stringify(req.body ?? {})}`)
+    .update(`${req.method}\n${req.url}\n${canonical(req.body ?? {})}`)
     .digest("hex");
 }
 
@@ -63,5 +75,34 @@ export async function withIdempotency(
     });
     return { status, body, replay: false };
   });
+}
+
+/**
+ * Route helper: honours `Idempotency-Key` when the caller sends one, and otherwise runs
+ * the handler directly. Every retryable write should go through this - the header was
+ * previously read on `POST /articles` alone, so a retried media/entity/source create
+ * (none of which have a unique constraint to fall back on) inserted a second row.
+ */
+export async function respondIdempotent(
+  db: { transaction: <R>(cb: (tx: any) => Promise<R>) => Promise<R> },
+  req: FastifyRequest,
+  reply: { status: (code: number) => { send: (body: unknown) => unknown } },
+  actorKey: string,
+  run: (tx: any) => Promise<{ status: number; body: unknown }>,
+): Promise<unknown> {
+  const raw = req.headers["idempotency-key"];
+  if (typeof raw !== "string" || raw.length === 0) {
+    const direct = await run(db);
+    return reply.status(direct.status).send(direct.body);
+  }
+  const parsed = idempotencyKeySchema.safeParse(raw);
+  if (!parsed.success) throw badRequest("invalid Idempotency-Key header");
+  const result = await withIdempotency(db, {
+    key: parsed.data,
+    actorKey,
+    requestHash: idempotencyRequestHash(req),
+    run,
+  });
+  return reply.status(result.status).send(result.body);
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
