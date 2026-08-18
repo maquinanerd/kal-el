@@ -160,15 +160,13 @@ test.describe("accessibility", () => {
   test("dialog: media picker traps focus and closes on Escape", async ({ page }) => {
     await login(page);
     await page.goto("/articles");
-    await page.waitForTimeout(1000);
-    const link = page.locator("a[href^='/articles/']").first();
-    if ((await link.count()) === 0) test.skip(true, "no article available");
-    await link.click();
+    await page.waitForTimeout(1200);
+    await page.getByRole("button", { name: "Novo artigo" }).first().click();
     await page.waitForURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
 
-    const trigger = page.getByRole("button", { name: /Imagem de destaque|Selecionar|Escolher/i }).first();
-    if ((await trigger.count()) === 0) test.skip(true, "no media picker trigger on this build");
+    const trigger = page.getByRole("button", { name: "Selecionar imagem de destaque" });
+    await expect(trigger).toHaveCount(1);
     await trigger.click();
     await page.waitForTimeout(600);
 

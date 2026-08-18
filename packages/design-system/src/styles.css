@@ -23,6 +23,9 @@
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
+  /* without this a chrome-less button falls back to the UA `buttontext` colour, which is
+     dark in both themes - unreadable on a dark surface */
+  color: inherit;
 }
 
 .peg-body ::selection {
@@ -388,10 +391,10 @@
   border: 1px solid transparent;
 }
 .peg-badge--neutral { background: var(--peg-surface-muted); color: var(--peg-text-secondary); }
-.peg-badge--success { background: rgba(22, 163, 74, 0.1); color: var(--peg-success); }
-.peg-badge--warning { background: rgba(217, 119, 6, 0.12); color: var(--peg-warning); }
-.peg-badge--danger { background: rgba(220, 38, 38, 0.1); color: var(--peg-danger); }
-.peg-badge--info { background: rgba(37, 99, 235, 0.1); color: var(--peg-info); }
+.peg-badge--success { background: rgba(22, 163, 74, 0.1); color: var(--peg-badge-success-fg); }
+.peg-badge--warning { background: rgba(217, 119, 6, 0.12); color: var(--peg-badge-warning-fg); }
+.peg-badge--danger { background: rgba(220, 38, 38, 0.1); color: var(--peg-badge-danger-fg); }
+.peg-badge--info { background: rgba(37, 99, 235, 0.1); color: var(--peg-badge-info-fg); }
 .peg-badge--accent { background: var(--peg-accent-soft); color: var(--peg-accent); }
 .peg-badge__dot {
   width: 6px;

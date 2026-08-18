@@ -203,6 +203,35 @@ describe("admin route site isolation", () => {
     expect(res.json().error.message).toMatch(/cannot grant permissions/i);
   });
 
+  it("mutating admin routes require the CSRF header", async () => {
+    // sameSite=lax does not stop a same-site cross-origin request, so the double-submit
+    // token is the actual control. It was enforced on /v1/sites/* but not on /v1/admin/*.
+    const noCsrf = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/admin/sites/${siteA}/service-tokens`,
+      headers: { Cookie: ownerA.cookieHeader },
+      payload: { name: "csrf-less", scopes: ["articles.read"] },
+    });
+    expect(noCsrf.statusCode).toBe(403);
+    expect(noCsrf.json().error.message).toMatch(/CSRF/i);
+
+    const wrongCsrf = await ctx.app.inject({
+      method: "POST",
+      url: "/v1/admin/sites",
+      headers: { Cookie: platformOwner.cookieHeader, "x-kal-el-csrf": "not-the-token" },
+      payload: { slug: "csrf-attempt", name: "CSRF attempt" },
+    });
+    expect(wrongCsrf.statusCode).toBe(403);
+
+    // reads stay reachable without the header
+    const read = await ctx.app.inject({
+      method: "GET",
+      url: "/v1/admin/sites",
+      headers: { Cookie: platformOwner.cookieHeader },
+    });
+    expect(read.statusCode).toBe(200);
+  });
+
   it("a service token cannot act on a site it is not bound to via admin routes", async () => {
     const tokenA = await ctx.app.inject({
       method: "POST",

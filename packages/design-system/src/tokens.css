@@ -19,6 +19,13 @@
   --peg-danger: #dc2626;
   --peg-info: #2563eb;
 
+  /* Badge foregrounds sit on a 10-12% tint of their own colour, where the base semantic
+     value measures 2.8-4.1:1. These are darkened to clear 4.5:1 on that tint. */
+  --peg-badge-success-fg: #166534;
+  --peg-badge-warning-fg: #92400e;
+  --peg-badge-danger-fg: #991b1b;
+  --peg-badge-info-fg: #1e40af;
+
   /* Kal El product accent (editorial red, used with moderation) */
   --peg-accent: #c8102e;
   --peg-accent-hover: #b00d29;
@@ -104,6 +111,12 @@
   --peg-danger: #f87171;
   --peg-info: #7aa5f5;
   --peg-focus: #7aa5f5;
+
+  /* on dark the tint is dark too, so the bright semantic values are the readable ones */
+  --peg-badge-success-fg: #4ade80;
+  --peg-badge-warning-fg: #fbbf24;
+  --peg-badge-danger-fg: #f87171;
+  --peg-badge-info-fg: #7aa5f5;
 
   --peg-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --peg-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);

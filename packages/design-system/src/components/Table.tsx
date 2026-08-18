@@ -28,7 +28,9 @@ export function Table<T extends { id: string }>({
   rowLabel?: (row: T) => string;
 }) {
   return (
-    <div className="peg-table-wrap">
+    // tabIndex: the wrapper scrolls horizontally on narrow viewports, and a scrollable
+    // region with no focusable child is unreachable by keyboard (axe scrollable-region-focusable)
+    <div className="peg-table-wrap" tabIndex={0}>
       <table className="peg-table" aria-label={caption}>
         <thead>
           <tr>

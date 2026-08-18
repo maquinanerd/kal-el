@@ -326,10 +326,10 @@ export default function ArticlePage() {
                 {socialImageId ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span className="peg-table__muted">{socialImageId.slice(0, 8)}…</span>
-                    <Button size="xs" variant="secondary" onClick={() => setMediaPicker("social")}>Trocar</Button>
+                    <Button size="xs" variant="secondary" aria-label="Trocar imagem social" onClick={() => setMediaPicker("social")}>Trocar</Button>
                   </div>
                 ) : (
-                  <Button size="sm" variant="secondary" onClick={() => setMediaPicker("social")}>Selecionar</Button>
+                  <Button size="sm" variant="secondary" aria-label="Selecionar imagem social" onClick={() => setMediaPicker("social")}>Selecionar</Button>
                 )}
               </div>
               <Select label="Categoria primária" value={primaryCategoryId} onChange={(e) => { setPrimaryCategoryId(e.target.value); scheduleSave(); }}>
@@ -341,10 +341,10 @@ export default function ArticlePage() {
                 {featuredMediaId ? (
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span className="peg-table__muted">{featuredMediaId.slice(0, 8)}…</span>
-                    <Button size="xs" variant="secondary" onClick={() => setMediaPicker("featured")}>Trocar</Button>
+                    <Button size="xs" variant="secondary" aria-label="Trocar imagem de destaque" onClick={() => setMediaPicker("featured")}>Trocar</Button>
                   </div>
                 ) : (
-                  <Button size="sm" variant="secondary" onClick={() => setMediaPicker("featured")}>Selecionar</Button>
+                  <Button size="sm" variant="secondary" aria-label="Selecionar imagem de destaque" onClick={() => setMediaPicker("featured")}>Selecionar</Button>
                 )}
               </div>
             </div>

@@ -66,6 +66,17 @@ async function requireAdminPermission(
     where: and(eq(sessions.tokenHash, hashToken(credentials.token)), gt(sessions.expiresAt, new Date())),
   });
   if (!session) throw unauthorized("invalid or expired session");
+
+  // Same double-submit check `/v1/sites/*` runs. Without it every mutating admin route -
+  // create site, create user, assign role, mint token, register webhook - was reachable
+  // cross-origin from any same-site subdomain, because the cookie is sameSite=lax.
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+    const csrfHeader = req.headers["x-kal-el-csrf"];
+    if (typeof csrfHeader !== "string" || hashToken(csrfHeader) !== session.csrfTokenHash) {
+      throw forbidden("CSRF validation failed");
+    }
+  }
+
   const user = await app.db.query.users.findFirst({ where: eq(users.id, session.userId) });
   if (!user || user.status === "disabled") throw forbidden("user is not active");
 
