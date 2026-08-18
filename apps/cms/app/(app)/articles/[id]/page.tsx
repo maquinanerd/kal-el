@@ -17,6 +17,7 @@ import {
   listRevisions,
   listTags,
   updateArticle,
+  uploadMedia,
   type ArticleDetail,
   type ArticleRevision,
   type ArticleStatus,
@@ -299,6 +300,16 @@ export default function ArticlePage() {
             onChange={(next) => { setDoc(next); scheduleSave(); }}
             onRequestImage={() => setMediaPicker("image")}
             onRequestGallery={() => setMediaPicker("gallery")}
+            onUploadFile={async (file) => {
+              if (!activeSiteId) return null;
+              try {
+                const created = await uploadMedia(activeSiteId, file);
+                return created.id;
+              } catch (err) {
+                setActionError(err instanceof Error ? err.message : "falha ao enviar a imagem");
+                return null;
+              }
+            }}
           />
         </div>
 

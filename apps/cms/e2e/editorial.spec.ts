@@ -33,9 +33,10 @@ test.describe("editorial lifecycle", () => {
     await expect(editor).toContainText("Texto real escrito pelo E2E.");
   });
 
-  test("an author cannot publish without permission (API authority)", async ({ request }) => {
-    // the backend enforces RBAC even if the UI hides nothing; a draft POST with status=published
-    // must be rejected for a user without articles.publish. Verify via the API directly.
+  test("an unauthenticated write is rejected", async ({ request }) => {
+    // Narrow by design: this only proves the auth gate. Real role enforcement - what an
+    // author can and cannot do once logged in - is covered in rbac.spec.ts, which
+    // provisions an actual author. (This test used to be labelled as the RBAC proof.)
     const res = await request.post("http://localhost:3101/v1/sites/00000000-0000-0000-0000-000000000000/articles", {
       data: { title: "x", status: "published" },
     });

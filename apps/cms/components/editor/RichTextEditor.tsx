@@ -3,7 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { EditorView } from "@tiptap/pm/view";
-import { EditorState } from "@tiptap/pm/state";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
 import type { Transaction } from "@tiptap/pm/state";
 import { history, redo, undo } from "@tiptap/pm/history";
 import { keymap } from "@tiptap/pm/keymap";
@@ -13,6 +13,7 @@ import type { MarkType, NodeType } from "@tiptap/pm/model";
 import { buildTiptapSchema, documentToProseMirror, proseMirrorToDocument } from "@kal-el/editor";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import { Menu } from "@kal-el/design-system";
+import { deleteSlashQuery, filterSlashItems, readSlashQuery, type SlashItem, type SlashQuery } from "./slash";
 
 type Command = (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => boolean;
 
@@ -30,6 +31,8 @@ type Props = {
   onChange: (doc: ArticleDocumentV2) => void;
   onRequestImage?: () => void;
   onRequestGallery?: () => void;
+  /** Upload a pasted/dropped file and return the created media id. */
+  onUploadFile?: (file: File) => Promise<string | null>;
 };
 
 function run(view: EditorView, command: Command) {
@@ -83,7 +86,12 @@ function insertTableNode(view: EditorView) {
   view.focus();
 }
 
-export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery }, ref) {
+export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile }, ref) {
+  const [slash, setSlash] = useState<SlashQuery | null>(null);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const slashRef = useRef<{ q: SlashQuery | null; index: number }>({ q: null, index: 0 });
+  const uploadRef = useRef(onUploadFile);
+  uploadRef.current = onUploadFile;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -129,6 +137,63 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     },
   }));
 
+  /**
+   * Applies a slash command: removes the typed `/query` first so the chosen block does
+   * not inherit it, then runs the same action the toolbar would.
+   */
+  function applySlash(item: SlashItem) {
+    const view = viewRef.current;
+    const q = slashRef.current.q;
+    if (!view || !q) return;
+    view.dispatch(deleteSlashQuery(view.state, q));
+    slashRef.current.q = null;
+    setSlash(null);
+    setSlashIndex(0);
+
+    switch (item.id) {
+      case "paragraph": setParagraph(view); break;
+      case "h2": setHeading(view, 2); break;
+      case "h3": setHeading(view, 3); break;
+      case "h4": setHeading(view, 4); break;
+      case "bullet": toggleListType(view, view.state.schema.nodes.bulletList); break;
+      case "ordered": toggleListType(view, view.state.schema.nodes.orderedList); break;
+      case "quote": run(view, wrapIn(view.state.schema.nodes.blockquote)); break;
+      case "table": insertTableNode(view); break;
+      case "image": onRequestImage?.(); break;
+      case "gallery": onRequestGallery?.(); break;
+      case "embed": requestEmbedRef.current(); break;
+      case "source": requestSourceRef.current(); break;
+    }
+    view.focus();
+  }
+
+  const applySlashRef = useRef(applySlash);
+  applySlashRef.current = applySlash;
+
+  /** Returns true when the slash menu consumed the key. */
+  function slashKey(action: "up" | "down" | "enter" | "escape"): boolean {
+    const q = slashRef.current.q;
+    if (!q) return false;
+    const items = filterSlashItems(q.query);
+    if (items.length === 0) return false;
+
+    if (action === "escape") {
+      slashRef.current.q = null;
+      setSlash(null);
+      return true;
+    }
+    if (action === "down" || action === "up") {
+      const delta = action === "down" ? 1 : -1;
+      const next = (slashRef.current.index + delta + items.length) % items.length;
+      slashRef.current.index = next;
+      setSlashIndex(next);
+      return true;
+    }
+    const chosen = items[Math.min(slashRef.current.index, items.length - 1)];
+    if (chosen) applySlashRef.current(chosen);
+    return true;
+  }
+
   useEffect(() => {
     if (!hostRef.current) return;
     const schema = buildTiptapSchema();
@@ -138,6 +203,14 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
       doc: documentToProseMirror(document),
       plugins: [
         history(),
+        // ahead of every other binding: while the slash menu is open it owns
+        // ArrowUp/ArrowDown/Enter/Escape
+        keymap({
+          ArrowDown: () => slashKey("down"),
+          ArrowUp: () => slashKey("up"),
+          Enter: () => slashKey("enter"),
+          Escape: () => slashKey("escape"),
+        }),
         keymap({ Enter: splitListItem(listItem), Tab: sinkListItem(listItem), "Shift-Tab": liftListItem(listItem) }),
         keymap(baseKeymap),
       ],
@@ -151,6 +224,53 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         if (transaction.docChanged) {
           onChangeRef.current(proseMirrorToDocument(next.doc));
         }
+        const q = readSlashQuery(next);
+        slashRef.current.q = q;
+        setSlash(q);
+        if (!q) {
+          slashRef.current.index = 0;
+          setSlashIndex(0);
+        }
+      },
+
+      /** Paste: an image file becomes an uploaded image node; a bare YouTube URL an embed. */
+      handlePaste(view, event) {
+        const clipboard = event.clipboardData;
+        if (!clipboard) return false;
+
+        const file = Array.from(clipboard.files).find((f) => f.type.startsWith("image/"));
+        if (file && uploadRef.current) {
+          event.preventDefault();
+          void uploadRef.current(file).then((mediaId) => {
+            if (mediaId) insertAtom(view, "image", { mediaId, altText: null, caption: null, credit: null });
+          });
+          return true;
+        }
+
+        // a bare YouTube URL pasted on its own becomes a safe embed, never raw markup
+        const text = clipboard.getData("text/plain").trim();
+        const id = text ? youtubeId(text) : null;
+        if (id && /^https?:\/\/\S+$/.test(text)) {
+          event.preventDefault();
+          insertAtom(view, "embed", { url: text, provider: "youtube", id });
+          return true;
+        }
+        return false;
+      },
+
+      /** Drop an image file straight onto the writing surface. */
+      handleDrop(view, event) {
+        const dt = (event as DragEvent).dataTransfer;
+        const file = dt ? Array.from(dt.files).find((f) => f.type.startsWith("image/")) : undefined;
+        if (!file || !uploadRef.current) return false;
+        event.preventDefault();
+        const at = view.posAtCoords({ left: (event as DragEvent).clientX, top: (event as DragEvent).clientY });
+        void uploadRef.current(file).then((mediaId) => {
+          if (!mediaId) return;
+          if (at) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at.pos)));
+          insertAtom(view, "image", { mediaId, altText: null, caption: null, credit: null });
+        });
+        return true;
       },
     });
     viewRef.current = view;
@@ -175,6 +295,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     view.focus();
   }
 
+  // stable refs so the slash applier (defined above the view) can reach these
+  const requestEmbedRef = useRef<() => void>(() => {});
+  const requestSourceRef = useRef<() => void>(() => {});
+
   function requestEmbed() {
     if (!view) return;
     const url = window.prompt("URL do vídeo (YouTube)");
@@ -190,6 +314,11 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     const url = window.prompt("URL da fonte") ?? "";
     insertAtom(view, "source", { label, url, kind: "external" });
   }
+
+  requestEmbedRef.current = requestEmbed;
+  requestSourceRef.current = requestSource;
+
+  const slashItems = slash ? filterSlashItems(slash.query) : [];
 
   return (
     <div className="peg-editor">
@@ -236,7 +365,33 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
           )}
         </div>
       </div>
-      <div ref={hostRef} className="peg-editor__surface" />
+      <div style={{ position: "relative" }}>
+        <div ref={hostRef} className="peg-editor__surface" />
+        {slash && slashItems.length > 0 && (
+          <div className="peg-slash-menu" role="listbox" aria-label="Inserir bloco">
+            {slashItems.map((item, i) => (
+              <button
+                key={item.id}
+                type="button"
+                role="option"
+                aria-selected={i === slashIndex}
+                className={`peg-slash-menu__item ${i === slashIndex ? "peg-slash-menu__item--active" : ""}`}
+                onMouseEnter={() => {
+                  slashRef.current.index = i;
+                  setSlashIndex(i);
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  applySlash(item);
+                }}
+              >
+                <span>{item.label}</span>
+                <span className="peg-slash-menu__hint">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 });

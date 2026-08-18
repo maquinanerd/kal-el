@@ -110,3 +110,43 @@ a {
     flex-shrink: 1;
   }
 }
+
+/* --- Slash command menu (docs/02-EDITOR-UX.md) --- */
+.peg-slash-menu {
+  position: absolute;
+  left: var(--peg-space-5);
+  top: var(--peg-space-6);
+  z-index: 30;
+  min-width: 240px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: var(--peg-space-1);
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border-strong);
+  border-radius: var(--peg-radius-md);
+  box-shadow: var(--peg-shadow-2);
+}
+.peg-slash-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peg-space-3);
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--peg-space-2);
+  border: 0;
+  border-radius: var(--peg-radius-sm);
+  background: none;
+  color: var(--peg-text-primary);
+  font: var(--peg-font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.peg-slash-menu__item--active,
+.peg-slash-menu__item:hover {
+  background: var(--peg-surface-muted);
+}
+.peg-slash-menu__hint {
+  color: var(--peg-text-tertiary);
+  font: var(--peg-font-caption);
+}
