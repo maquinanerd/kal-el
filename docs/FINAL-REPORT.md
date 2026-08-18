@@ -1,11 +1,16 @@
-# Kal El — Release-Readiness Report (draft RC)
+# Kal El — Release-Readiness Report
 
-Status: **not yet a full release candidate** — backend + integrations complete and
-tested; the CMS UI (editor/media/screen inventory) is blocked by the DS-3 visual
-gate (no image-capable reviewer in this session). This report records exact
-state, evidence, and the human staging/production runbook.
-Date: 2026-08-14
-Branch: `feat/foundation-phase-1-3`
+Status: **staging-ready with nine known P1; not production-ready.**
+
+> Sections 1-N below are the record as of 2026-08-14 (branch
+> `feat/foundation-phase-1-3`). The status line above supersedes the original
+> header: the visual gate is no longer "blocked by no image-capable reviewer" -
+> it was made mechanical and now passes. See the R14 section at the end, and
+> `docs/audits/KALEL_STAGING_READINESS_AUDIT.md` for the full evidence.
+
+Original header (kept for provenance):
+Date: 2026-08-14 · Branch: `feat/foundation-phase-1-3` · Status at the time:
+*not yet a full release candidate; CMS UI blocked by the DS-3 visual gate.*
 
 ---
 
@@ -140,3 +145,55 @@ Steps are for a human operator; nothing here is executed autonomously.
 
 Stop: **do not run any of the above against live data without an explicit
 human instruction.**
+
+---
+
+## R14 — Staging readiness pass
+
+**Method:** every gate reproduced rather than inherited; a real browser for the
+visual and accessibility gates; adversarial review of the security and
+integration surfaces.
+
+### What changed
+
+The 2026-08-14 baseline was accurate — 139 tests, 0 fail, 0 skip, typecheck /
+lint / build green. Eight P0 defects nonetheless survived it, because the
+existing tests asserted counters and happy paths rather than effects:
+
+1. `/v1/admin/sites/:siteId/*` authorised against the **union** of the caller's
+   permissions across every site, and never checked `:siteId` against their
+   memberships — full cross-tenant takeover from any site owner.
+2. `POST /v1/admin/users/:id/roles` took `siteId` from the request body with no
+   check — persistent self-escalation to Owner of any site.
+3. `revokeServiceToken` and `deleteWebhook` mutated the row before validating the
+   site, returning 404 *after* destroying another tenant's data.
+4. The importer dropped **every** category, tag and author from **every** article
+   (slug-keyed map vs external-id reference).
+5. The Lexical format bitmask was off by one bit from strikethrough onwards.
+6. `Idempotency-Key` was honoured on one write route out of ~20; media, entities
+   and sources have no unique index, so retries created real duplicates.
+7. Primary navigation was unreachable below 1024px on 100% of authenticated
+   surfaces.
+8. Dark mode was unreachable — the tokens existed, the product hardcoded light.
+
+All eight are closed with regression coverage. Nine P1 remain open and are listed
+in `docs/audits/KALEL_STAGING_READINESS_AUDIT.md` §5, along with four
+production-blocking operational gaps (logging disabled in every real deployment,
+rate limiting without `trustProxy`, a bootstrap oracle, and session lifecycle).
+
+### Gates
+
+| gate | before | after |
+|---|---|---|
+| typecheck / lint / build | PASS | PASS |
+| unit + integration | 139 | see the staging audit |
+| Playwright | 2 | 12 |
+| axe (WCAG 2.1 A+AA) | not run | 0 violations over 72 scans |
+| navigation reachable | 73/180 | 180/180 |
+
+### Not covered
+
+Browser-level E2E for media, SEO redirects, preview and the worker (all have
+strong API-level integration coverage but no UI path); Media Detail in the visual
+sweep; real screen-reader testing; 200% zoom reflow. Deployment, DNS, CDN and
+remote backup remain out of scope by instruction.
