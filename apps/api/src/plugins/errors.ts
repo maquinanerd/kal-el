@@ -19,8 +19,8 @@ export const notFound = (message = "not found") =>
   new ApiHttpError(404, API_ERROR_CODES.NOT_FOUND, message);
 export const conflict = (message: string, details?: Record<string, unknown>) =>
   new ApiHttpError(409, API_ERROR_CODES.CONFLICT, message, details);
-export const forbidden = (message = "forbidden") =>
-  new ApiHttpError(403, API_ERROR_CODES.FORBIDDEN, message);
+export const forbidden = (message = "forbidden", details?: Record<string, unknown>) =>
+  new ApiHttpError(403, API_ERROR_CODES.FORBIDDEN, message, details);
 export const unauthorized = (message = "unauthenticated") =>
   new ApiHttpError(401, API_ERROR_CODES.UNAUTHENTICATED, message);
 export const badRequest = (message: string, details?: Record<string, unknown>) =>

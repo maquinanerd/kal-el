@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
 import { webhooks } from "@kal-el/db/schema";
 import type { CreateWebhookBody } from "@kal-el/contracts";
@@ -62,10 +62,12 @@ export async function listWebhooks(db: Db, siteId: string) {
 }
 
 export async function deleteWebhook(db: Db, siteId: string, webhookId: string) {
+  // The site filter belongs in the WHERE clause: checking it after the DELETE would
+  // already have destroyed another site's webhook by the time we throw.
   const [row] = await db
     .delete(webhooks)
-    .where(eq(webhooks.id, webhookId))
+    .where(and(eq(webhooks.id, webhookId), eq(webhooks.siteId, siteId)))
     .returning();
-  if (!row || row.siteId !== siteId) throw notFound("webhook not found");
+  if (!row) throw notFound("webhook not found");
   return { id: row.id, deleted: true };
 }

@@ -66,6 +66,26 @@ export async function createRole(
   return listRoles(db).then((all) => all.find((r) => r.id === roleId) ?? ({} as (typeof all)[number]));
 }
 
+/**
+ * Give a user the preset Owner role on a site. Used when a site is created, so the
+ * creator can administer it (site-scoped admin routes require membership).
+ */
+export async function grantOwnerOnSite(db: Db, userId: string, siteId: string): Promise<void> {
+  const role = await db.query.roles.findFirst({ where: eq(roles.key, OWNER_ROLE_KEY) });
+  if (!role) throw notFound("owner role not found");
+  await db.insert(userRoles).values({ userId, roleId: role.id, siteId }).onConflictDoNothing();
+}
+
+/** Permission keys granted by a role. Used to stop privilege escalation on assignment. */
+export async function getRolePermissions(db: Db, roleId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ key: permissions.key })
+    .from(rolePermissions)
+    .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
+    .where(eq(rolePermissions.roleId, roleId));
+  return new Set(rows.map((r) => r.key));
+}
+
 export async function assignRoleToUser(db: Db, userId: string, roleId: string, siteId: string) {
   await db.query.roles.findFirst({ where: eq(roles.id, roleId) }).then((r) => {
     if (!r) throw notFound("role not found");

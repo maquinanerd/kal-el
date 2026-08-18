@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
 import { serviceTokens } from "@kal-el/db/schema";
 import { generateOpaqueToken, hashToken, serviceTokenPrefix } from "@kal-el/auth";
@@ -50,12 +50,13 @@ export async function listServiceTokens(db: Db, siteId: string) {
 }
 
 export async function revokeServiceToken(db: Db, siteId: string, tokenId: string) {
+  // The site filter belongs in the WHERE clause: checking it after the UPDATE would
+  // already have revoked another site's token by the time we throw.
   const [row] = await db
     .update(serviceTokens)
     .set({ revokedAt: new Date() })
-    .where(eq(serviceTokens.id, tokenId))
+    .where(and(eq(serviceTokens.id, tokenId), eq(serviceTokens.siteId, siteId)))
     .returning();
   if (!row) throw notFound("service token not found");
-  if (row.siteId !== siteId) throw notFound("service token not found");
   return { id: row.id, revokedAt: row.revokedAt?.toISOString() ?? null };
 }
