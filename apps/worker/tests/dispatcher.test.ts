@@ -107,7 +107,7 @@ describe("outbox dispatcher", () => {
     await seedWebhook();
     const event = await seedEvent({ articleId: "a-1", slug: "gladiador-ii" });
 
-    const summary = await processDueEvents(db);
+    const summary = await processDueEvents(db, { allowPrivateTargets: true });
     expect(summary.delivered).toBe(1);
     expect(summary.failed).toBe(0);
 
@@ -135,7 +135,7 @@ describe("outbox dispatcher", () => {
     await seedWebhook();
     const event = await seedEvent({ articleId: "a-2" });
 
-    const first = await processDueEvents(db);
+    const first = await processDueEvents(db, { allowPrivateTargets: true });
     expect(first.failed).toBe(1);
 
     const delivery = await db.query.webhookDeliveries.findFirst({
@@ -146,13 +146,13 @@ describe("outbox dispatcher", () => {
     expect(delivery?.nextAttemptAt).toBeTruthy();
 
     // the event is not re-claimed before its retry time
-    const retrySoon = await processDueEvents(db);
+    const retrySoon = await processDueEvents(db, { allowPrivateTargets: true });
     expect(retrySoon.claimed).toBe(0);
 
     // simulate the retry window opening and the endpoint recovering
     await db.update(outboxEvents).set({ availableAt: new Date(Date.now() - 1000), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
 
-    const second = await processDueEvents(db);
+    const second = await processDueEvents(db, { allowPrivateTargets: true });
     expect(second.delivered).toBe(1);
 
     const done = await db.query.outboxEvents.findFirst({ where: eq(outboxEvents.id, event.id) });
@@ -172,11 +172,11 @@ describe("outbox dispatcher", () => {
     await seedWebhook();
     const event = await seedEvent({ articleId: "a-3" });
 
-    const first = await processDueEvents(db, { maxAttempts: 2 });
+    const first = await processDueEvents(db, { allowPrivateTargets: true, maxAttempts: 2 });
     expect(first.failed).toBe(1);
 
     await db.update(outboxEvents).set({ availableAt: new Date(Date.now() - 1000), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
-    const second = await processDueEvents(db, { maxAttempts: 2 });
+    const second = await processDueEvents(db, { allowPrivateTargets: true, maxAttempts: 2 });
     expect(second.failed).toBe(1);
 
     const done = await db.query.outboxEvents.findFirst({ where: eq(outboxEvents.id, event.id) });
@@ -191,7 +191,7 @@ describe("outbox dispatcher", () => {
   it("marks events as published when there are no subscribers", async () => {
     received = [];
     const event = await seedEvent({ articleId: "a-4" });
-    const summary = await processDueEvents(db);
+    const summary = await processDueEvents(db, { allowPrivateTargets: true });
     expect(summary.noSubscribers).toBe(1);
     const after = await db.query.outboxEvents.findFirst({ where: eq(outboxEvents.id, event.id) });
     expect(after?.status).toBe("published");

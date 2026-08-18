@@ -2,6 +2,15 @@ import { z } from "zod";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  /**
+   * Allow webhooks that point at private/loopback addresses. Every other production
+   * guard keys off NODE_ENV, which defaults to "development" - so a deployment that
+   * forgets to set it silently disables the SSRF check. This one is opt-in instead.
+   */
+  ALLOW_PRIVATE_WEBHOOKS: z
+    .union([z.boolean(), z.string()])
+    .default(false)
+    .transform((v) => v === true || v === "true" || v === "1"),
   PORT: z.coerce.number().int().positive().default(3001),
   HOST: z.string().default("0.0.0.0"),
   DATABASE_URL: z.string().min(1).default("postgresql://kalel:kalel@localhost:5432/kalel"),
@@ -40,6 +49,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     if (config.SESSION_SECRET === "development-only-secret") {
       throw new Error("SESSION_SECRET must be set to a strong random value in production");
+    }
+    // The only previous check was equality with the known default, so SESSION_SECRET=x
+    // booted cleanly. This key also signs preview tokens, and a preview URL is handed to
+    // external reviewers by design - a weak key is brute-forceable offline into the
+    // ability to mint a preview for any article on any site.
+    if (config.SESSION_SECRET.length < 32) {
+      throw new Error("SESSION_SECRET must be at least 32 characters in production");
+    }
+    if (config.ALLOW_PRIVATE_WEBHOOKS) {
+      throw new Error("ALLOW_PRIVATE_WEBHOOKS must not be enabled in production");
     }
   }
   return config;

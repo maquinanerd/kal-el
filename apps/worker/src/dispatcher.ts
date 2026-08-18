@@ -4,6 +4,7 @@ import type { Db } from "@kal-el/db";
 import { outboxEvents, webhookDeliveries, webhooks } from "@kal-el/db/schema";
 
 import { signWebhook } from "./signature.js";
+import { assertDeliverableUrl } from "./ssrf.js";
 
 export type DispatchOptions = {
   fetchImpl?: typeof fetch;
@@ -12,6 +13,8 @@ export type DispatchOptions = {
   baseDelayMs?: number;
   timeoutMs?: number;
   onLog?: (line: string) => void;
+  /** Permit private/loopback delivery targets (local development and tests only). */
+  allowPrivateTargets?: boolean;
 };
 
 export type DispatchSummary = {
@@ -30,7 +33,15 @@ const LOCK_MS = 60_000;
  * (webhook, event).
  */
 export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Promise<DispatchSummary> {
-  const { fetchImpl = fetch, limit = 20, maxAttempts = 5, baseDelayMs = 1_000, timeoutMs = 10_000, onLog = () => {} } = opts;
+  const {
+    fetchImpl = fetch,
+    limit = 20,
+    maxAttempts = 5,
+    baseDelayMs = 1_000,
+    timeoutMs = 10_000,
+    onLog = () => {},
+    allowPrivateTargets = process.env.ALLOW_PRIVATE_WEBHOOKS === "true",
+  } = opts;
   const now = new Date();
 
   const due = await db.transaction(async (tx) => {
@@ -74,7 +85,7 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
 
     let allSuccess = true;
     for (const hook of subscribers) {
-      const ok = await dispatchOne(db, event, hook, { fetchImpl, maxAttempts, baseDelayMs, timeoutMs, onLog });
+      const ok = await dispatchOne(db, event, hook, { fetchImpl, maxAttempts, baseDelayMs, timeoutMs, onLog, allowPrivateTargets });
       if (ok) summary.delivered++;
       else {
         summary.failed++;
@@ -100,7 +111,14 @@ async function dispatchOne(
   db: Db,
   event: OutboxRow,
   hook: WebhookRow,
-  opts: { fetchImpl: typeof fetch; maxAttempts: number; baseDelayMs: number; timeoutMs: number; onLog: (l: string) => void },
+  opts: {
+    fetchImpl: typeof fetch;
+    maxAttempts: number;
+    baseDelayMs: number;
+    timeoutMs: number;
+    onLog: (l: string) => void;
+    allowPrivateTargets: boolean;
+  },
 ): Promise<boolean> {
   const body = JSON.stringify(event.payload);
   const signature = signWebhook(hook.secret, body);
@@ -113,8 +131,15 @@ async function dispatchOne(
   const attempt = existing ? existing.attempt + 1 : 1;
 
   try {
+    // The URL was validated when the webhook was registered, but delivery happens later
+    // and repeatedly: a hostname can be re-pointed at an internal address in between
+    // (DNS rebinding). Re-check immediately before the request, and refuse to follow
+    // redirects - a 302 into the metadata service would otherwise bypass every check.
+    if (!opts.allowPrivateTargets) await assertDeliverableUrl(hook.url);
+
     const res = await opts.fetchImpl(hook.url, {
       method: "POST",
+      redirect: "manual",
       headers: {
         "content-type": "application/json",
         "x-kal-el-event": event.eventType,

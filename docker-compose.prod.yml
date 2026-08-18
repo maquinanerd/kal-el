@@ -21,6 +21,9 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
+      # Cookie-secure, session-secret strength and docs exposure all key off NODE_ENV,
+      # which defaults to "development" - it must be set explicitly, not inherited.
+      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:?set in .env.prod}
       SESSION_SECRET: ${SESSION_SECRET:?set in .env.prod}
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set in .env.prod}
@@ -49,6 +52,9 @@ services:
       context: .
       dockerfile: apps/worker/Dockerfile
     environment:
+      # Cookie-secure, session-secret strength and docs exposure all key off NODE_ENV,
+      # which defaults to "development" - it must be set explicitly, not inherited.
+      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:?set in .env.prod}
       POLL_INTERVAL_MS: "1000"
     depends_on:

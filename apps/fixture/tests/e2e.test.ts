@@ -35,6 +35,8 @@ describe("delivery + revalidation end-to-end", () => {
       DATABASE_URL: fresh.url,
       SESSION_SECRET: "test-secret-key",
       BOOTSTRAP_TOKEN: "test-bootstrap-token",
+      // the fixture consumer runs on loopback; private targets are opt-in now
+      ALLOW_PRIVATE_WEBHOOKS: "true",
     } as NodeJS.ProcessEnv);
     api = await buildApp({ connectionString: fresh.url, config });
     await seedPermissions(api.db);
@@ -101,7 +103,7 @@ describe("delivery + revalidation end-to-end", () => {
     const miss = await fixture.inject({ method: "GET", url: "/articles/gladiador-ii-webhook" });
     expect(miss.statusCode).toBe(404);
 
-    const summary = await processDueEvents(db);
+    const summary = await processDueEvents(db, { allowPrivateTargets: true });
     expect(summary.delivered).toBe(1);
 
     expect(revalidated.length).toBe(1);

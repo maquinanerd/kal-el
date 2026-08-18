@@ -4,7 +4,7 @@ import { assertSafeWebhookUrl } from "../src/services/webhooks.js";
 
 describe("production hardening", () => {
   it("refuses production config without COOKIE_SECURE", () => {
-    expect(() => loadConfig({ NODE_ENV: "production", SESSION_SECRET: "strong-secret-xyz", COOKIE_SECURE: "false" })).toThrow(/COOKIE_SECURE/);
+    expect(() => loadConfig({ NODE_ENV: "production", SESSION_SECRET: "strong-secret-xyz-at-least-32-chars-long", COOKIE_SECURE: "false" })).toThrow(/COOKIE_SECURE/);
   });
 
   it("refuses production config with the default SESSION_SECRET", () => {
@@ -12,7 +12,7 @@ describe("production hardening", () => {
   });
 
   it("accepts a valid production config", () => {
-    const c = loadConfig({ NODE_ENV: "production", SESSION_SECRET: "strong-secret-xyz", COOKIE_SECURE: "true" });
+    const c = loadConfig({ NODE_ENV: "production", SESSION_SECRET: "strong-secret-xyz-at-least-32-chars-long", COOKIE_SECURE: "true" });
     expect(c.COOKIE_SECURE).toBe(true);
   });
 
@@ -23,18 +23,40 @@ describe("production hardening", () => {
     expect(corsOrigins(multi)).toEqual(["http://a.example", "http://b.example"]);
   });
 
-  it("rejects private/internal webhook URLs (SSRF)", () => {
-    expect(() => assertSafeWebhookUrl("http://169.254.169.254/latest/meta-data")).toThrow();
-    expect(() => assertSafeWebhookUrl("http://localhost:3000/hook")).toThrow();
-    expect(() => assertSafeWebhookUrl("http://192.168.1.10/hook")).toThrow();
-    expect(() => assertSafeWebhookUrl("http://10.0.0.5/hook")).toThrow();
-    expect(() => assertSafeWebhookUrl("http://127.0.0.1/hook")).toThrow();
-    expect(() => assertSafeWebhookUrl("http://[::1]/hook")).toThrow();
-    expect(() => assertSafeWebhookUrl("http://metadata.google.internal")).toThrow();
+  it("rejects private/internal webhook URLs (SSRF)", async () => {
+    await expect(assertSafeWebhookUrl("http://169.254.169.254/latest/meta-data")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://localhost:3000/hook")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://192.168.1.10/hook")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://10.0.0.5/hook")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://127.0.0.1/hook")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://[::1]/hook")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://metadata.google.internal")).rejects.toThrow();
+    // IPv4-mapped IPv6: the URL parser normalises these to ::ffff:a9fe:a9fe, which the
+    // previous prefix-only IPv6 check let straight through.
+    await expect(assertSafeWebhookUrl("http://[::ffff:169.254.169.254]/latest/meta-data")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://[::ffff:127.0.0.1]/hook")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://[::ffff:10.0.0.5]/hook")).rejects.toThrow();
+    await expect(assertSafeWebhookUrl("http://100.64.1.1/hook")).rejects.toThrow();
   });
 
-  it("accepts public webhook URLs", () => {
-    expect(() => assertSafeWebhookUrl("https://hooks.example.com/wh")).not.toThrow();
-    expect(() => assertSafeWebhookUrl("https://api.example.org/notify?x=1")).not.toThrow();
+  it("refuses to boot in production with a weak or permissive configuration", () => {
+    const base = {
+      NODE_ENV: "production",
+      COOKIE_SECURE: "true",
+      DATABASE_URL: "postgres://u:p@localhost:5432/db",
+    } as NodeJS.ProcessEnv;
+
+    // a single character satisfied the old "not the default value" check
+    expect(() => loadConfig({ ...base, SESSION_SECRET: "x" })).toThrow(/at least 32/);
+    expect(() => loadConfig({ ...base, SESSION_SECRET: "development-only-secret" })).toThrow();
+    expect(() =>
+      loadConfig({ ...base, SESSION_SECRET: "a".repeat(32), ALLOW_PRIVATE_WEBHOOKS: "true" }),
+    ).toThrow(/ALLOW_PRIVATE_WEBHOOKS/);
+    expect(() => loadConfig({ ...base, SESSION_SECRET: "a".repeat(32) })).not.toThrow();
+  });
+
+  it("accepts public webhook URLs", async () => {
+    await expect(assertSafeWebhookUrl("https://hooks.example.com/wh")).resolves.toBeUndefined();
+    await expect(assertSafeWebhookUrl("https://api.example.org/notify?x=1")).resolves.toBeUndefined();
   });
 });

@@ -12,6 +12,7 @@ async function main(): Promise<void> {
     console.log(`[dev] embedded postgres on ${url}`);
   }
   if (!process.env.BOOTSTRAP_TOKEN) process.env.BOOTSTRAP_TOKEN = "dev-bootstrap-token";
+  if (!process.env.ALLOW_PRIVATE_WEBHOOKS) process.env.ALLOW_PRIVATE_WEBHOOKS = "true";
   if (!process.env.SESSION_SECRET) process.env.SESSION_SECRET = "dev-session-secret-change-me";
 
   await runMigrations(process.env.DATABASE_URL);
