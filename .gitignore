@@ -22,3 +22,4 @@ tmp/
 test-results/
 playwright-report/
 apps/cms/artifacts/
+apps/cms/e2e/.auth/

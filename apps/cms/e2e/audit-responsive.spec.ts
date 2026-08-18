@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { BREAKPOINTS, CREDENTIALS, SURFACES, THEMES } from "./_surfaces";
+import { BREAKPOINTS, STORAGE_STATE, SURFACES, THEMES } from "./_surfaces";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ARTIFACTS = join(here, "..", "artifacts");
@@ -141,14 +141,11 @@ test("collect responsive/visual evidence for every surface", async ({ browser })
 
   const results: Measurement[] = [];
 
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    storageState: STORAGE_STATE,
+  });
   const page = await context.newPage();
-
-  await page.goto("/login");
-  await page.getByLabel("E-mail").fill(CREDENTIALS.email);
-  await page.getByLabel("Senha").fill(CREDENTIALS.password);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page).toHaveURL(/\/articles/, { timeout: 30_000 });
 
   // make sure there is an article to open the editor on
   await page.goto("/articles");

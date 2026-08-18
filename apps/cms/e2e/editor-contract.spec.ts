@@ -1,19 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { CREDENTIALS } from "./_surfaces";
-
 /**
  * `docs/02-EDITOR-UX.md` lists slash commands, paste-to-embed and drag/drop of images as
  * part of the editor contract. These exercise them through the real UI.
  */
 
 async function openNewArticle(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("E-mail").fill(CREDENTIALS.email);
-  await page.getByLabel("Senha").fill(CREDENTIALS.password);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page).toHaveURL(/\/articles/, { timeout: 30_000 });
-
+  await page.goto("/articles");
+  await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Novo artigo" }).first().click();
   await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
   await expect(page.getByLabel("Título", { exact: true })).toHaveValue("Novo artigo", { timeout: 30_000 });

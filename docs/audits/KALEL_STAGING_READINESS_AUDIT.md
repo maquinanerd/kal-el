@@ -184,6 +184,19 @@ auth 5 · sdk 5 · design-system 5 · fixture 4.
 | Overflow horizontal | 0 |
 | Erros de console na varredura | 0 |
 
+### Nota sobre a suíte E2E
+
+A primeira execução completa da suíte Playwright teve 2 falhas que passavam quando os
+specs rodavam isolados. A causa não era flakiness genérica: `POST /v1/auth/login` tem rate
+limit de 10 por minuto — que é o controle de força bruta, funcionando corretamente — e a
+suíte fazia ~13 logins (um por teste). Os últimos recebiam 429 e o spec falhava num
+redirect para `/login`.
+
+Corrigido pelo lado da suíte, não do produto: um projeto `setup` do Playwright autentica
+uma vez e grava `storageState`, que os demais specs reutilizam. O `rbac.spec.ts` continua
+fazendo logins próprios (precisa de um autor real), mas são poucos. O limite permanece
+inalterado.
+
 ### Fresh install / demo data
 
 `packages/testkit` inicia PostgreSQL embutido com `persistent: false` e diretório único por

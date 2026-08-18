@@ -41,6 +41,9 @@ export const SURFACES: Surface[] = [
   { id: "settings", label: "Settings", path: "/settings" },
 ];
 
+/** Shared authenticated session, produced by e2e/auth.setup.ts. */
+export const STORAGE_STATE = "e2e/.auth/user.json";
+
 export const CREDENTIALS = {
   email: "owner@kalel.dev",
   password: "kalel-dev-password-1",

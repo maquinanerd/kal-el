@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { CREDENTIALS, SURFACES } from "./_surfaces";
+import { STORAGE_STATE, SURFACES } from "./_surfaces";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ARTIFACTS = join(here, "..", "artifacts");
@@ -33,14 +33,6 @@ type Violation = {
 };
 
 const collected: Violation[] = [];
-
-async function login(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("E-mail").fill(CREDENTIALS.email);
-  await page.getByLabel("Senha").fill(CREDENTIALS.password);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page).toHaveURL(/\/articles/, { timeout: 30_000 });
-}
 
 async function scan(page: Page, surface: string, viewport: string, theme: string) {
   const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
@@ -64,9 +56,11 @@ test.describe("accessibility", () => {
     test.setTimeout(20 * 60_000);
     mkdirSync(ARTIFACTS, { recursive: true });
 
-    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      storageState: STORAGE_STATE,
+    });
     const page = await context.newPage();
-    await login(page);
 
     await page.goto("/articles");
     await page.waitForTimeout(1200);
@@ -87,20 +81,26 @@ test.describe("accessibility", () => {
       { id: "390", width: 390, height: 844 },
     ];
 
+    // the login surface must be scanned WITHOUT a session, or it just redirects
+    const anonContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const anonPage = await anonContext.newPage();
+
     for (const surface of SURFACES) {
       if (surface.needsMedia) continue; // media detail requires seeded media
       const path = surface.path.replace("__ARTICLE__", articleId);
+      const target = surface.anonymous ? anonPage : page;
       for (const vp of viewports) {
         for (const theme of ["light", "dark"]) {
-          await page.setViewportSize({ width: vp.width, height: vp.height });
-          await page.goto(path, { waitUntil: "domcontentloaded" });
-          await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
-          await page.waitForTimeout(500);
-          await scan(page, surface.label, vp.id, theme);
+          await target.setViewportSize({ width: vp.width, height: vp.height });
+          await target.goto(path, { waitUntil: "domcontentloaded" });
+          await target.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+          await target.waitForTimeout(500);
+          await scan(target, surface.label, vp.id, theme);
         }
       }
     }
 
+    await anonContext.close();
     await context.close();
 
     writeFileSync(join(ARTIFACTS, "a11y-report.json"), JSON.stringify(collected, null, 2), "utf8");
@@ -130,7 +130,6 @@ test.describe("accessibility", () => {
   });
 
   test("keyboard: primary navigation is reachable and operable without a mouse", async ({ page }) => {
-    await login(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/articles");
     await page.waitForTimeout(600);
@@ -158,9 +157,8 @@ test.describe("accessibility", () => {
   });
 
   test("dialog: media picker traps focus and closes on Escape", async ({ page }) => {
-    await login(page);
     await page.goto("/articles");
-    await page.waitForTimeout(1200);
+    await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: "Novo artigo" }).first().click();
     await page.waitForURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
     await page.waitForTimeout(2000);

@@ -2,14 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test.describe("editorial lifecycle", () => {
   test("login, create an article, write, save and reopen it", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("E-mail").fill("owner@kalel.dev");
-    await page.getByLabel("Senha").fill("kalel-dev-password-1");
-    await page.getByRole("button", { name: "Entrar" }).click();
-
-    await expect(page).toHaveURL(/\/articles/, { timeout: 15_000 });
-
-    // empty or existing articles — either is a valid real state
+    await page.goto("/articles");
+    await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: "Novo artigo" }).first().click();
     await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 15_000 });
 

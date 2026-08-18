@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const STORAGE_STATE = "e2e/.auth/user.json";
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
@@ -8,6 +10,17 @@ export default defineConfig({
     baseURL: "http://localhost:3100",
     headless: true,
   },
+  // One login for the whole run: /v1/auth/login is rate limited to 10/minute and a
+  // per-test login made the suite non-deterministic once it crossed that.
+  projects: [
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "chromium",
+      testIgnore: /auth\.setup\.ts/,
+      dependencies: ["setup"],
+      use: { storageState: STORAGE_STATE },
+    },
+  ],
   webServer: [
     {
       command: "tsx ../../scripts/dev-api.ts",
