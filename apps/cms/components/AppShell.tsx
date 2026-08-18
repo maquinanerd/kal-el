@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AppLayout,
   Button,
@@ -16,6 +16,7 @@ import {
   IconTag,
   IconUsers,
   IconWorkflow,
+  MenuButton,
   Sidebar,
   Topbar,
   Workspace,
@@ -23,11 +24,18 @@ import {
 } from "@kal-el/design-system";
 
 import { useAuth } from "../lib/auth";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, sites, activeSiteId, setActiveSite, signOut } = useAuth();
+  const [navOpen, setNavOpen] = useState(false);
+
+  // navigating from inside the drawer must close it, otherwise the scrim covers the page
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   const is = (path: string) => pathname.startsWith(path);
 
@@ -72,6 +80,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar
         brand="Kal El"
         groups={navGroups}
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
         footer={
           <button type="button" className="peg-nav-item" onClick={signOutAndGo}>
             <IconMore />
@@ -82,29 +92,42 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
         <Topbar
           left={
-            <select
-              className="peg-select"
-              style={{ minWidth: 180 }}
-              value={activeSiteId ?? ""}
-              onChange={(e) => setActiveSite(e.target.value)}
-              aria-label="Selecionar site"
-            >
-              {sites.length === 0 && <option value="">Sem sites</option>}
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <>
+              <MenuButton onClick={() => setNavOpen(true)} expanded={navOpen} />
+              <select
+                className="peg-select"
+                style={{ minWidth: 140, maxWidth: 220 }}
+                value={activeSiteId ?? ""}
+                onChange={(e) => setActiveSite(e.target.value)}
+                aria-label="Selecionar site"
+              >
+                {sites.length === 0 && <option value="">Sem sites</option>}
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </>
           }
           right={
-            <Button size="sm" variant="secondary" onClick={signOutAndGo}>
-              Sair
-            </Button>
+            <>
+              <ThemeToggle />
+              <Button size="sm" variant="secondary" onClick={signOutAndGo}>
+                Sair
+              </Button>
+            </>
           }
         />
         <Workspace>
-          <Content>{children}</Content>
+          <a className="peg-skip-link" href="#conteudo">
+            Pular para o conteúdo
+          </a>
+          <Content>
+            <div id="conteudo" tabIndex={-1}>
+              {children}
+            </div>
+          </Content>
         </Workspace>
       </div>
     </AppLayout>

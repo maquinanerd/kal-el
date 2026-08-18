@@ -1,5 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { IconCheck } from "../icons";
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export type Account = {
   id: string;
@@ -40,6 +43,11 @@ export function AccountSwitcher({
   );
 }
 
+/**
+ * `aria-modal="true"` asserts the background is inert, so the dialog has to actually
+ * behave like one: focus moves in on open, Tab cycles inside it, Escape closes it and
+ * focus returns to whatever opened it.
+ */
 export function Modal({
   title,
   onClose,
@@ -53,9 +61,59 @@ export function Modal({
   footer?: ReactNode;
   width?: number;
 }) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const restoreTo = useRef<Element | null>(null);
+
+  useEffect(() => {
+    restoreTo.current = document.activeElement;
+    const node = dialogRef.current;
+    const first = node?.querySelector<HTMLElement>(FOCUSABLE);
+    (first ?? node)?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose?.();
+        return;
+      }
+      if (e.key !== "Tab" || !node) return;
+      const items = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => el.offsetParent !== null || el === document.activeElement,
+      );
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const firstItem = items[0];
+      const lastItem = items[items.length - 1];
+      if (!firstItem || !lastItem) return;
+      if (e.shiftKey && document.activeElement === firstItem) {
+        e.preventDefault();
+        lastItem.focus();
+      } else if (!e.shiftKey && document.activeElement === lastItem) {
+        e.preventDefault();
+        firstItem.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      if (restoreTo.current instanceof HTMLElement) restoreTo.current.focus();
+    };
+  }, [onClose]);
+
   return (
-    <div className="peg-overlay" role="presentation">
-      <div className="peg-modal" role="dialog" aria-modal="true" aria-label={title} style={width ? { width } : undefined}>
+    <div className="peg-overlay" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="peg-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={width ? { width } : undefined}
+      >
         <header className="peg-modal__header">
           <h3 className="peg-modal__title">{title}</h3>
           <button className="peg-btn peg-btn--icon" aria-label="Fechar" onClick={onClose}>

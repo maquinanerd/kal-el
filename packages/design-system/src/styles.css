@@ -39,10 +39,44 @@
 }
 
 .peg-body :focus-visible {
-  outline: 2px solid var(--peg-info);
+  outline: 2px solid var(--peg-focus);
   outline-offset: 1px;
   border-radius: var(--peg-radius-sm);
 }
+
+/* Skip link: first focusable element in the shell, visible only while focused. */
+.peg-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 60;
+}
+.peg-skip-link:focus {
+  left: var(--peg-space-3);
+  top: var(--peg-space-3);
+  padding: var(--peg-space-2) var(--peg-space-3);
+  background: var(--peg-surface);
+  color: var(--peg-text-primary);
+  border: 1px solid var(--peg-border-strong);
+  border-radius: var(--peg-radius-sm);
+  box-shadow: var(--peg-shadow-2);
+}
+#conteudo:focus { outline: none; }
+
+.peg-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: var(--peg-radius-sm);
+  background: none;
+  color: var(--peg-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.peg-theme-toggle:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
 
 .peg-btn {
   display: inline-flex;
@@ -60,7 +94,7 @@
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 .peg-btn:focus-visible {
-  outline: none;
+  /* the ring is additive; the outline stays as the guaranteed 3:1 indicator */
   box-shadow: var(--peg-focus-ring);
 }
 .peg-btn:active:not(:disabled) {
@@ -919,31 +953,81 @@
 
 .peg-main { display: flex; flex: 1; min-height: 0; }
 
+/* Drawer chrome. The hamburger and the close button only exist below the desktop
+   breakpoint; above it the sidebar is permanent and both would be noise. */
+.peg-menu-button,
+.peg-sidebar__close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--peg-radius-sm);
+  background: none;
+  color: var(--peg-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.peg-menu-button:hover,
+.peg-sidebar__close:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
+.peg-sidebar__close { margin-left: auto; }
+.peg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  background: rgba(23, 23, 25, 0.45);
+}
+
 /* Responsive: sidebar → drawer, inspector → sheet (mobile < 1024px) */
 @media (max-width: 1023px) {
+  .peg-menu-button,
+  .peg-sidebar__close { display: inline-flex; }
+
   .peg-sidebar {
     position: fixed;
     z-index: 45;
     left: 0;
     top: 0;
     bottom: 0;
+    width: min(var(--peg-sidebar-width), 86vw);
     transform: translateX(-100%);
-    transition: transform 160ms ease;
+    /* visibility keeps the off-canvas drawer out of the tab order; without it the nav
+       buttons stay focusable and focus disappears off-screen. */
+    visibility: hidden;
+    transition: transform 160ms ease, visibility 160ms ease;
     box-shadow: var(--peg-shadow-3);
   }
-  .peg-sidebar--open { transform: translateX(0); }
+  .peg-sidebar--open { transform: translateX(0); visibility: visible; }
+
   .peg-inspector {
     position: fixed;
     right: 0;
     top: 0;
     bottom: 0;
     z-index: 46;
+    width: min(var(--peg-inspector-width), 92vw);
     transform: translateX(100%);
-    transition: transform 160ms ease;
+    visibility: hidden;
+    transition: transform 160ms ease, visibility 160ms ease;
     box-shadow: var(--peg-shadow-3);
   }
-  .peg-inspector--open { transform: translateX(0); }
+  .peg-inspector--open { transform: translateX(0); visibility: visible; }
+
   .peg-content { padding: var(--peg-space-4); }
+  /* the editor loses its centring gutter and takes the full usable width */
+  .peg-editor { max-width: 100%; }
+  .peg-editor__title { font-size: 28px; line-height: 34px; padding: var(--peg-space-5) var(--peg-space-4) 0; }
+  .peg-editor__dek,
+  .peg-editor__body { padding-left: var(--peg-space-4); padding-right: var(--peg-space-4); }
+  /* dense tables keep their information by scrolling inside their own container */
+  .peg-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .peg-page-head { flex-direction: column; align-items: stretch; gap: var(--peg-space-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peg-sidebar,
+  .peg-inspector { transition: none; }
 }
 
 .peg-stack { display: flex; flex-direction: column; gap: var(--peg-space-3); }

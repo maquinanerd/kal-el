@@ -8,17 +8,19 @@ a {
 }
 
 /* --- RichText editor (ProseMirror) --- */
+/* `--peg-border` is a colour token, not a border shorthand: `border: <color>` is an
+   invalid declaration, so the editor and its toolbar divider rendered with no border. */
 .peg-editor {
-  border: var(--peg-border);
-  border-radius: var(--peg-radius-md, 8px);
-  background: var(--peg-surface, #fff);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-md);
+  background: var(--peg-surface);
 }
 .peg-editor__toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 8px;
-  border-bottom: var(--peg-border);
+  border-bottom: 1px solid var(--peg-border);
   flex-wrap: wrap;
 }
 .peg-editor__btn {
@@ -31,18 +33,18 @@ a {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--peg-text-secondary, #555);
+  color: var(--peg-text-secondary);
   cursor: pointer;
   font: inherit;
 }
 .peg-editor__btn:hover {
-  background: var(--peg-surface-hover, #f3f4f6);
-  color: var(--peg-text-primary, #111);
+  background: var(--peg-surface-muted);
+  color: var(--peg-text-primary);
 }
 .peg-editor__sep {
   width: 1px;
   height: 18px;
-  background: var(--peg-border-color, #e5e7eb);
+  background: var(--peg-border);
   margin: 0 4px;
 }
 .peg-editor__surface {
@@ -54,7 +56,7 @@ a {
   min-height: 288px;
   outline: none;
   font: var(--peg-font-body);
-  color: var(--peg-text-primary, #111);
+  color: var(--peg-text-primary);
   line-height: 1.7;
 }
 .peg-editor__surface .ProseMirror p { margin: 0 0 0.6em; }
@@ -64,14 +66,47 @@ a {
 .peg-editor__surface .ProseMirror blockquote {
   margin: 0.8em 0;
   padding-left: 12px;
-  border-left: 3px solid var(--peg-accent, #2563eb);
-  color: var(--peg-text-secondary, #555);
+  border-left: 3px solid var(--peg-accent);
+  color: var(--peg-text-secondary);
 }
 .peg-editor__surface .ProseMirror ul, .peg-editor__surface .ProseMirror ol { margin: 0.6em 0; padding-left: 1.5em; }
 .peg-editor__surface .ProseMirror code {
-  font-family: var(--peg-font-mono, monospace);
-  background: var(--peg-surface-hover, #f3f4f6);
+  font-family: var(--peg-font-mono);
+  background: var(--peg-surface-muted);
   padding: 0 4px;
   border-radius: 4px;
 }
-.peg-editor__surface .ProseMirror a { color: var(--peg-accent, #2563eb); text-decoration: underline; }
+.peg-editor__surface .ProseMirror a { color: var(--peg-accent); text-decoration: underline; }
+
+/* --- Article editor layout ---
+   The inspector was a hard 320px column with flex-shrink:0, so below ~1024px it
+   crushed the writing surface. Content stays dominant; the inspector stacks under it. */
+.kalel-editor-layout {
+  display: flex;
+  gap: var(--peg-space-5);
+  align-items: flex-start;
+}
+.kalel-editor-layout__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--peg-space-4);
+}
+.kalel-editor-layout__aside {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--peg-space-4);
+}
+
+@media (max-width: 1023px) {
+  .kalel-editor-layout {
+    flex-direction: column;
+  }
+  .kalel-editor-layout__aside {
+    width: 100%;
+    flex-shrink: 1;
+  }
+}

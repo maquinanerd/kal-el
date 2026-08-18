@@ -270,7 +270,10 @@ export default function ArticlePage() {
 
   return (
     <>
-      <PageHead title={article?.title ?? "Carregando…"} description={saveState ? SAVE_LABEL[saveState] : "Editor"} />
+      <PageHead title={article?.title ?? "Carregando…"} />
+      <p className="peg-save-state" role="status" aria-live="polite">
+        {saveState ? SAVE_LABEL[saveState] : "Editor"}
+      </p>
 
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
@@ -284,8 +287,8 @@ export default function ArticlePage() {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="kalel-editor-layout">
+        <div className="kalel-editor-layout__main">
           <Input label="Título" value={title} onChange={(e) => { setTitle(e.target.value); scheduleSave(); }} />
           <Input label="Subtítulo (dek)" value={dek} onChange={(e) => { setDek(e.target.value); scheduleSave(); }} />
 
@@ -299,7 +302,7 @@ export default function ArticlePage() {
           />
         </div>
 
-        <aside style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+        <aside className="kalel-editor-layout__aside" aria-label="Inspector do artigo">
           <div className="peg-card">
             <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <Input label="Slug" value={slug} onChange={(e) => { setSlug(e.target.value); scheduleSave(); }} />
@@ -483,6 +486,11 @@ function CheckboxGroup({ label, items, selected, onToggle }: { label: string; it
         {items.map((it) => (
           <label key={it.id} className="peg-checkbox" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input type="checkbox" checked={selected.has(it.id)} onChange={() => onToggle(it.id)} />
+            <span className="peg-checkbox__box" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="m5 13 4 4L19 7" />
+              </svg>
+            </span>
             <span>{it.name}</span>
           </label>
         ))}

@@ -21,3 +21,4 @@ tmp/
 *.tsbuildinfo
 test-results/
 playwright-report/
+apps/cms/artifacts/

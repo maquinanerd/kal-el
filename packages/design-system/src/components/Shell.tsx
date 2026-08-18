@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 export type NavItemDef = {
   id: string;
@@ -23,33 +23,113 @@ export function NavItem({ item }: { item: NavItemDef }) {
   );
 }
 
+/**
+ * Below 1024px the sidebar is a drawer (PEG Shell F). It is translated off-canvas by
+ * default, so `open`/`onClose` are what make navigation reachable at all on mobile -
+ * without them the nav is simply unreachable, not merely inconvenient.
+ */
 export function Sidebar({
   brand,
   groups,
   footer,
+  open = false,
+  onClose,
+  id = "peg-sidebar",
 }: {
   brand: string;
   groups: { label?: string; items: NavItemDef[] }[];
   footer?: ReactNode;
+  open?: boolean;
+  onClose?: () => void;
+  id?: string;
+}) {
+  const ref = useRef<HTMLElement | null>(null);
+  const restoreTo = useRef<Element | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    restoreTo.current = document.activeElement;
+    // move focus into the drawer so keyboard users land on the navigation
+    const first = ref.current?.querySelector<HTMLElement>("button, a[href]");
+    first?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (restoreTo.current instanceof HTMLElement) restoreTo.current.focus();
+    };
+  }, [open, onClose]);
+
+  return (
+    <>
+      {open && <div className="peg-scrim" onClick={onClose} aria-hidden="true" />}
+      <aside
+        id={id}
+        ref={ref}
+        className={`peg-sidebar ${open ? "peg-sidebar--open" : ""}`}
+        aria-label="Navegação principal"
+      >
+        <div className="peg-sidebar__brand">
+          <span className="peg-sidebar__brand-dot">K</span>
+          <span>{brand}</span>
+          {onClose && (
+            <button
+              type="button"
+              className="peg-sidebar__close"
+              aria-label="Fechar navegação"
+              onClick={onClose}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <nav className="peg-sidebar__nav">
+          {groups.map((g, i) => (
+            <div key={i}>
+              {g.label && <div className="peg-sidebar__group-label">{g.label}</div>}
+              {g.items.map((it) => (
+                <NavItem key={it.id} item={it} />
+              ))}
+            </div>
+          ))}
+        </nav>
+        {footer && <div className="peg-sidebar__footer">{footer}</div>}
+      </aside>
+    </>
+  );
+}
+
+/** Hamburger that reveals the mobile drawer. Hidden at >= 1024px by CSS. */
+export function MenuButton({
+  onClick,
+  controls = "peg-sidebar",
+  expanded = false,
+}: {
+  onClick: () => void;
+  controls?: string;
+  expanded?: boolean;
 }) {
   return (
-    <aside className="peg-sidebar" aria-label="Navegação principal">
-      <div className="peg-sidebar__brand">
-        <span className="peg-sidebar__brand-dot">K</span>
-        <span>{brand}</span>
-      </div>
-      <nav className="peg-sidebar__nav">
-        {groups.map((g, i) => (
-          <div key={i}>
-            {g.label && <div className="peg-sidebar__group-label">{g.label}</div>}
-            {g.items.map((it) => (
-              <NavItem key={it.id} item={it} />
-            ))}
-          </div>
-        ))}
-      </nav>
-      {footer && <div className="peg-sidebar__footer">{footer}</div>}
-    </aside>
+    <button
+      type="button"
+      className="peg-menu-button"
+      aria-label="Abrir navegação"
+      aria-controls={controls}
+      aria-expanded={expanded}
+      onClick={onClick}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M3 6h18M3 12h18M3 18h18" />
+      </svg>
+    </button>
   );
 }
 

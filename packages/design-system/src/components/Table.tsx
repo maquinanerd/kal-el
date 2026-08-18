@@ -9,26 +9,43 @@ export type Column<T> = {
   muted?: boolean;
 };
 
-export function Table<T extends { id: string }>({ columns, rows, selectable = true }: { columns: Column<T>[]; rows: T[]; selectable?: boolean }) {
+/**
+ * `selectable` defaults to false: the checkboxes are not wired to any bulk action, and
+ * rendering them put N+1 focusable, non-functional controls into the tab order of every
+ * list in the product. Opt in only where a bulk action actually exists.
+ */
+export function Table<T extends { id: string }>({
+  columns,
+  rows,
+  selectable = false,
+  caption,
+  rowLabel,
+}: {
+  columns: Column<T>[];
+  rows: T[];
+  selectable?: boolean;
+  caption?: string;
+  rowLabel?: (row: T) => string;
+}) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="peg-table">
+    <div className="peg-table-wrap">
+      <table className="peg-table" aria-label={caption}>
         <thead>
           <tr>
             {selectable && (
-              <th style={{ width: 40 }}>
-                <span className="peg-checkbox">
-                  <input type="checkbox" aria-label="Select all" />
+              <th scope="col" style={{ width: 40 }}>
+                <label className="peg-checkbox">
+                  <input type="checkbox" aria-label="Selecionar tudo" />
                   <span className="peg-checkbox__box" aria-hidden="true">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="m5 13 4 4L19 7" />
                     </svg>
                   </span>
-                </span>
+                </label>
               </th>
             )}
             {columns.map((c) => (
-              <th key={c.key} style={c.align === "right" ? { textAlign: "right" } : undefined}>
+              <th key={c.key} scope="col" style={c.align === "right" ? { textAlign: "right" } : undefined}>
                 {c.header}
               </th>
             ))}
@@ -39,14 +56,14 @@ export function Table<T extends { id: string }>({ columns, rows, selectable = tr
             <tr key={row.id}>
               {selectable && (
                 <td>
-                  <span className="peg-checkbox">
-                    <input type="checkbox" aria-label={`Select ${row.id}`} />
+                  <label className="peg-checkbox">
+                    <input type="checkbox" aria-label={`Selecionar ${rowLabel ? rowLabel(row) : row.id}`} />
                     <span className="peg-checkbox__box" aria-hidden="true">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="m5 13 4 4L19 7" />
                       </svg>
                     </span>
-                  </span>
+                  </label>
                 </td>
               )}
               {columns.map((c) => (
