@@ -186,7 +186,7 @@ rate limiting without `trustProxy`, a bootstrap oracle, and session lifecycle).
 | gate | before | after |
 |---|---|---|
 | typecheck / lint / build | PASS | PASS |
-| unit + integration | 139 | see the staging audit |
+| unit + integration | 139 | 159 |
 | Playwright | 2 | 12 |
 | axe (WCAG 2.1 A+AA) | not run | 0 violations over 72 scans |
 | navigation reachable | 73/180 | 180/180 |

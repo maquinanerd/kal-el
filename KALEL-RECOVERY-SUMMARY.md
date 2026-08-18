@@ -269,7 +269,7 @@ larguras × 2 temas) tornou o gate mecânico e reprodutível.
 pnpm -r typecheck                    PASS (13 projetos)
 pnpm -r lint                         PASS (13 projetos)
 pnpm -r build                        PASS
-pnpm -r test                         139 → ver docs/audits/KALEL_STAGING_READINESS_AUDIT.md
+pnpm -r test                         139 → 159 (0 fail, 0 skip)
 Playwright                           2 → 12
 axe (WCAG 2.1 A+AA, 72 varreduras)   0 violações
 Navegação alcançável                 107/180 falhas → 0/180

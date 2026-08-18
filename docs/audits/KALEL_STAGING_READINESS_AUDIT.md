@@ -174,7 +174,10 @@ Detalhe completo de visual/responsivo/a11y em
 | `pnpm -r typecheck` | PASS (13 projetos) |
 | `pnpm -r lint` | PASS (13 projetos) |
 | `pnpm -r build` | PASS |
-| `pnpm -r test` | **171 passed, 0 failed, 0 skipped** (era 139) |
+| `pnpm -r test` | **159 passed, 0 failed, 0 skipped** (era 139) |
+
+Distribuição: api 87 · contracts 15 · importer 15 · db 8 · worker 8 · editor 7 ·
+auth 5 · sdk 5 · design-system 5 · fixture 4.
 | Playwright | **12 passed, 0 failed, 0 skipped** (era 2) |
 | axe (WCAG 2.1 A+AA, 72 varreduras) | **0 violações** |
 | Navegação alcançável (180 medições) | **180/180** |
@@ -241,7 +244,7 @@ build scripts são silenciosamente ignorados.
 ## 6. Cobertura desta auditoria — e o que ela não cobre
 
 **Coberto por execução:** todos os gates mecânicos; 180 medições de navegador; 72
-varreduras axe; 12 specs Playwright; 171 testes de integração contra PostgreSQL real;
+varreduras axe; 12 specs Playwright; 159 testes de integração contra PostgreSQL real;
 fresh install; backup/restore; idempotência incluindo concorrência; importadores WordPress
 e Payload contra fixtures; revisão adversarial de segurança de `apps/api`, `packages/auth`,
 `packages/events` e `apps/worker`.
