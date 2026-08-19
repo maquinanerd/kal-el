@@ -245,4 +245,41 @@ describe("WordPress import through the REST API", () => {
     expect(report.warnings.filter((w) => w.startsWith("create failed"))).toHaveLength(2);
   });
 
+  it("counts a refused update, and survives a token that cannot even read", async () => {
+    const batch = normalizeWordPress(readWordPressSnapshot(SNAPSHOT));
+    const fetchMedia = async () => ({ data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), mimeType: "image/jpeg" });
+
+    // the articles from the first test are already there under this prefix, so this run
+    // takes the update path for both of them
+    const noUpdate = await api.inject({
+      method: "POST",
+      url: `/v1/admin/sites/${siteId}/service-tokens`,
+      headers: { Cookie: ownerSession.cookieHeader, "x-kal-el-csrf": ownerSession.csrf },
+      payload: { name: "no-update", scopes: ["articles.read", "articles.create", "media.read", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage"] },
+    });
+    const readOnlyish = new KalElClient({ baseUrl: apiBase, token: noUpdate.json().data.token as string, retries: 1 });
+
+    const changed = { ...batch, articles: batch.articles.map((a) => ({ ...a, title: `${a.title} (revisado)` })) };
+    const updateReport = await importBatch(readOnlyish, siteId, changed, { externalKeyPrefix: "imp", fetchMedia });
+    // counted, not merely warned: a re-sync with a token that lost articles.update used to
+    // report zero failures while synchronizing nothing
+    expect(updateReport.failed.articles).toBe(2);
+    expect(updateReport.updated.articles).toBe(0);
+    expect(updateReport.warnings.filter((w) => w.startsWith("update failed"))).toHaveLength(2);
+
+    // and the lookups at the top of the loop are guarded too - without articles.read the
+    // very first call in the iteration threw out of the batch and discarded the report
+    const blind = await api.inject({
+      method: "POST",
+      url: `/v1/admin/sites/${siteId}/service-tokens`,
+      headers: { Cookie: ownerSession.cookieHeader, "x-kal-el-csrf": ownerSession.csrf },
+      payload: { name: "blind", scopes: ["media.read", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage"] },
+    });
+    const blindClient = new KalElClient({ baseUrl: apiBase, token: blind.json().data.token as string, retries: 1 });
+
+    const blindReport = await importBatch(blindClient, siteId, batch, { externalKeyPrefix: "blind", fetchMedia });
+    expect(blindReport.failed.articles).toBe(2);
+    expect(blindReport.warnings.filter((w) => w.startsWith("import failed"))).toHaveLength(2);
+  });
+
 });

@@ -175,6 +175,7 @@ export async function importBatch(
   report.mediaPending = batch.media.length - report.imported.media;
 
   for (const article of batch.articles) {
+    try {
     const externalKey = `${prefix}:${article.externalId}`;
     const existing = await client.listArticles(siteId, { externalKey });
     const first = existing.items[0];
@@ -340,8 +341,15 @@ export async function importBatch(
       report.imported.articles++;
       report.articleIds.push(created.id);
     } catch (err) {
+        report.failed.articles++;
+        report.warnings.push(`create failed for "${article.slug}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } catch (err) {
+      // the lookups at the top of this loop were the last unguarded calls in it: a token
+      // missing `articles.read`, or one transient 5xx that outlived the SDK's retries,
+      // still threw out of the whole batch and discarded the report with every warning in it
       report.failed.articles++;
-      report.warnings.push(`create failed for "${article.slug}": ${err instanceof Error ? err.message : String(err)}`);
+      report.warnings.push(`import failed for "${article.slug}": ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
