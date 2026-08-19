@@ -10,16 +10,17 @@ import {
   createServiceTokenBodySchema,
   createWebhookBodySchema,
   updateSiteBodySchema,
+  updateWebhookBodySchema,
   uuidSchema,
 } from "@kal-el/contracts";
 
 import { badRequest, forbidden, unauthorized } from "../plugins/errors.js";
 import { getSite, listSites, createSite, updateSite } from "../services/sites.js";
 import { createUser, listUsers } from "../services/users.js";
-import { createRole, listRoles, assignRoleToUser, getRolePermissions, grantOwnerOnSite } from "../services/roles.js";
+import { createRole, listRoles, assignRoleToUser, getRolePermissions, grantOwnerOnSite, type RoleAuditActor } from "../services/roles.js";
 import { createServiceToken, listServiceTokens, revokeServiceToken } from "../services/tokens.js";
-import { createWebhook, deleteWebhook, listWebhooks } from "../services/webhooks.js";
-import { writeAudit } from "../plugins/audit.js";
+import { createWebhook, deleteWebhook, listWebhooks, updateWebhook } from "../services/webhooks.js";
+import { auditActorFields, writeAudit, type AuditEntry } from "../plugins/audit.js";
 import type { ActorContext } from "../auth-context.js";
 
 /**
@@ -126,6 +127,34 @@ async function requireAdminPermission(
   };
 }
 
+/**
+ * Audit identity for an admin action.
+ *
+ * Every one of these routes used to record `actorId: req.actor?.kind === "user" ? ... :
+ * null`, so a platform integration acting through a service token appeared in the log as
+ * an unattributed action. `auditActorFields` resolves the token id and its operator-chosen
+ * name instead.
+ */
+function adminAudit(req: FastifyRequest): Pick<AuditEntry, "actorType" | "actorId" | "actorLabel"> {
+  const actor = req.actor;
+  if (!actor) return { actorType: "system", actorId: null, actorLabel: null };
+  return auditActorFields(actor);
+}
+
+/** The same identity in the shape the roles service takes. */
+function roleAuditActor(req: FastifyRequest): RoleAuditActor {
+  const actor = req.actor;
+  if (!actor) return { kind: "system", actorKey: "system:admin", id: null, label: null, ip: req.ip, requestId: req.id };
+  return {
+    kind: actor.kind,
+    actorKey: actor.actorKey,
+    id: actor.kind === "service" ? actor.tokenId : actor.userId,
+    label: actor.name,
+    ip: req.ip,
+    requestId: req.id,
+  };
+}
+
 function adminGuard(app: FastifyInstance, permission: string) {
   return async (req: FastifyRequest) => {
     req.actor = await requireAdminPermission(app, req, permission);
@@ -161,14 +190,30 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       adminApp.post("/sites", { preHandler: adminGuard(app, "sites.create") }, async (req, reply) => {
         const parsed = createSiteBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const row = await createSite(app.db, parsed.data);
-        // Site-scoped admin routes require membership in the target site, so the creator
-        // has to become an owner of the site they just created - otherwise the new site
-        // would be unadministrable by anyone.
-        const actor = req.actor;
-        if (actor && actor.kind === "user") {
-          await grantOwnerOnSite(app.db, actor.userId, row.id);
-        }
+        // Creating a tenant, granting its first owner and recording that it happened are
+        // one act: a crash between them leaves a site nobody can administer, or a site
+        // with no record of who created it. F10 - `createSite` wrote no audit row at all.
+        const row = await app.db.transaction(async (tx) => {
+          const site = await createSite(tx as unknown as typeof app.db, parsed.data);
+          // Site-scoped admin routes require membership in the target site, so the creator
+          // has to become an owner of the site they just created - otherwise the new site
+          // would be unadministrable by anyone.
+          const actor = req.actor;
+          if (actor && actor.kind === "user") {
+            await grantOwnerOnSite(tx as unknown as typeof app.db, actor.userId, site.id);
+          }
+          await writeAudit(tx, {
+            siteId: site.id,
+            ...adminAudit(req),
+            action: "sites.create",
+            objectType: "site",
+            objectId: site.id,
+            details: { slug: site.slug, name: site.name },
+            ip: req.ip,
+            requestId: req.id,
+          });
+          return site;
+        });
         return reply.status(201).send({
           data: {
             id: row.id,
@@ -186,7 +231,21 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         if (!uuidSchema.safeParse(siteId).success) throw badRequest("invalid siteId");
         const parsed = updateSiteBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const row = await updateSite(app.db, siteId, parsed.data);
+        const row = await app.db.transaction(async (tx) => {
+          const site = await updateSite(tx as unknown as typeof app.db, siteId, parsed.data);
+          // Deactivating a site is an operational event; it had no trail either.
+          await writeAudit(tx, {
+            siteId,
+            ...adminAudit(req),
+            action: "sites.update",
+            objectType: "site",
+            objectId: siteId,
+            details: { changedFields: Object.keys(parsed.data), status: site.status },
+            ip: req.ip,
+            requestId: req.id,
+          });
+          return site;
+        });
         return {
           data: {
             id: row.id,
@@ -204,7 +263,26 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       adminApp.post("/users", { preHandler: adminGuard(app, "users.create") }, async (req, reply) => {
         const parsed = createUserBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        return reply.status(201).send({ data: await createUser(app.db, parsed.data) });
+        // F10: creating an account is how a person enters the platform, and it left no
+        // record of who let them in. Same transaction as the insert, so the account and
+        // the entry saying it was created cannot disagree.
+        const user = await app.db.transaction(async (tx) => {
+          const created = await createUser(tx as unknown as typeof app.db, parsed.data);
+          await writeAudit(tx, {
+            // no siteId: an account is a platform object and only becomes site-scoped
+            // when a role is granted (see roles.assign)
+            ...adminAudit(req),
+            action: "users.create",
+            objectType: "user",
+            objectId: created.id,
+            // deliberately never the password or its hash
+            details: { email: created.email, name: created.name, status: created.status },
+            ip: req.ip,
+            requestId: req.id,
+          });
+          return created;
+        });
+        return reply.status(201).send({ data: user });
       });
 
       // The target site comes from the body, so the guard has to run inside the handler:
@@ -233,12 +311,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           });
         }
 
-        await assignRoleToUser(app.db, userId, roleId, siteId, {
-          kind: actor.kind,
-          actorKey: actor.actorKey,
-          ip: req.ip,
-          requestId: req.id,
-        });
+        await assignRoleToUser(app.db, userId, roleId, siteId, roleAuditActor(req));
         return reply.status(201).send({ data: { assigned: true } });
       });
 
@@ -249,13 +322,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         // was hardcoded to `system:admin`, so every role creation was attributed to
         // nobody in the one log that exists to say who did it
-        const roleActor = req.actor;
-        const role = await createRole(app.db, parsed.data, {
-          kind: roleActor?.kind ?? "system",
-          actorKey: roleActor?.actorKey ?? "system:admin",
-          ip: req.ip,
-          requestId: req.id,
-        });
+        const role = await createRole(app.db, parsed.data, roleAuditActor(req));
         return reply.status(201).send({ data: role });
       });
 
@@ -277,8 +344,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         // who did what had no record that it was ever issued.
         await writeAudit(app.db, {
           siteId,
-          actorType: req.actor?.kind ?? "system",
-          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          ...adminAudit(req),
           action: "tokens.create",
           objectType: "service_token",
           objectId: token.id,
@@ -295,8 +361,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         const revoked = await revokeServiceToken(app.db, siteId, tokenId);
         await writeAudit(app.db, {
           siteId,
-          actorType: req.actor?.kind ?? "system",
-          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          ...adminAudit(req),
           action: "tokens.revoke",
           objectType: "service_token",
           objectId: tokenId,
@@ -324,8 +389,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         // one is a data-egress decision and left no trace
         await writeAudit(app.db, {
           siteId,
-          actorType: req.actor?.kind ?? "system",
-          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          ...adminAudit(req),
           action: "webhooks.create",
           objectType: "webhook",
           objectId: webhook.id,
@@ -336,14 +400,35 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(201).send({ data: webhook });
       });
 
+      adminApp.patch("/sites/:siteId/webhooks/:webhookId", { preHandler: siteAdminGuard(app, "tokens.manage") }, async (req) => {
+        const { siteId, webhookId } = req.params as { siteId: string; webhookId: string };
+        if (!uuidSchema.safeParse(siteId).success || !uuidSchema.safeParse(webhookId).success) throw badRequest("invalid id");
+        const parsed = updateWebhookBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        const webhook = await updateWebhook(app.db, siteId, webhookId, parsed.data, {
+          allowPrivate: app.config.ALLOW_PRIVATE_WEBHOOKS,
+        });
+        await writeAudit(app.db, {
+          siteId,
+          ...adminAudit(req),
+          action: "webhooks.update",
+          objectType: "webhook",
+          objectId: webhookId,
+          // never the secret; it is not updatable and is not read here
+          details: { changedFields: Object.keys(parsed.data), enabled: webhook.enabled },
+          ip: req.ip,
+          requestId: req.id,
+        });
+        return { data: webhook };
+      });
+
       adminApp.delete("/sites/:siteId/webhooks/:webhookId", { preHandler: siteAdminGuard(app, "tokens.manage") }, async (req) => {
         const { siteId, webhookId } = req.params as { siteId: string; webhookId: string };
         if (!uuidSchema.safeParse(siteId).success || !uuidSchema.safeParse(webhookId).success) throw badRequest("invalid id");
         const removed = await deleteWebhook(app.db, siteId, webhookId);
         await writeAudit(app.db, {
           siteId,
-          actorType: req.actor?.kind ?? "system",
-          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          ...adminAudit(req),
           action: "webhooks.delete",
           objectType: "webhook",
           objectId: webhookId,

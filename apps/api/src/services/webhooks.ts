@@ -1,19 +1,28 @@
 import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
-import { webhooks } from "@kal-el/db/schema";
-import type { CreateWebhookBody } from "@kal-el/contracts";
+import { outboxEvents, webhookDeliveries, webhooks } from "@kal-el/db/schema";
+import type { CreateWebhookBody, UpdateWebhookBody } from "@kal-el/contracts";
 
 import { badRequest, notFound } from "../plugins/errors.js";
 
+/**
+ * The signing secret is deliberately absent.
+ *
+ * It is shown exactly once, in the create response, the same way a service token is. A
+ * list endpoint that returns it turns every reader of the admin UI into someone who can
+ * forge a signed payload to the subscriber.
+ */
 function dto(row: typeof webhooks.$inferSelect) {
   return {
     id: row.id,
     siteId: row.siteId,
     url: row.url,
     events: row.events,
+    description: row.description ?? null,
+    enabled: row.enabled,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -109,14 +118,100 @@ export async function assertSafeWebhookUrl(url: string, allowPrivate = false): P
 export async function createWebhook(db: Db, siteId: string, body: CreateWebhookBody, opts: { allowPrivate?: boolean } = {}) {
   await assertSafeWebhookUrl(body.url, opts.allowPrivate);
   const secret = body.secret ?? randomBytes(32).toString("hex");
-  const [row] = await db.insert(webhooks).values({ siteId, url: body.url, events: body.events, secret }).returning();
+  const [row] = await db
+    .insert(webhooks)
+    .values({ siteId, url: body.url, events: body.events, secret, description: body.description ?? null })
+    .returning();
   if (!row) throw new Error("createWebhook returned no row");
+  // The only time the secret is ever returned. Same contract as a service token.
   return { ...dto(row), secret };
 }
 
-export async function listWebhooks(db: Db, siteId: string) {
+export async function updateWebhook(db: Db, siteId: string, webhookId: string, body: UpdateWebhookBody, opts: { allowPrivate?: boolean } = {}) {
+  const existing = await db.query.webhooks.findFirst({
+    where: and(eq(webhooks.id, webhookId), eq(webhooks.siteId, siteId)),
+  });
+  if (!existing) throw notFound("webhook not found");
+  // Re-point is a change of egress destination, so it goes through the same SSRF check
+  // as registration - not just the delivery-time one.
+  if (body.url !== undefined && body.url !== existing.url) {
+    await assertSafeWebhookUrl(body.url, opts.allowPrivate);
+  }
+  const [row] = await db
+    .update(webhooks)
+    .set({
+      url: body.url ?? existing.url,
+      events: body.events ?? existing.events,
+      description: body.description !== undefined ? body.description : existing.description,
+      enabled: body.enabled !== undefined ? body.enabled : existing.enabled,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(webhooks.id, webhookId), eq(webhooks.siteId, siteId)))
+    .returning();
+  if (!row) throw notFound("webhook not found");
+  return dto(row);
+}
+
+export type WebhookWithHealth = ReturnType<typeof dto> & {
+  lastDelivery: {
+    status: string;
+    attempt: number;
+    responseStatus: number | null;
+    error: string | null;
+    at: string | null;
+    eventType: string | null;
+  } | null;
+};
+
+/**
+ * Webhooks plus the outcome of their most recent delivery.
+ *
+ * Without this the admin surface can show that a subscriber exists but not whether it is
+ * working - and a dead-lettered endpoint looks exactly like a healthy one that has had no
+ * events. One query for the deliveries rather than one per hook.
+ */
+export async function listWebhooks(db: Db, siteId: string): Promise<WebhookWithHealth[]> {
   const rows = await db.select().from(webhooks).where(eq(webhooks.siteId, siteId)).orderBy(asc(webhooks.createdAt));
-  return rows.map(dto);
+  if (rows.length === 0) return [];
+
+  const deliveries = await db
+    .select({
+      webhookId: webhookDeliveries.webhookId,
+      status: webhookDeliveries.status,
+      attempt: webhookDeliveries.attempt,
+      responseStatus: webhookDeliveries.responseStatus,
+      error: webhookDeliveries.error,
+      deliveredAt: webhookDeliveries.deliveredAt,
+      createdAt: webhookDeliveries.createdAt,
+      eventType: outboxEvents.eventType,
+    })
+    .from(webhookDeliveries)
+    .innerJoin(outboxEvents, eq(outboxEvents.id, webhookDeliveries.outboxEventId))
+    .where(inArray(webhookDeliveries.webhookId, rows.map((r) => r.id)))
+    .orderBy(desc(webhookDeliveries.createdAt))
+    .limit(rows.length * 20);
+
+  const latest = new Map<string, (typeof deliveries)[number]>();
+  for (const d of deliveries) {
+    if (!latest.has(d.webhookId)) latest.set(d.webhookId, d);
+  }
+
+  return rows.map((r) => {
+    const d = latest.get(r.id);
+    return {
+      ...dto(r),
+      lastDelivery: d
+        ? {
+            status: d.status,
+            attempt: d.attempt,
+            responseStatus: d.responseStatus,
+            error: d.error,
+            at: (d.deliveredAt ?? d.createdAt).toISOString(),
+            eventType: d.eventType,
+          }
+        : null,
+    };
+  });
 }
 
 export async function deleteWebhook(db: Db, siteId: string, webhookId: string) {

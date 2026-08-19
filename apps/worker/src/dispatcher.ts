@@ -96,7 +96,11 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
       const subscribers = await db
         .select()
         .from(webhooks)
-        .where(and(eq(webhooks.siteId, event.siteId), sql`${webhooks.events} ? ${event.eventType}`))
+        // A paused subscriber is skipped entirely rather than attempted and failed: the
+        // point of pausing is to stop an endpoint burning its retry budget while it is
+        // being fixed, and a paused hook that accumulated dead-letters would come back
+        // already exhausted.
+        .where(and(eq(webhooks.siteId, event.siteId), eq(webhooks.enabled, true), sql`${webhooks.events} ? ${event.eventType}`))
         // heap order made which hook ran first - and so which one shaped the shared state -
         // effectively random between passes
         .orderBy(asc(webhooks.createdAt), asc(webhooks.id));
