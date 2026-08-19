@@ -169,18 +169,18 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     } catch (err) {
       const message = err instanceof Error ? err.message.slice(0, 500) : String(err);
       onLog(`event ${event.id}: pass aborted: ${message}`);
-      // Release the claim, hold the event back, and spend an attempt. Clearing the lock
-      // alone re-claimed it on the next tick and span on whatever was throwing - and with
-      // no budget at this level, twenty such events at the head of the claim order would
-      // take all twenty slots forever and no real delivery would ever happen again.
+      // Release the claim and hold the event back, with the delay growing each time.
+      // Clearing the lock alone re-claimed it on the next tick and span on whatever was
+      // throwing; dead-lettering here was worse, because `attempts` is also spent by every
+      // normal pass and `maxAttempts` is the per-hook budget - one transient error on the
+      // fifth pass would terminate an event whose remaining subscriber still had attempts
+      // left, with no requeue path. A pass that could not run is not a delivery attempt
+      // against any hook, so it only backs off.
       const attempts = event.attempts + 1;
+      const backoff = Math.min(baseDelayMs * 2 ** Math.min(attempts, 10), 60 * 60_000);
       await db
         .update(outboxEvents)
-        .set(
-          attempts >= maxAttempts
-            ? { status: "failed", attempts, lastError: message, lockedUntil: null }
-            : { attempts, lastError: message, lockedUntil: null, availableAt: new Date(Date.now() + baseDelayMs * 2 ** attempts) },
-        )
+        .set({ attempts, lastError: message, lockedUntil: null, availableAt: new Date(Date.now() + backoff) })
         .where(eq(outboxEvents.id, event.id));
     }
   }

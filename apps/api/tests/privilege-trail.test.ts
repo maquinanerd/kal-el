@@ -56,6 +56,33 @@ describe("privilege operations leave a trail", () => {
     expect(actions).toContain("roles.assign");
   });
 
+  it("records credential minting and webhook registration", async () => {
+    // Neither wrote anything at all. A service token can carry every permission in the
+    // system and outlive whoever created it; a webhook receives the full payload of every
+    // event it subscribes to. Both are decisions someone should be able to look up.
+    const token = await createServiceToken(ctx, owner, siteId, ["articles.read"]);
+    expect(token.statusCode).toBe(201);
+
+    const hook = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/admin/sites/${siteId}/webhooks`,
+      headers: { Cookie: owner.cookieHeader, "x-kal-el-csrf": owner.csrf },
+      payload: { url: "https://example.com/hook", events: ["article.published"] },
+    });
+    expect(hook.statusCode).toBe(201);
+
+    const log = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteId}/audit-log`,
+      headers: { Cookie: owner.cookieHeader },
+    });
+    const rows = (log.json() as { data: { action: string; actorId: string | null }[] }).data;
+    const minted = rows.find((r) => r.action === "tokens.create");
+    const registered = rows.find((r) => r.action === "webhooks.create");
+    expect(minted?.actorId).toBe(owner.userId);
+    expect(registered?.actorId).toBe(owner.userId);
+  });
+
   it("a service token cannot grant permissions it does not itself hold", async () => {
     // The escalation guard read `actor.kind === "user"` only, so a token carrying
     // `roles.manage` could hand out the owner role - every permission in the system -

@@ -54,10 +54,18 @@ async function publicTables(db: Db): Promise<string[]> {
 export async function exportBackup(db: Db, opts: { tables?: string[] } = {}): Promise<Backup> {
   const tables = opts.tables ?? (await publicTables(db)).filter((t) => !t.startsWith("__drizzle"));
   const data: Record<string, unknown[]> = {};
-  for (const name of tables) {
-    const res = await db.execute(sql.raw(`SELECT * FROM ${quote(name)}`));
-    data[name] = res.rows as unknown[];
-  }
+  // One snapshot for every table. Each SELECT used to run in its own implicit transaction,
+  // in alphabetical order - `article_revisions` before `articles` - so a delete landing
+  // between two reads produced a dump with revisions whose article is absent. Restoring it
+  // hits a foreign key and, because the restore is one transaction, rolls the whole thing
+  // back. The opposite ordering loses the relation silently, which is worse.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql.raw("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"));
+    for (const name of tables) {
+      const res = await tx.execute(sql.raw(`SELECT * FROM ${quote(name)}`));
+      data[name] = res.rows as unknown[];
+    }
+  });
   return { exportedAt: new Date().toISOString(), data };
 }
 

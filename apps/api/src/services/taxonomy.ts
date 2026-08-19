@@ -1,6 +1,6 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
-import { authors, categories, entities, sources, tags, userRoles } from "@kal-el/db/schema";
+import { articles, authors, categories, entities, sources, tags, userRoles } from "@kal-el/db/schema";
 import type {
   CreateAuthorBody,
   CreateCategoryBody,
@@ -281,9 +281,28 @@ export async function updateCategory(db: Db, siteId: string, categoryId: string,
   };
 }
 
+/**
+ * An article's `seo.primaryCategoryId` is validated on every update, including one that
+ * does not mention SEO at all - `seo` falls back to the stored value. Deleting a category
+ * some article points at therefore made every later PATCH to that article return 400,
+ * with the CMS re-sending the dead id because its Select renders blank while the state
+ * still holds it. The article could not be edited back into a valid state.
+ */
+async function assertNotPrimaryCategory(db: Db, siteId: string, categoryId: string) {
+  const used = await db
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(eq(articles.siteId, siteId), sql`${articles.seo} ->> 'primaryCategoryId' = ${categoryId}`))
+    .limit(1);
+  if (used.length > 0) {
+    throw conflict("category is the primary category of at least one article", { field: "primaryCategoryId" });
+  }
+}
+
 export async function deleteCategory(db: Db, siteId: string, categoryId: string, actor: ActorRef) {
   const existing = await db.query.categories.findFirst({ where: and(eq(categories.id, categoryId), eq(categories.siteId, siteId)) });
   if (!existing) throw notFound("category not found");
+  await assertNotPrimaryCategory(db, siteId, categoryId);
   await db.transaction(async (tx) => {
     await tx.update(categories).set({ parentId: null }).where(and(eq(categories.siteId, siteId), eq(categories.parentId, categoryId)));
     await tx.delete(categories).where(and(eq(categories.id, categoryId), eq(categories.siteId, siteId)));

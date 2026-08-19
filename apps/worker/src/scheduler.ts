@@ -22,8 +22,22 @@ const DEFAULT_DOCUMENT = { version: 2, nodes: [] };
  */
 function publishableDocument(document: unknown) {
   if (!document) return DEFAULT_DOCUMENT;
-  return migrateDocumentToV2(document as Parameters<typeof migrateDocumentToV2>[0]);
+  try {
+    return migrateDocumentToV2(document as Parameters<typeof migrateDocumentToV2>[0]);
+  } catch (err) {
+    throw new UnpublishableArticle(err instanceof Error ? err.message : String(err));
+  }
 }
+
+/**
+ * A failure that will still be a failure on the next tick.
+ *
+ * Blocking on *any* rejection meant a connection reset, a failover or a statement timeout
+ * mid-transaction took a perfectly healthy article out of the queue permanently - which is
+ * a worse outcome than the starvation the blocking was added to prevent. Only a failure
+ * that is a property of the data qualifies.
+ */
+class UnpublishableArticle extends Error {}
 
 /**
  * Promote articles whose scheduled_at has arrived. Safe under concurrent
@@ -61,6 +75,8 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
     }
     if (failure) {
       console.error(`[scheduler] article ${id} could not be promoted`, failure);
+      // a transient failure keeps its place in the queue and is retried next tick
+      if (!(failure instanceof UnpublishableArticle)) continue;
       // Isolating the failure is not enough. A refused article keeps `status='scheduled'`
       // and its past `scheduledAt`, so it matches the due query forever - and since a new
       // schedule must be in the future, it sorts ahead of every healthy article. A hundred
@@ -80,7 +96,10 @@ async function blockArticle(db: Db, id: string, failure: unknown): Promise<boole
     return await db.transaction(async (tx) => {
       const rows = await tx
         .update(articles)
-        .set({ status: "blocked", updatedAt: new Date() })
+        // the version has to move: every other status write bumps it, and an editor
+        // holding the pre-block version would otherwise have `If-Match` accepted against a
+        // state that had changed underneath them
+        .set({ status: "blocked", version: sql`${articles.version} + 1`, updatedAt: new Date() })
         .where(and(eq(articles.id, id), eq(articles.status, "scheduled")))
         .returning();
       const row = rows[0];

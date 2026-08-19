@@ -19,6 +19,7 @@ import { createUser, listUsers } from "../services/users.js";
 import { createRole, listRoles, assignRoleToUser, getRolePermissions, grantOwnerOnSite } from "../services/roles.js";
 import { createServiceToken, listServiceTokens, revokeServiceToken } from "../services/tokens.js";
 import { createWebhook, deleteWebhook, listWebhooks } from "../services/webhooks.js";
+import { writeAudit } from "../plugins/audit.js";
 import type { ActorContext } from "../auth-context.js";
 
 /**
@@ -271,13 +272,39 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         const parsed = createServiceTokenBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         const token = await createServiceToken(app.db, siteId, parsed.data);
+        // Minting a credential wrote nothing at all. A token can carry every permission in
+        // the system and outlive the person who created it; the one log that exists to say
+        // who did what had no record that it was ever issued.
+        await writeAudit(app.db, {
+          siteId,
+          actorType: req.actor?.kind ?? "system",
+          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          action: "tokens.create",
+          objectType: "service_token",
+          objectId: token.id,
+          details: { name: parsed.data.name, scopes: parsed.data.scopes },
+          ip: req.ip,
+          requestId: req.id,
+        });
         return reply.status(201).send({ data: token });
       });
 
       adminApp.post("/sites/:siteId/service-tokens/:tokenId/revoke", { preHandler: siteAdminGuard(app, "tokens.manage") }, async (req) => {
         const { siteId, tokenId } = req.params as { siteId: string; tokenId: string };
         if (!uuidSchema.safeParse(siteId).success || !uuidSchema.safeParse(tokenId).success) throw badRequest("invalid id");
-        return { data: await revokeServiceToken(app.db, siteId, tokenId) };
+        const revoked = await revokeServiceToken(app.db, siteId, tokenId);
+        await writeAudit(app.db, {
+          siteId,
+          actorType: req.actor?.kind ?? "system",
+          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          action: "tokens.revoke",
+          objectType: "service_token",
+          objectId: tokenId,
+          details: {},
+          ip: req.ip,
+          requestId: req.id,
+        });
+        return { data: revoked };
       });
 
       adminApp.get("/sites/:siteId/webhooks", { preHandler: siteAdminGuard(app, "tokens.manage") }, async (req) => {
@@ -293,13 +320,38 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         const parsed = createWebhookBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         const webhook = await createWebhook(app.db, siteId, parsed.data, { allowPrivate: app.config.ALLOW_PRIVATE_WEBHOOKS });
+        // a webhook receives the full payload of every event it subscribes to; registering
+        // one is a data-egress decision and left no trace
+        await writeAudit(app.db, {
+          siteId,
+          actorType: req.actor?.kind ?? "system",
+          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          action: "webhooks.create",
+          objectType: "webhook",
+          objectId: webhook.id,
+          details: { url: parsed.data.url, events: parsed.data.events },
+          ip: req.ip,
+          requestId: req.id,
+        });
         return reply.status(201).send({ data: webhook });
       });
 
       adminApp.delete("/sites/:siteId/webhooks/:webhookId", { preHandler: siteAdminGuard(app, "tokens.manage") }, async (req) => {
         const { siteId, webhookId } = req.params as { siteId: string; webhookId: string };
         if (!uuidSchema.safeParse(siteId).success || !uuidSchema.safeParse(webhookId).success) throw badRequest("invalid id");
-        return { data: await deleteWebhook(app.db, siteId, webhookId) };
+        const removed = await deleteWebhook(app.db, siteId, webhookId);
+        await writeAudit(app.db, {
+          siteId,
+          actorType: req.actor?.kind ?? "system",
+          actorId: req.actor?.kind === "user" ? (req.actor.userId ?? null) : null,
+          action: "webhooks.delete",
+          objectType: "webhook",
+          objectId: webhookId,
+          details: {},
+          ip: req.ip,
+          requestId: req.id,
+        });
+        return { data: removed };
       });
     },
     { prefix: "/v1/admin" },
