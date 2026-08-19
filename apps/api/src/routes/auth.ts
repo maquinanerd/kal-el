@@ -125,6 +125,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       where: eq(sessions.tokenHash, hashToken(credentials.token)),
     });
     if (!session || session.expiresAt < new Date()) throw unauthorized("session expired");
+    // same checks /v1/auth/me makes: a disabled account keeps an unexpired cookie for up
+    // to SESSION_TTL_DAYS, and this route discloses every site they belonged to
+    const sitesUser = await app.db.query.users.findFirst({ where: eq(users.id, session.userId) });
+    if (!sitesUser) throw unauthorized();
+    if (sitesUser.status === "disabled") throw forbidden("user is not active");
     const memberships = await app.db
       .selectDistinct({ siteId: userRoles.siteId })
       .from(userRoles)

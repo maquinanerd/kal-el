@@ -254,6 +254,53 @@ describe("retry and error contract", () => {
     expect(replay.json().data.id).toBe(first.json().data.id);
   });
 
+  it("two concurrent updates with the same If-Match do not both win", async () => {
+    // Every UPDATE derived `version: row.version + 1` from a snapshot read taken outside
+    // the write, with no version predicate - so both writers passed If-Match, both wrote
+    // N+1, and the second silently overwrote the first with a 200.
+    const article = await mkArticle(siteA, `Concorrencia ${Date.now()}`);
+
+    const patch = (title: string) =>
+      ctx.app.inject({
+        method: "PATCH",
+        url: `/v1/sites/${siteA}/articles/${article.id}`,
+        headers: { ...h(), "if-match": String(article.version) },
+        payload: { title },
+      });
+
+    const [a, b] = await Promise.all([patch("Escritor A"), patch("Escritor B")]);
+    const codes = [a.statusCode, b.statusCode].sort();
+    expect(codes, "exactly one writer may win").toEqual([200, 409]);
+
+    const loser = a.statusCode === 409 ? a : b;
+    expect(loser.json().error.code).toBe("VERSION_CONFLICT");
+
+    const fresh = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteA}/articles/${article.id}`,
+      headers: { Cookie: owner.cookieHeader },
+    });
+    expect(fresh.json().data.version, "only one increment").toBe(article.version + 1);
+  });
+
+  it("two concurrent transitions do not both apply", async () => {
+    const article = await mkArticle(siteA, `Transicao concorrente ${Date.now()}`);
+    const results = await Promise.all([
+      action(siteA, article.id, "submit"),
+      action(siteA, article.id, "submit"),
+    ]);
+    const ok = results.filter((r) => r.statusCode === 200);
+    expect(ok.length, "both may answer 200 - one applies, one is the no-op replay").toBeGreaterThan(0);
+
+    const log = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteA}/audit-log/article/${article.id}`,
+      headers: { Cookie: owner.cookieHeader },
+    });
+    const submits = (log.json().data as { action: string }[]).filter((e) => e.action === "articles.submit");
+    expect(submits.length, "the transition must be recorded once, not twice").toBe(1);
+  });
+
   it("a slug clash stays a plain CONFLICT, so the three are distinguishable", async () => {
     await ctx.app.inject({
       method: "POST",

@@ -21,14 +21,12 @@ const ACTIONS: Record<ArticleStatus, { key: string; label: string; variant: "pri
   draft: [
     { key: "submit", label: "Enviar p/ revisão", variant: "primary" },
     { key: "publish", label: "Publicar", variant: "secondary" },
-    { key: "schedule", label: "Agendar", variant: "secondary" },
     { key: "archive", label: "Arquivar", variant: "secondary" },
   ],
   in_review: [
     { key: "approve", label: "Aprovar", variant: "primary" },
     { key: "reject", label: "Rejeitar", variant: "destructive" },
     { key: "publish", label: "Publicar", variant: "secondary" },
-    { key: "schedule", label: "Agendar", variant: "secondary" },
   ],
   scheduled: [
     { key: "publish", label: "Publicar agora", variant: "primary" },
@@ -49,6 +47,9 @@ export default function WorkflowPage() {
   const [items, setItems] = useState<ArticleSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // one action at a time: a double click used to fire two POSTs and surface the second
+  // as a raw INVALID_TRANSITION in a Portuguese UI
+  const [pending, setPending] = useState<string | null>(null);
 
   const load = useCallback(async (siteId: string, status: ArticleStatus) => {
     setLoading(true);
@@ -68,14 +69,20 @@ export default function WorkflowPage() {
     else setItems([]);
   }, [activeSiteId, active, load]);
 
-  async function act(articleId: string, action: string) {
-    if (!activeSiteId) return;
+  async function act(articleId: string, action: string, version: number) {
+    if (!activeSiteId || pending) return;
     setError(null);
+    setPending(`${articleId}:${action}`);
+    // same contract as the article editor: keyed by the version the action was issued
+    // against, so a double click collapses and a later, genuine action does not
+    const key = `cms.${articleId}.${action}.v${version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
     try {
-      await articleAction(activeSiteId, articleId, action);
+      await articleAction(activeSiteId, articleId, action, key);
       await load(activeSiteId, active);
     } catch (err) {
-      setError(err instanceof ApiError ? (err.status === 403 ? "Sem permissão para esta ação" : err.message) : "Falha na ação");
+      setError(err instanceof ApiError ? err.message : "Falha na ação");
+    } finally {
+      setPending(null);
     }
   }
 
@@ -96,8 +103,14 @@ export default function WorkflowPage() {
       render: (a) => (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {ACTIONS[a.status].map((action) => (
-            <Button key={action.key} size="xs" variant={action.variant} onClick={() => void act(a.id, action.key)}>
-              {action.label}
+            <Button
+              key={action.key}
+              size="xs"
+              variant={action.variant}
+              disabled={pending !== null}
+              onClick={() => void act(a.id, action.key, a.version)}
+            >
+              {pending === `${a.id}:${action.key}` ? "…" : action.label}
             </Button>
           ))}
         </div>

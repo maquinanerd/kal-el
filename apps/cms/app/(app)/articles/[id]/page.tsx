@@ -16,6 +16,7 @@ import {
   listEntities,
   listRevisions,
   listTags,
+  scheduleArticle,
   updateArticle,
   uploadMedia,
   type ArticleDetail,
@@ -233,6 +234,38 @@ export default function ArticlePage() {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  /**
+   * Scheduling needs a date the generic action helper has no way to supply - it posted an
+   * empty body against a `.strict()` schema, so the button always 400d and no CMS user
+   * could produce a scheduled article at all.
+   */
+  async function doSchedule() {
+    if (!activeSiteId || pendingAction) return;
+    const raw = window.prompt("Publicar em (AAAA-MM-DD HH:MM)", "");
+    if (!raw) return;
+    const when = new Date(raw.replace(" ", "T"));
+    if (Number.isNaN(when.getTime())) {
+      setActionError("Data inválida. Use AAAA-MM-DD HH:MM.");
+      return;
+    }
+    if (when.getTime() <= Date.now()) {
+      setActionError("A data de agendamento precisa estar no futuro.");
+      return;
+    }
+    setActionError(null);
+    setPendingAction("schedule");
+    const key = `cms.${params.id}.schedule.v${version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
+    try {
+      const updated = await scheduleArticle(activeSiteId, params.id, when.toISOString(), key);
+      setStatus(updated.status);
+      setVersion(updated.version);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? (err.status === 403 ? "Sem permissão para esta ação" : err.message) : "Falha ao agendar");
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   async function doAction(action: string) {
     if (!activeSiteId || pendingAction) return;
     setActionError(null);
@@ -241,7 +274,14 @@ export default function ArticlePage() {
     // replays the same intent instead of being re-derived. `approve` and `unpublish`
     // both target `draft`, so the server cannot tell a retry from a call that was never
     // legal - the key is what makes those two safe from the UI.
-    const key = `cms.${params.id}.${action}.${status}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
+    // Per click, not per (article, action, status). A key derived only from state was
+    // stable across the whole 24h TTL, so a SECOND legitimate approval - writer
+    // re-submits, editor approves again the same day - replayed the first response:
+    // no transition, no audit row, and a UI that reported success. That is the exact
+    // defect this round exists to close, reintroduced from the client.
+    // `version` moves on every accepted transition, so it separates real attempts
+    // while still collapsing a double click on the same one.
+    const key = `cms.${params.id}.${action}.v${version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
     try {
       const updated = await articleAction(activeSiteId, params.id, action, key);
       setStatus(updated.status);
@@ -302,7 +342,7 @@ export default function ArticlePage() {
             size="sm"
             variant={a.variant}
             disabled={pendingAction !== null}
-            onClick={() => void doAction(a.key)}
+            onClick={() => void (a.key === "schedule" ? doSchedule() : doAction(a.key))}
           >
             {pendingAction === a.key ? "…" : a.label}
           </Button>

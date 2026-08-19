@@ -236,10 +236,12 @@ export function htmlToIntermediate(html: string): HtmlParseResult {
  * Resolve intermediate image/gallery source URLs to created media UUIDs,
  * producing a schema-valid v2 ArticleDocument (marks preserved).
  */
+/** @param dropped set to true when any media node was degraded or removed. */
 export function finalizeDocument(
   intermediate: IntermediateNode[],
   urlToMediaId: Map<string, string>,
   warnings: string[],
+  dropped?: { value: boolean },
 ): ArticleDocumentV2 {
   const nodes: DocumentNodeV2[] = [];
   for (const node of intermediate) {
@@ -247,6 +249,7 @@ export function finalizeDocument(
       const mediaId = urlToMediaId.get(node.attrs.sourceUrl);
       if (!mediaId) {
         warnings.push(`media not imported: ${node.attrs.sourceUrl}`);
+        if (dropped) dropped.value = true;
         continue;
       }
       nodes.push({
@@ -262,7 +265,13 @@ export function finalizeDocument(
       const ids = node.attrs.sourceUrls.map((u) => urlToMediaId.get(u)).filter((id): id is string => Boolean(id));
       if (ids.length === 0) {
         warnings.push("gallery dropped: no media imported");
+        if (dropped) dropped.value = true;
         continue;
+      }
+      // a partially resolved gallery silently lost images and used to report nothing
+      if (ids.length !== node.attrs.sourceUrls.length) {
+        warnings.push(`gallery partially imported: ${ids.length}/${node.attrs.sourceUrls.length}`);
+        if (dropped) dropped.value = true;
       }
       nodes.push({ type: "gallery", attrs: { mediaIds: ids } });
     } else if (node.type === "embed") {

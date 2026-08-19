@@ -421,9 +421,9 @@ export async function updateArticle(
         version: row.version + 1,
         updatedAt: new Date(),
       })
-      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId)))
+      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw conflict("article changed concurrently");
+    if (!result) throw versionConflict("article changed concurrently");
 
     if (body.document && JSON.stringify(document) !== JSON.stringify(row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT)) {
       const maxRev = await tx
@@ -578,9 +578,9 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
         version: row.version + 1,
         updatedAt: new Date(),
       })
-      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId)))
+      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw conflict("article changed concurrently");
+    if (!result) throw versionConflict("article changed concurrently");
 
     const maxRev = await tx
       .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
@@ -644,9 +644,9 @@ export async function scheduleArticle(db: Db, siteId: string, articleId: string,
         version: row.version + 1,
         updatedAt: new Date(),
       })
-      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId)))
+      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw conflict("article changed concurrently");
+    if (!result) throw versionConflict("article changed concurrently");
 
     await writeAudit(tx, {
       siteId,
@@ -714,9 +714,9 @@ async function applyStatusTransition(
         version: row.version + 1,
         updatedAt: new Date(),
       })
-      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId)))
+      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw conflict("article changed concurrently");
+    if (!result) throw versionConflict("article changed concurrently");
 
     await writeAudit(tx, {
       siteId,

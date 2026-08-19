@@ -152,6 +152,21 @@ export function articleAction(
   );
 }
 
+/** `scheduledAt` is required and must be in the future; the endpoint is `.strict()`. */
+export function scheduleArticle(
+  siteId: string,
+  articleId: string,
+  scheduledAt: string,
+  idempotencyKey?: string,
+): Promise<ArticleDetail> {
+  return request(
+    "POST",
+    `/v1/sites/${siteId}/articles/${articleId}/schedule`,
+    { scheduledAt },
+    idempotencyKey ? { "idempotency-key": idempotencyKey } : undefined,
+  );
+}
+
 export function getPreviewUrl(siteId: string, articleId: string): Promise<{ url: string }> {
   return request("POST", `/v1/sites/${siteId}/articles/${articleId}/preview`, {});
 }

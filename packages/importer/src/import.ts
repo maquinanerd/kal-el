@@ -207,8 +207,14 @@ export async function importBatch(
     const authorIds = authorRel.ids;
 
     const featuredMediaId = article.featuredMediaExternalId ? urlToMediaId.get(batch.media.find((m) => m.externalId === article.featuredMediaExternalId)?.url ?? "") : undefined;
+    // the source names a featured image this run could not resolve - a transient media
+    // failure, never a signal that the article should lose the one it already has
+    const featuredResolved = !article.featuredMediaExternalId || featuredMediaId !== undefined;
 
-    const document = finalizeDocument(article.intermediateNodes, urlToMediaId, report.warnings);
+    // Per-article, not a scan of batch-scoped warnings: one article losing an image
+    // must not freeze the document of every other article in the run.
+    const droppedMedia = { value: false };
+    const document = finalizeDocument(article.intermediateNodes, urlToMediaId, report.warnings, droppedMedia);
 
     if (first) {
       // Import used to be insert-only: a changed title, slug, body, status or SEO field
@@ -255,6 +261,11 @@ export async function importBatch(
         ["categories", categoryRel.complete],
         ["tags", tagRel.complete],
         ["authors", authorRel.complete],
+        ["featuredMediaId", featuredResolved],
+        // finalizeDocument DROPS image and gallery nodes whose media did not resolve.
+        // Patching that would delete images out of a live article body because a CDN
+        // was down for one run, and file the degraded version as a revision.
+        ["document", !droppedMedia.value],
       ];
       for (const [field, complete] of incomplete) {
         if (!complete && field in patch) {

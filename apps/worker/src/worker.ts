@@ -19,23 +19,40 @@ process.on("SIGTERM", () => void SHUTDOWN("SIGTERM"));
 
 console.log(`[worker] outbox dispatcher polling every ${INTERVAL_MS}ms`);
 
-async function tick() {
+/**
+ * Each job gets its own try. They shared one, so a throw escaping the dispatcher skipped
+ * scheduled publishing and the idempotency purge for that whole tick.
+ */
+async function run(label: string, job: () => Promise<void>) {
   try {
-    const summary = await processDueEvents(db);
-    if (summary.claimed > 0) {
-      console.log(`[worker] ${JSON.stringify(summary)}`);
-    }
-    const promoted = await promoteScheduledArticles(db);
-    if (promoted.promoted > 0) {
-      console.log(`[worker] scheduled publish ${JSON.stringify(promoted)}`);
-    }
-    // cheap and idempotent; keeps idempotency_keys from growing without bound
-    const purged = await purgeExpiredIdempotencyKeys(db);
-    if (purged > 0) {
-      console.log(`[worker] purged ${purged} expired idempotency keys`);
-    }
+    await job();
   } catch (err) {
-    console.error("[worker] tick failed", err);
+    console.error(`[worker] ${label} failed`, err);
+  }
+}
+
+let ticking = false;
+
+async function tick() {
+  // the poll interval is shorter than the delivery timeout, so overlapping ticks would
+  // race on the same claimed rows
+  if (ticking) return;
+  ticking = true;
+  try {
+    await run("dispatch", async () => {
+      const summary = await processDueEvents(db);
+      if (summary.claimed > 0) console.log(`[worker] ${JSON.stringify(summary)}`);
+    });
+    await run("scheduled-publish", async () => {
+      const promoted = await promoteScheduledArticles(db);
+      if (promoted.promoted > 0) console.log(`[worker] scheduled publish ${JSON.stringify(promoted)}`);
+    });
+    await run("idempotency-purge", async () => {
+      const purged = await purgeExpiredIdempotencyKeys(db);
+      if (purged > 0) console.log(`[worker] purged ${purged} expired idempotency keys`);
+    });
+  } finally {
+    ticking = false;
   }
 }
 
