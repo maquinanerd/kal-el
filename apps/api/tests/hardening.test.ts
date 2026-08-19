@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { corsOrigins, loadConfig } from "../src/config.js";
+import { corsOrigins, loadConfig, trustProxySetting } from "../src/config.js";
 import { assertSafeWebhookUrl } from "../src/services/webhooks.js";
 
 describe("production hardening", () => {
@@ -12,8 +12,9 @@ describe("production hardening", () => {
   });
 
   it("accepts a valid production config", () => {
-    const c = loadConfig({ NODE_ENV: "production", SESSION_SECRET: "strong-secret-xyz-at-least-32-chars-long", COOKIE_SECURE: "true" });
+    const c = loadConfig({ NODE_ENV: "production", SESSION_SECRET: "strong-secret-xyz-at-least-32-chars-long", COOKIE_SECURE: "true", TRUST_PROXY: "direct" });
     expect(c.COOKIE_SECURE).toBe(true);
+    expect(c.LOG_LEVEL).toBe("info");
   });
 
   it("defaults CORS origins to APP_BASE_URL and parses a custom list", () => {
@@ -44,6 +45,8 @@ describe("production hardening", () => {
       NODE_ENV: "production",
       COOKIE_SECURE: "true",
       DATABASE_URL: "postgres://u:p@localhost:5432/db",
+      // production must state a reverse-proxy policy; "direct" is the explicit "no proxy"
+      TRUST_PROXY: "direct",
     } as NodeJS.ProcessEnv;
 
     // a single character satisfied the old "not the default value" check
@@ -53,6 +56,20 @@ describe("production hardening", () => {
       loadConfig({ ...base, SESSION_SECRET: "a".repeat(32), ALLOW_PRIVATE_WEBHOOKS: "true" }),
     ).toThrow(/ALLOW_PRIVATE_WEBHOOKS/);
     expect(() => loadConfig({ ...base, SESSION_SECRET: "a".repeat(32) })).not.toThrow();
+
+    // A no-op logger in production is the gap that makes every other failure invisible.
+    expect(() => loadConfig({ ...base, SESSION_SECRET: "a".repeat(32), LOG_LEVEL: "silent" })).toThrow(/LOG_LEVEL/);
+    // Not stating the proxy policy leaves the rate limiter bucketing every user together.
+    expect(() => loadConfig({ ...base, SESSION_SECRET: "a".repeat(32), TRUST_PROXY: "false" })).toThrow(/TRUST_PROXY/);
+    // And trusting every hop makes the forwarded address client-controlled.
+    expect(() =>
+      trustProxySetting(loadConfig({ ...base, SESSION_SECRET: "a".repeat(32), TRUST_PROXY: "true" })),
+    ).toThrow(/TRUST_PROXY/);
+    expect(trustProxySetting(loadConfig({ ...base, SESSION_SECRET: "a".repeat(32), TRUST_PROXY: "1" }))).toBe(1);
+    expect(trustProxySetting(loadConfig({ ...base, SESSION_SECRET: "a".repeat(32), TRUST_PROXY: "10.0.0.0/8, 172.16.0.0/12" }))).toEqual([
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+    ]);
   });
 
   it("accepts public webhook URLs", async () => {
