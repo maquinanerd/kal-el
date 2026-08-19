@@ -13,12 +13,17 @@
     "test": "pnpm -r test",
     "test:unit": "pnpm -r test:unit",
     "test:integration": "pnpm -r test:integration",
+    "test:e2e": "pnpm --filter @kal-el/cms test:e2e",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "backup": "tsx scripts/backup.ts",
     "migrate": "pnpm --filter @kal-el/db migrate",
     "dev:site": "pnpm --filter @kal-el/design-system dev",
-    "dev:api": "tsx scripts/dev-api.ts"
+    "dev:api": "tsx scripts/dev-api.ts",
+    "start:api": "pnpm --filter @kal-el/api start",
+    "start:worker": "pnpm --filter @kal-el/worker start",
+    "start:cms": "pnpm --filter @kal-el/cms start",
+    "bootstrap": "tsx scripts/bootstrap.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",

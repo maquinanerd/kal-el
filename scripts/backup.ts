@@ -25,6 +25,11 @@ async function main(): Promise<void> {
       const parsed = JSON.parse(await readFile(file, "utf8")) as Parameters<typeof restoreBackup>[1];
       const result = await restoreBackup(db, parsed);
       console.log(`restored ${result.rows} rows across ${result.restoredTables} tables`);
+      // A snapshot taken before a migration names tables this schema no longer has. The
+      // restore skips them rather than aborting, which is only safe if it says so.
+      if (result.skippedTables.length > 0) {
+        console.warn(`skipped ${result.skippedTables.length} table(s) absent from this schema: ${result.skippedTables.join(", ")}`);
+      }
     }
   } finally {
     await pool.end();

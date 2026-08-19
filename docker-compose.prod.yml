@@ -1,9 +1,13 @@
 # Kal El production template (Contabo / Easypanel or any docker host).
 # Secrets are injected via an env file — never baked into images.
 # Usage: docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+#
+# TLS termination and the public hostnames are the reverse proxy's job. The API is
+# published on the host only so a panel-managed proxy can reach it; put it behind that
+# proxy and set TRUST_PROXY to match, or the rate limiter buckets every user together.
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: kalel
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.prod}
@@ -15,6 +19,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   api:
     build:
@@ -26,12 +31,26 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:?set in .env.prod}
       SESSION_SECRET: ${SESSION_SECRET:?set in .env.prod}
-      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?set in .env.prod}
+      # Only needed while provisioning the first owner. Remove it from the env file
+      # afterwards: the route refuses once a user exists, but there is no reason to keep
+      # a credential that creates full-permission accounts sitting in the environment.
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:-}
       COOKIE_SECURE: "true"
       RUN_MIGRATIONS: "true"
       MIGRATIONS_FOLDER: /app/drizzle
-      APP_BASE_URL: ${APP_BASE_URL}
-      API_BASE_URL: ${API_BASE_URL}
+      APP_BASE_URL: ${APP_BASE_URL:?set in .env.prod}
+      API_BASE_URL: ${API_BASE_URL:?set in .env.prod}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Required in production. One reverse proxy in front of this service is TRUST_PROXY=1;
+      # see .env.example for the other accepted forms.
+      TRUST_PROXY: ${TRUST_PROXY:?set in .env.prod}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-720}
+      SESSION_ABSOLUTE_TIMEOUT_MINUTES: ${SESSION_ABSOLUTE_TIMEOUT_MINUTES:-43200}
+      SESSION_ROTATE_MINUTES: ${SESSION_ROTATE_MINUTES:-60}
+      MEDIA_STORAGE_PROVIDER: local
+      MEDIA_LOCAL_PATH: /app/uploads
+      MEDIA_MAX_BYTES: ${MEDIA_MAX_BYTES:-26214400}
       PORT: "3001"
       HOST: "0.0.0.0"
     depends_on:
@@ -40,12 +59,17 @@ services:
     ports:
       - "3001:3001"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/v1/health"]
+      # /ready, not /health: this decides whether the container takes traffic, and a
+      # process that is up but cannot reach the database should not.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/ready"]
       interval: 15s
       timeout: 5s
       retries: 5
     volumes:
       - kalel_media:/app/uploads
+    # SIGTERM starts the drain; the container must be given long enough to finish it.
+    stop_grace_period: 30s
+    restart: unless-stopped
 
   worker:
     build:
@@ -56,10 +80,37 @@ services:
       # which defaults to "development" - it must be set explicitly, not inherited.
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:?set in .env.prod}
-      POLL_INTERVAL_MS: "1000"
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-20}
+      SCHEDULER_BATCH_SIZE: ${SCHEDULER_BATCH_SIZE:-100}
     depends_on:
       db:
         condition: service_healthy
+    # Long enough for an in-flight tick to finish: a tick killed mid-delivery leaves its
+    # claimed outbox rows locked for the full lock window.
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+  cms:
+    build:
+      context: .
+      dockerfile: apps/cms/Dockerfile
+      args:
+        # Inlined into the client bundle at build time - it is the origin the browser
+        # calls, so it must be the public API URL, not the internal service name.
+        NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:?set in .env.prod}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    stop_grace_period: 20s
+    restart: unless-stopped
 
 volumes:
   kalel_pgdata:

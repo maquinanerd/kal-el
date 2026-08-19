@@ -3,12 +3,19 @@ packages:
   - "packages/*"
 
 # pnpm 11 build approval policy.
+#
+# Every entry has to be a boolean. Four of these were previously numbered keys ('0': esbuild)
+# and two were the literal string pnpm prints when it wants an answer - "set this to true or
+# false" - so the file parsed but approved nothing, and the build scripts of every package
+# below were skipped silently on every install.
 strictDepBuilds: false
 allowBuilds:
-  '0': esbuild
-  '1': sharp
-  '2': '@node-rs/argon2'
-  '3': embedded-postgres
-  '4': '@embedded-postgres/windows-x64'
-  '@embedded-postgres/windows-x64': set this to true or false
-  esbuild: set this to true or false
+  # native Argon2id binding used for password hashing
+  "@node-rs/argon2": true
+  # embedded PostgreSQL, used only by the test kit
+  embedded-postgres: true
+  "@embedded-postgres/windows-x64": true
+  "@embedded-postgres/linux-x64": true
+  "@embedded-postgres/darwin-arm64": true
+  esbuild: true
+  sharp: true
