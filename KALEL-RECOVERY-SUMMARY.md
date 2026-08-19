@@ -223,6 +223,8 @@ Distribuição dos 139 testes: api 72 · importer 10 · fixture 4 · worker 8 ·
 
 ## 21. Pendências remanescentes
 
+*Estado em R13. Fechadas depois — ver §23.*
+
 - **P0**: nenhum.
 - **P1**: visual QA por imagem (P0/P1/P2 contra corpus PEG); axe/a11y automatizado.
 - **P2**: deprecation `maxParamLength` (cosmético); preview de imagem depende de mídia pública; webhooks sem UI (API existe).
@@ -310,3 +312,53 @@ Detalhe completo em `docs/audits/KALEL_STAGING_READINESS_AUDIT.md` §5.
 - `RECOVERY-REPORT.md` (293 KB) e `RECOVERY-DIFF.patch` (455 KB) — **mantidos fora do Git**.
   São artefatos históricos grandes e redundantes: o histórico de commits já contém o mesmo
   diff, de forma navegável. **Não foram apagados** — continuam no checkout do autor.
+
+---
+
+## 23. Depois de R13 — endurecimento e prontidão de produção
+
+R0–R13 entregaram o produto. Duas rodadas posteriores fecharam o que faltava para
+operá-lo: a auditoria de staging (`docs/audits/KALEL_STAGING_READINESS_AUDIT.md`) e esta
+rodada de implementação. O relatório corrente é `docs/FINAL-REPORT.md`; o resumo:
+
+**Fechado da auditoria de staging**
+
+| id | o que era |
+|---|---|
+| A6 | documento ilegível recuperável só por SQL direto → permissão `articles.recover` + rotas de leitura bruta e substituição controlada, com os bytes anteriores preservados como revisão antes da escrita |
+| F7 | nenhum índice atendia a consulta do agendador → índice parcial em `scheduled_at WHERE status = 'scheduled'`; eram 86.400 seq scans da tabela `articles` por dia |
+| F9 | toda ação de service token auditada com `actor_id = NULL` → identidade e rótulo estáveis por credencial, e `worker` separado de `system` |
+| F10 | `createUser` / `createSite` sem trilha → auditoria na mesma transação do insert |
+
+**Fechado dos bloqueadores de produção**
+
+| id | o que era |
+|---|---|
+| PROD-1 | `logger: false` em toda implantação → logging estruturado com redaction obrigatória; produção recusa subir com `LOG_LEVEL=silent` |
+| PROD-2 | rate limit por `req.ip` sem política de proxy → `TRUST_PROXY` obrigatório em produção, `true` recusado, service tokens contados por credencial |
+| PROD-3 | oráculo no bootstrap, sem limite dedicado → 5/min e uma única recusa idêntica para token errado, token ausente e sistema já inicializado |
+| PROD-4 | sessão sem ciclo de vida → idle e absolute timeout, rotação com janela de graça, revogação ao desabilitar conta, `logout-all` |
+
+**P2 com consequência operacional**
+
+DNS rebinding na entrega de webhook (resolve-then-connect fechado dentro do lookup do
+socket); post WordPress `future` com data passada auto-publicando na importação; namespace
+de externalId compartilhado entre tipos; backup/restore para datasets grandes e schema que
+mudou; webhooks sem UI; `allowBuilds` do pnpm com placeholders literais, que fazia todo
+build script ser ignorado silenciosamente; deprecation `maxParamLength`.
+
+**Adicionado para operar**
+
+`/health` e `/ready` (com e sem prefixo `/v1`), `/ops-status` e painel operacional no CMS,
+heartbeat do worker, graceful shutdown nos dois processos, Dockerfile do CMS, e scripts
+`start:api` / `start:worker` / `start:cms` / `bootstrap` / `test:e2e` na raiz.
+
+**Veredito atual**
+
+| | |
+|---|---|
+| P0 conhecidos | 0 |
+| P1 conhecidos | 0 |
+| Pronto para staging | SIM |
+| Código pronto para deploy de produção | SIM |
+| Deploy executado | NÃO — exige instrução humana explícita |
