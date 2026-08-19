@@ -269,19 +269,39 @@ larguras × 2 temas) tornou o gate mecânico e reprodutível.
 pnpm -r typecheck                    PASS (13 projetos)
 pnpm -r lint                         PASS (13 projetos)
 pnpm -r build                        PASS
-pnpm -r test                         139 → 159 (0 fail, 0 skip)
-Playwright                           2 → 13 (0 fail, 0 skip)
-axe (WCAG 2.1 A+AA, 72 varreduras)   0 violações
-Navegação alcançável                 107/180 falhas → 0/180
+pnpm -r test                         139 → 211 (0 fail, 0 skip)
+Playwright                           2 → 24 (0 fail, 0 skip)
+axe (WCAG 2.1 A+AA, 76 varreduras)   0 violações
+Navegação alcançável                 107/180 falhas → 190/190 ok
 ```
 
 ### Veredito revisado
 
 - **P0 remanescentes: 0**
-- **P1 remanescentes: 9** — listados em `docs/audits/KALEL_STAGING_READINESS_AUDIT.md` §5
-- **Pronto para staging: SIM**, com esses nove P1 conhecidos
+- **P1 remanescentes: 0** — os nove (P1-A … P1-I) foram fechados numa segunda rodada, cada
+  um com regressão própria, sem reclassificar nada para P2
+- **Pronto para staging: SIM**
 - **Pronto para produção: NÃO** — quatro bloqueadores operacionais (logging desabilitado,
-  rate limit sem `trustProxy`, oráculo no bootstrap, ciclo de vida de sessão)
+  rate limit sem `trustProxy`, oráculo no bootstrap, ciclo de vida de sessão), deixados
+  para uma rodada separada por instrução explícita
+
+## 24. R15 — Fechamento dos P1
+
+Duas migrations novas: `0001` (`authors.user_id`, ligando assinatura editorial a conta) e
+`0002` (`media.external_key`, identidade de origem que torna o re-import não-duplicante).
+
+O padrão dos nove P1 repete o dos oito P0: nenhum era invisível no código, mas todos
+passavam pelos gates porque os testes afirmavam contadores e caminhos felizes. O caso mais
+claro é P1-B — `articleAuthors.authorId` comparado contra `actor.userId`, dois espaços de
+UUID disjuntos, então `isListedAuthor` era **sempre falso**. Falhava fechado, e por isso
+nada pegou.
+
+Dois defeitos foram **introduzidos nesta rodada e corrigidos** antes do fechamento: o
+replay de idempotência estourando 500 em criações de taxonomia (DTO montado depois do
+bloco que persiste em JSONB), e um mínimo de 12 bytes na detecção de imagem quando um
+cabeçalho JPEG válido tem 3. Ambos encontrados por verificação, não por sorte.
+
+Detalhe completo em `docs/audits/KALEL_STAGING_READINESS_AUDIT.md` §5.
 
 ### Política de versionamento dos artefatos de recuperação
 

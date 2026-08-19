@@ -1,6 +1,6 @@
 # Kal El — Release-Readiness Report
 
-Status: **staging-ready with nine known P1; not production-ready.**
+Status: **staging-ready (P0 = 0, P1 = 0); not production-ready.**
 
 > Sections 1-N below are the record as of 2026-08-14 (branch
 > `feat/foundation-phase-1-3`). The status line above supersedes the original
@@ -176,24 +176,36 @@ existing tests asserted counters and happy paths rather than effects:
    surfaces.
 8. Dark mode was unreachable — the tokens existed, the product hardcoded light.
 
-All eight are closed with regression coverage. Nine P1 remain open and are listed
-in `docs/audits/KALEL_STAGING_READINESS_AUDIT.md` §5, along with four
-production-blocking operational gaps (logging disabled in every real deployment,
-rate limiting without `trustProxy`, a bootstrap oracle, and session lifecycle).
+All eight are closed with regression coverage.
+
+A second round then closed the nine P1 that remained (P1-A ... P1-I), each with its
+own regression: cross-site relation validation; an explicit user-to-byline link so
+ownership resolves at all; re-import that synchronizes instead of only inserting;
+retry-safe workflow transitions; machine-readable conflict codes; idempotency keys
+scoped by site with an enforced TTL; a pipeline contract reconciled against the
+runtime; the remaining editor contract items; and magic-byte verification on
+upload. Details in `docs/audits/KALEL_STAGING_READINESS_AUDIT.md` section 5.
+
+Four production-blocking operational gaps remain and were deliberately left for a
+separate round: logging disabled in every real deployment, rate limiting without
+`trustProxy`, a bootstrap oracle, and session lifecycle.
 
 ### Gates
 
 | gate | before | after |
 |---|---|---|
 | typecheck / lint / build | PASS | PASS |
-| unit + integration | 139 | 159 |
-| Playwright | 2 | 13 |
-| axe (WCAG 2.1 A+AA) | not run | 0 violations over 72 scans |
-| navigation reachable | 73/180 | 179-180/180 (harness timing) |
+| unit + integration | 139 | 211 |
+| Playwright | 2 | 24 |
+| axe (WCAG 2.1 A+AA) | not run | 0 violations over 76 scans |
+| navigation reachable | 73/180 | 190/190 |
 
 ### Not covered
 
-Browser-level E2E for media, SEO redirects, preview and the worker (all have
-strong API-level integration coverage but no UI path); Media Detail in the visual
-sweep; real screen-reader testing; 200% zoom reflow. Deployment, DNS, CDN and
-remote backup remain out of scope by instruction.
+Real screen-reader testing and 200% zoom reflow. Deployment, DNS, CDN and remote
+backup remain out of scope by instruction.
+
+Media, SEO redirects, preview and workflow now have browser-level E2E, and Media
+Detail joined the visual and accessibility sweeps - it had been skipped silently on
+every prior run because the harness looked for a link where the grid renders a
+button.

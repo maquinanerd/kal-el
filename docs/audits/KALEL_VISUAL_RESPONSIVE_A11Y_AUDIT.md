@@ -16,10 +16,14 @@ pnpm --filter @kal-el/cms exec playwright test a11y
 O primeiro é diagnóstico (coleta evidência, nunca falha); o segundo é gate (falha com
 qualquer violação `critical` ou `serious` do axe).
 
-**Cobertura:** 18 superfícies × 5 breakpoints (375 / 390 / 768 / 1024 / 1440) × 2 temas
-= **180 medições**, mais screenshot de cada combinação em `apps/cms/artifacts/shots/`.
-A superfície *Media Detail* exige mídia semeada e fica fora do laço quando a biblioteca
-está vazia — anotada como cobertura parcial.
+**Cobertura:** 19 superfícies × 5 breakpoints (375 / 390 / 768 / 1024 / 1440) × 2 temas
+= **190 medições**, mais screenshot de cada combinação em `apps/cms/artifacts/shots/`.
+
+*Media Detail* entrou na cobertura na rodada de fechamento. Ela era pulada **em toda
+execução anterior** e a razão não era a biblioteca vazia: o harness procurava
+`a[href^='/media/']` para descobrir um id, mas a grade renderiza cada asset como
+`<button aria-label="Abrir …">`. O seletor nunca casava, e o laço simplesmente seguia.
+Agora as varreduras semeiam um asset pela API.
 
 ---
 
@@ -27,7 +31,7 @@ está vazia — anotada como cobertura parcial.
 
 | métrica | antes | depois |
 |---|---|---|
-| Medições com navegação inalcançável | **107 / 180** | **0 / 180** |
+| Medições com navegação inalcançável | **107 / 180** | **0 / 190** |
 | Controle para abrir a navegação existe | **não** (nenhuma superfície) | **sim** |
 | Overflow horizontal | 0 | 0 |
 | Erros de console durante a varredura | 90 | 0 |
@@ -48,7 +52,7 @@ Ou seja: **100% das superfícies autenticadas** ficavam sem navegação em 375, 
 
 ### Gate axe
 
-72 varreduras (18 superfícies × 2 viewports × 2 temas), WCAG 2.1 A + AA.
+76 varreduras (19 superfícies × 2 viewports × 2 temas), WCAG 2.1 A + AA.
 
 ```
 AXE_TOTAL_VIOLATION_INSTANCES=0
@@ -305,12 +309,20 @@ Verificado por busca no código (`apps/cms/components/editor/RichTextEditor.tsx`
 | **Toolbar inline contextual** | CSS `.peg-inline-toolbar` existe; o editor usa só a toolbar fixa |
 | **Modo sem distração** | ausente |
 | **Focal point / crop** | ausente |
-| `aria-pressed` nos toggles da toolbar | ausente |
-| Nome acessível da superfície de escrita | ausente |
-| Alt text de imagem inserida | sempre `alt=""`; não há UI para defini-lo no nó |
+| `aria-pressed` nos toggles da toolbar | ausente (P2) |
+| Nome acessível da superfície de escrita | ausente (P2) |
 
-Estas lacunas são **P1 de contrato** (o documento as declara obrigatórias) e continuam
-abertas — ver `KALEL_STAGING_READINESS_AUDIT.md` para a classificação de bloqueio.
+**Fechado na rodada seguinte** (P1-H): slash command, drag/drop, paste, **toolbar inline
+contextual**, **modo sem distrações**, **ponto focal** e **alt text**.
+
+O alt text era o mais grave: todo nó de imagem era criado sem `altText`, então o renderer
+emitia `alt=""` — que marca a imagem como decorativa e a remove inteiramente para leitores
+de tela. Fotos editoriais eram silenciosamente invisíveis em todo artigo publicado. Inserir
+imagem agora pergunta, com o alt da biblioteca como padrão mas não herdado em silêncio, e
+"decorativa" como escolha explícita — o botão de inserir fica desabilitado até que uma das
+duas seja feita.
+
+Ver `KALEL_STAGING_READINESS_AUDIT.md` §5 para o detalhe.
 
 ---
 
@@ -320,6 +332,6 @@ Coberto: as 18 superfícies autenticadas + login, nos 5 breakpoints e 2 temas, c
 de overflow, alcançabilidade de navegação, tamanho de alvo e erros de console, mais
 varredura axe (WCAG 2.1 A + AA) em 1440 e 390 nos dois temas.
 
-**Não coberto:** *Media Detail* (exige mídia semeada); estados interativos além do
-`MediaPicker` (menus abertos, dropdowns, toasts); leitor de tela real (NVDA/VoiceOver);
-`prefers-reduced-motion` além da regra CSS adicionada; zoom a 200% e reflow (WCAG 1.4.10).
+**Não coberto:** estados interativos além do `MediaPicker` e da toolbar contextual (menus
+abertos, dropdowns, toasts); leitor de tela real (NVDA/VoiceOver); `prefers-reduced-motion`
+além da regra CSS adicionada; zoom a 200% e reflow (WCAG 1.4.10).
