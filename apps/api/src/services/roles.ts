@@ -41,6 +41,20 @@ export async function createRole(
       const [role] = await tx.insert(roles).values({ key: body.key, name: body.name, description: body.description }).returning();
       if (!role) throw new Error("createRole returned no row");
       await tx.insert(rolePermissions).values(permRows.map((p) => ({ roleId: role.id, permissionId: p.id })));
+      // inside the transaction: written against `db` and after the commit, a failing
+      // audit insert returned 500 for a role that did exist, and the retry then 409ed
+      if (actor) {
+        await writeAudit(tx, {
+          actorType: actor.kind,
+          actorId: actor.kind === "user" ? actor.actorKey.replace("user:", "") : null,
+          action: "roles.create",
+          objectType: "role",
+          objectId: role.id,
+          details: { key: body.key, permissions: body.permissions },
+          ip: actor.ip ?? null,
+          requestId: actor.requestId ?? null,
+        });
+      }
       return role.id;
     });
   } catch (err) {
@@ -48,19 +62,6 @@ export async function createRole(
       throw conflict(`role key "${body.key}" already exists`, { field: "key" });
     }
     throw err;
-  }
-
-  if (actor) {
-    await writeAudit(db, {
-      actorType: actor.kind,
-      actorId: actor.kind === "user" ? actor.actorKey.replace("user:", "") : null,
-      action: "roles.create",
-      objectType: "role",
-      objectId: roleId,
-      details: { key: body.key, permissions: body.permissions },
-      ip: actor.ip ?? null,
-      requestId: actor.requestId ?? null,
-    });
   }
 
   return listRoles(db).then((all) => all.find((r) => r.id === roleId) ?? ({} as (typeof all)[number]));
@@ -86,15 +87,41 @@ export async function getRolePermissions(db: Db, roleId: string): Promise<Set<st
   return new Set(rows.map((r) => r.key));
 }
 
-export async function assignRoleToUser(db: Db, userId: string, roleId: string, siteId: string) {
-  await db.query.roles.findFirst({ where: eq(roles.id, roleId) }).then((r) => {
-    if (!r) throw notFound("role not found");
-  });
-  await db.query.users.findFirst({ where: eq(users.id, userId) }).then((u) => {
-    if (!u) throw notFound("user not found");
-  });
+/**
+ * Grant a role on a site.
+ *
+ * This is the highest-privilege write in the product - it is how someone becomes an owner
+ * - and it left no trace at all: there was no audit call here, so a mistaken or malicious
+ * grant was invisible in the site audit log and recoverable only from the database.
+ */
+export async function assignRoleToUser(
+  db: Db,
+  userId: string,
+  roleId: string,
+  siteId: string,
+  actor?: { kind: "user" | "service" | "system"; actorKey: string; ip?: string; requestId?: string },
+) {
+  const role = await db.query.roles.findFirst({ where: eq(roles.id, roleId) });
+  if (!role) throw notFound("role not found");
+  const target = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!target) throw notFound("user not found");
   try {
-    await db.insert(userRoles).values({ userId, roleId, siteId }).onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx.insert(userRoles).values({ userId, roleId, siteId }).onConflictDoNothing();
+      if (actor) {
+        await writeAudit(tx, {
+          siteId,
+          actorType: actor.kind,
+          actorId: actor.kind === "user" ? actor.actorKey.replace("user:", "") : null,
+          action: "roles.assign",
+          objectType: "user",
+          objectId: userId,
+          details: { roleId, roleKey: role.key, targetEmail: target.email },
+          ip: actor.ip ?? null,
+          requestId: actor.requestId ?? null,
+        });
+      }
+    });
   } catch (err) {
     if (isForeignKeyViolation(err)) {
       throw badRequest("invalid user, role or site");

@@ -230,7 +230,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           }
         }
 
-        await assignRoleToUser(app.db, userId, roleId, siteId);
+        await assignRoleToUser(app.db, userId, roleId, siteId, {
+          kind: actor.kind,
+          actorKey: actor.actorKey,
+          ip: req.ip,
+          requestId: req.id,
+        });
         return reply.status(201).send({ data: { assigned: true } });
       });
 
@@ -239,9 +244,14 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       adminApp.post("/roles", { preHandler: adminGuard(app, "roles.manage") }, async (req, reply) => {
         const parsed = createRoleBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        // was hardcoded to `system:admin`, so every role creation was attributed to
+        // nobody in the one log that exists to say who did it
+        const roleActor = req.actor;
         const role = await createRole(app.db, parsed.data, {
-          kind: "system",
-          actorKey: "system:admin",
+          kind: roleActor?.kind ?? "system",
+          actorKey: roleActor?.actorKey ?? "system:admin",
+          ip: req.ip,
+          requestId: req.id,
         });
         return reply.status(201).send({ data: role });
       });
