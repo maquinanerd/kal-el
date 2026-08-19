@@ -302,6 +302,10 @@ export async function importBatch(
         await client.updateArticle(siteId, first.id, patch, String(full.version));
         report.updated.articles++;
       } catch (err) {
+        // counted, not only warned: a re-sync whose token lost `articles.update` produced
+        // 500 warnings, zero updates and `failed.articles === 0` - a clean-looking run in
+        // which nothing synchronized
+        report.failed.articles++;
         report.warnings.push(`update failed for "${article.slug}": ${err instanceof Error ? err.message : String(err)}`);
       }
       continue;

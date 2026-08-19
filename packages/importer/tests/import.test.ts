@@ -56,6 +56,8 @@ describe("WordPress import through the REST API", () => {
   let db: import("@kal-el/db").Db;
   let siteId: string;
   let client: KalElClient;
+  let ownerSession: { cookieHeader: string; csrf: string };
+  let apiBase: string;
 
   beforeAll(async () => {
     const fresh = await freshTestDb();
@@ -72,6 +74,7 @@ describe("WordPress import through the REST API", () => {
     await seedPermissions(api.db);
     await api.listen({ port: 0, host: "127.0.0.1" });
     const base = `http://127.0.0.1:${(api.server.address() as { port: number }).port}`;
+    apiBase = base;
 
     const boot = await api.inject({
       method: "POST",
@@ -84,6 +87,7 @@ describe("WordPress import through the REST API", () => {
     const login = await api.inject({ method: "POST", url: "/v1/auth/login", payload: { email: "owner@kalel.test", password: "super-secure-password-123" } });
     const cookies = login.cookies ?? [];
     const session = { cookieHeader: `ke_session=${cookies.find((c) => c.name === "ke_session")?.value ?? ""}`, csrf: cookies.find((c) => c.name === "ke_csrf")?.value ?? "" };
+    ownerSession = session;
 
     const tokenRes = await api.inject({
       method: "POST",
@@ -217,4 +221,28 @@ describe("WordPress import through the REST API", () => {
     const rc = await reconcile(client, siteId, batch, { externalKeyPrefix: "imp" });
     expect(rc.extraArticles).toEqual([]);
   });
+  it("survives an article the API refuses, and says so in the report", async () => {
+    // createArticle was the one unguarded call in the loop: a single refusal threw out of
+    // it, so every later article was skipped and the report - with all its warnings - was
+    // never returned to the caller at all.
+    const weakToken = await api.inject({
+      method: "POST",
+      url: `/v1/admin/sites/${siteId}/service-tokens`,
+      headers: { Cookie: ownerSession.cookieHeader, "x-kal-el-csrf": ownerSession.csrf },
+      // no articles.create: every article in the batch will be refused
+      payload: { name: "weak-importer", scopes: ["articles.read", "media.read", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage"] },
+    });
+    const weak = new KalElClient({ baseUrl: apiBase, token: weakToken.json().data.token as string, retries: 1 });
+
+    const batch = normalizeWordPress(readWordPressSnapshot(SNAPSHOT));
+    const fetchMedia = async () => ({ data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), mimeType: "image/jpeg" });
+
+    const report = await importBatch(weak, siteId, batch, { externalKeyPrefix: "refused", fetchMedia });
+
+    // it returns rather than throwing, and the refusals are counted, not just warned about
+    expect(report.imported.articles).toBe(0);
+    expect(report.failed.articles).toBe(2);
+    expect(report.warnings.filter((w) => w.startsWith("create failed"))).toHaveLength(2);
+  });
+
 });
