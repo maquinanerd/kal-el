@@ -91,10 +91,18 @@ function measure() {
     }
   }
 
-  // raw enum leaking into the interface
+  /**
+   * Raw workflow enum leaking into the interface.
+   *
+   * `(?<![.\w-])` excludes identifiers that legitimately END in one of these words and are
+   * meant to be technical: the webhook event names (`article.published`,
+   * `article.scheduled`) are the exact strings a subscriber receives, and audit actions
+   * like `articles.publish` are keys, not labels. Without it the check reported six hits
+   * on a screen that has no status on it at all.
+   */
   const text = document.body.innerText;
   const rawEnums = ["in_review", "blocked", "scheduled", "archived", "draft", "published"].filter((e) =>
-    new RegExp(`\\b${e}\\b`).test(text),
+    new RegExp(`(?<![.\\w-])${e}\\b`).test(text),
   );
 
   let scroll = null;

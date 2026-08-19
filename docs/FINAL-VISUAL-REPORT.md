@@ -148,9 +148,34 @@ Sources herdam shell, tokens, tabela e status sem alteração própria.
 
 ## Verificação
 
-`pnpm -r typecheck` e `pnpm -r lint` limpos nos 13 pacotes. Os 161 testes da API passam.
-A varredura visual (`apps/cms/e2e/visual-validation.mjs`) percorre 12 telas × 4 viewports
-× 2 temas medindo scroll alcançável, CTA invisível, scroll duplo e enum cru na interface.
+`pnpm -r typecheck`, `pnpm -r lint` e `pnpm -r build` limpos nos 13 pacotes. Os 161 testes
+da API passam.
+
+A varredura visual (`apps/cms/e2e/visual-validation.mjs`) roda contra o build de produção
+e percorre 13 telas × 4 viewports × 2 temas:
+
+```
+captured 78 combinations
+actually measured     : 78
+nav errors            : 0
+shell did NOT render  : 0
+invisible CTAs        : 0
+unreachable content   : 0
+double scrollbars     : 0
+```
+
+O `actually measured` existe por um motivo. Na primeira execução a varredura reportou zero
+defeitos em tudo — e todas as capturas eram, na verdade, a tela de erro do Next: um build
+de produção rodando em paralelo havia corrompido o `.next` do dev server. Zero achados
+sobre um objeto que nunca renderizou é o resultado mais perigoso possível, porque é
+indistinguível de aprovação. A varredura agora registra, por combinação, se o shell do CMS
+apareceu, calcula os contadores só sobre o que foi realmente medido, e sai com código
+diferente de zero imprimindo `SWEEP INCONCLUSIVE` quando algo não navega ou não renderiza.
+
+Uma observação sobre "enum cru": a checagem acusava seis ocorrências na tela de Webhooks.
+São `article.published` / `article.scheduled` — nomes de evento, exatamente as strings que
+um assinante recebe, não rótulos de status. O detector passou a ignorar identificadores
+que terminam nessas palavras.
 
 ---
 

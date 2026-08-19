@@ -23,3 +23,6 @@ test-results/
 playwright-report/
 apps/cms/artifacts/
 apps/cms/e2e/.auth/
+
+# visual validation output (regenerate with apps/cms/e2e/visual-validation.mjs)
+apps/cms/artifacts/

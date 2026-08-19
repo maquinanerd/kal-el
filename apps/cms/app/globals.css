@@ -814,6 +814,8 @@ a {
 .kalel-dash__list { display: flex; flex-direction: column; padding: 0; }
 .kalel-dash__row {
   display: grid;
+  /* five slots when the next action is shown; the row is declared by the modifier below
+     so the extra cell does not wrap onto a second line and double the row height */
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--peg-space-3);
@@ -833,6 +835,7 @@ a {
 .kalel-dash__author { color: var(--peg-text-tertiary); font: var(--peg-font-caption); white-space: nowrap; }
 .kalel-dash__time { color: var(--peg-text-tertiary); font: var(--peg-font-caption); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .kalel-dash__next { color: var(--peg-text-secondary); font: var(--peg-font-caption); white-space: nowrap; }
+.kalel-dash__row--next { grid-template-columns: minmax(0, 1fr) auto auto auto auto; }
 .kalel-dash__list .peg-table__muted { padding: var(--peg-space-4); }
 
 @media (max-width: 1023px) {

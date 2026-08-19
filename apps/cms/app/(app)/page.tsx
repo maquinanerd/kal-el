@@ -240,7 +240,7 @@ function ArticleQueue({
           <p className="peg-table__muted">{empty}</p>
         ) : (
           rows.map((a) => (
-            <button key={a.id} type="button" className="kalel-dash__row" onClick={() => onOpen(a.id)}>
+            <button key={a.id} type="button" className={`kalel-dash__row ${showNextAction ? "kalel-dash__row--next" : ""}`} onClick={() => onOpen(a.id)}>
               <span className="kalel-dash__title" title={a.title}>
                 {a.title || "Sem título"}
               </span>
