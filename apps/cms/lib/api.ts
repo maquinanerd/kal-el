@@ -201,7 +201,8 @@ export function scheduleArticle(
   );
 }
 
-export function getPreviewUrl(siteId: string, articleId: string): Promise<{ url: string }> {
+/** `url` is the CMS renderer a person opens; `dataUrl` is the JSON endpoint behind it. */
+export function getPreviewUrl(siteId: string, articleId: string): Promise<{ url: string; dataUrl: string }> {
   return request("POST", `/v1/sites/${siteId}/articles/${articleId}/preview`, {});
 }
 

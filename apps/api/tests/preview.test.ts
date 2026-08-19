@@ -36,10 +36,15 @@ describe("preview", () => {
       headers: { Cookie: owner.cookieHeader, "x-kal-el-csrf": owner.csrf },
     });
     expect(preview.statusCode).toBe(200);
+    // `url` is what a person opens: the CMS renderer, not the JSON endpoint. Pointing it
+    // at the API meant the preview showed the raw payload instead of the article.
     const url = preview.json().data.url as string;
-    expect(url).toContain("/v1/preview/kpv.");
+    const dataUrl = preview.json().data.dataUrl as string;
+    expect(url).toContain("/preview/kpv.");
+    expect(url).not.toContain("/v1/preview/");
+    expect(dataUrl).toContain("/v1/preview/kpv.");
 
-    const token = url.split("/v1/preview/")[1];
+    const token = dataUrl.split("/v1/preview/")[1];
     const served = await ctx.app.inject({ method: "GET", url: `/v1/preview/${token}` });
     expect(served.statusCode).toBe(200);
     expect(served.json().data.article.title).toBe("Rascunho para preview");

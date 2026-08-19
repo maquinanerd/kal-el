@@ -292,10 +292,26 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         }));
       });
 
+      /**
+       * A preview URL a person can open.
+       *
+       * This returned `API_BASE_URL/v1/preview/<token>` — the JSON endpoint. Opening it
+       * shows the raw payload, not the article, so even before the CMS lost its popup to
+       * the browser there was nothing readable at the other end. The renderer lives in
+       * the CMS (`/preview/[token]`), which fetches that same JSON endpoint server-side;
+       * the viewer URL has to point there.
+       *
+       * `dataUrl` keeps the API endpoint addressable for machine consumers.
+       */
       siteApp.post("/articles/:articleId/preview", { preHandler: guard("articles.read") }, async (req) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const token = createPreviewToken(app.config.SESSION_SECRET, siteId, articleId);
-        return { data: { url: `${app.config.API_BASE_URL}/v1/preview/${token}` } };
+        return {
+          data: {
+            url: `${app.config.APP_BASE_URL}/preview/${token}`,
+            dataUrl: `${app.config.API_BASE_URL}/v1/preview/${token}`,
+          },
+        };
       });
 
       // ---- Taxonomy ----
