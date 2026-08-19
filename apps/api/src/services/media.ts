@@ -225,11 +225,34 @@ export async function deleteMedia(db: Db, storage: StorageProvider, siteId: stri
   const existing = await db.query.media.findFirst({ where: and(eq(media.id, mediaId), eq(media.siteId, siteId)) });
   if (!existing) throw notFound("media not found");
 
-  const pattern = `%"mediaId":"${mediaId}"%`;
+  // This was a LIKE against `document::text` for `"mediaId":"<id>"`. Postgres re-serialises
+  // jsonb on output as `{"mediaId": "<id>"}` - with a space - so the pattern never matched
+  // anything, and the guard the CMS relies on (its grid deletes on one click, with no
+  // confirmation) could not fire. It also could not see galleries, whose attribute is an
+  // array called `mediaIds`, nor the social image in `seo`.
+  const inDocument = sql`(
+    jsonb_typeof(${articles.document} -> 'nodes') = 'array'
+    and exists (
+      select 1
+      from jsonb_array_elements(${articles.document} -> 'nodes') as node
+      where node -> 'attrs' ->> 'mediaId' = ${mediaId}
+         or (jsonb_typeof(node -> 'attrs' -> 'mediaIds') = 'array'
+             and (node -> 'attrs' -> 'mediaIds') @> ${JSON.stringify([mediaId])}::jsonb)
+    )
+  )`;
   const usedByArticle = await db
     .select({ id: articles.id })
     .from(articles)
-    .where(and(eq(articles.siteId, siteId), or(eq(articles.featuredMediaId, mediaId), sql`${articles.document}::text like ${pattern}`)))
+    .where(
+      and(
+        eq(articles.siteId, siteId),
+        or(
+          eq(articles.featuredMediaId, mediaId),
+          sql`${articles.seo} ->> 'socialImageMediaId' = ${mediaId}`,
+          inDocument,
+        ),
+      ),
+    )
     .limit(1);
   const usedByAuthor = await db
     .select({ id: authors.id })
@@ -240,7 +263,6 @@ export async function deleteMedia(db: Db, storage: StorageProvider, siteId: stri
     throw conflict("media is in use");
   }
 
-  await storage.delete(existing.storageKey);
   await db.transaction(async (tx) => {
     await tx.delete(media).where(and(eq(media.id, mediaId), eq(media.siteId, siteId)));
     await writeAudit(tx, {

@@ -253,6 +253,96 @@ describe("media subsystem", () => {
     expect(document.statusCode).toBe(400);
   });
 
+  it.each([
+    [
+      "an image in the article body",
+      (id: string) => ({ document: { version: 2, nodes: [{ type: "image", attrs: { mediaId: id } }] } }),
+    ],
+    [
+      "one image of a gallery",
+      (id: string) => ({ document: { version: 2, nodes: [{ type: "gallery", attrs: { mediaIds: [id] } }] } }),
+    ],
+    [
+      "the social sharing image",
+      (id: string) => ({ seo: { socialImageMediaId: id } }),
+    ],
+  ])("refuses to delete media referenced as %s", async (_label, reference) => {
+    // The body check was a LIKE for `"mediaId":"<id>"` against `document::text`. Postgres
+    // renders jsonb with a space after the colon, so it never matched anything - and it
+    // could not have seen a gallery (attribute `mediaIds`, an array) or the social image
+    // at all. The CMS grid deletes on one click with no confirmation and relies entirely
+    // on this 409.
+    const asset = (await upload(ownerSession, siteA)).json().data;
+    const created = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteA}/articles`,
+      headers: headers(ownerSession),
+      payload: { title: `Usa ${_label}`, ...reference(asset.id) },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const res = await ctx.app.inject({
+      method: "DELETE",
+      url: `/v1/sites/${siteA}/media/${asset.id}`,
+      headers: headers(ownerSession),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.message).toMatch(/in use/);
+
+    // and the bytes are still there: the delete used to unlink before the transaction
+    const still = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteA}/media/${asset.id}`,
+      headers: headers(ownerSession),
+    });
+    expect(still.statusCode).toBe(200);
+  });
+
+  it.each([
+    [
+      "an image in the article body",
+      (id: string) => ({ document: { version: 2, nodes: [{ type: "image", attrs: { mediaId: id } }] } }),
+    ],
+    [
+      "one image of a gallery",
+      (id: string) => ({ document: { version: 2, nodes: [{ type: "gallery", attrs: { mediaIds: [id] } }] } }),
+    ],
+    [
+      "the social sharing image",
+      (id: string) => ({ seo: { socialImageMediaId: id } }),
+    ],
+  ])("refuses to delete media referenced as %s", async (_label, reference) => {
+    // The body check was a LIKE for `"mediaId":"<id>"` against `document::text`. Postgres
+    // renders jsonb with a space after the colon, so it never matched anything - and it
+    // could not have seen a gallery (attribute `mediaIds`, an array) or the social image
+    // at all. The CMS grid deletes on one click with no confirmation and relies entirely
+    // on this 409.
+    const asset = (await upload(ownerSession, siteA)).json().data;
+    const created = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteA}/articles`,
+      headers: headers(ownerSession),
+      payload: { title: `Usa ${_label}`, ...reference(asset.id) },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const res = await ctx.app.inject({
+      method: "DELETE",
+      url: `/v1/sites/${siteA}/media/${asset.id}`,
+      headers: headers(ownerSession),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.message).toMatch(/in use/);
+
+    // and the bytes are still there: the delete used to unlink before the transaction
+    const still = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteA}/media/${asset.id}`,
+      headers: headers(ownerSession),
+    });
+    expect(still.statusCode).toBe(200);
+  });
+
   it("refuses to delete media that is in use and deletes unused media", async () => {
     const media = (await upload(ownerSession, siteA)).json().data;
     await ctx.app.inject({
