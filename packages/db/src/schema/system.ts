@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { sites } from "./sites";
 
@@ -7,8 +7,29 @@ export const auditLog = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     siteId: uuid("site_id").references(() => sites.id, { onDelete: "set null" }),
-    actorType: text("actor_type", { enum: ["user", "service", "system"] }).notNull(),
+    /**
+     * `worker` separated from `system`: both are unattended, but `system` is provisioning
+     * (bootstrap, seeding) and `worker` is the background process acting on editorial
+     * state. An operator reading the log needs to tell "the platform did this at install
+     * time" from "the scheduler did this at 03:00".
+     */
+    actorType: text("actor_type", { enum: ["user", "service", "system", "worker"] }).notNull(),
+    /**
+     * `users.id` for a session actor, `service_tokens.id` for a token actor, null for
+     * system/worker. Deliberately not a foreign key: an audit row must outlive the
+     * credential it records, and pointing at two different tables rules one out anyway.
+     */
     actorId: uuid("actor_id"),
+    /**
+     * Human-readable name of the actor as it was at the time of the action.
+     *
+     * Every service-token action was written with `actor_id = NULL`, so a site with three
+     * integrations could not say which credential did what. Resolving the id at read time
+     * is not enough either: a revoked and deleted token would leave the row unreadable,
+     * and the CMS would have to join two tables to render one column. The label is copied
+     * in - "Pipeline MN26", "Importer X" - and never carries the secret or its hash.
+     */
+    actorLabel: text("actor_label"),
     action: text("action").notNull(),
     objectType: text("object_type").notNull(),
     objectId: uuid("object_id"),
@@ -20,8 +41,23 @@ export const auditLog = pgTable(
   (t) => [
     index("audit_log_site_created_idx").on(t.siteId, t.createdAt),
     index("audit_log_object_idx").on(t.objectType, t.objectId),
+    // "what has this integration been doing" is the question F9 exists to answer
+    index("audit_log_actor_idx").on(t.actorType, t.actorId, t.createdAt),
   ],
 );
+
+/**
+ * Liveness of each background process, for the operational status surface.
+ *
+ * One row per worker role, rewritten on every tick. Without it the CMS could report the
+ * outbox backlog but not whether anything was draining it - a stopped worker and an empty
+ * queue look identical from the API side.
+ */
+export const workerHeartbeats = pgTable("worker_heartbeats", {
+  id: text("id").primaryKey(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  details: jsonb("details").$type<Record<string, unknown>>(),
+});
 
 export const outboxEvents = pgTable(
   "outbox_events",
@@ -90,6 +126,13 @@ export const webhooks = pgTable(
     url: text("url").notNull(),
     events: jsonb("events").$type<string[]>().notNull(),
     secret: text("secret").notNull(),
+    /** Optional operator-facing name, so the admin list is not a column of URLs. */
+    description: text("description"),
+    /**
+     * Pausing a subscriber had to be done by deleting it, which loses the signing secret
+     * and every subscriber has to be reconfigured on the other end to restore it.
+     */
+    enabled: boolean("enabled").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -88,6 +88,14 @@ export const sessions = pgTable(
     ip: text("ip"),
     userAgent: text("user_agent"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    /**
+     * When this session's token was last replaced.
+     *
+     * The token is a long-lived bearer credential; rotating it periodically bounds how
+     * long a copy taken from a shared machine or a proxy log stays usable. Distinct from
+     * `createdAt`, which anchors the absolute timeout and must not move.
+     */
+    rotatedAt: timestamp("rotated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("sessions_token_hash_unique").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],

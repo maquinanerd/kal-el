@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { ArticleDocument, ArticleStatus, ArticleType, Provenance, SeoMetadata } from "@kal-el/contracts";
 
@@ -156,6 +157,20 @@ export const articles = pgTable(
     uniqueIndex("articles_site_external_key_unique").on(t.siteId, t.externalKey),
     index("articles_site_status_idx").on(t.siteId, t.status),
     index("articles_site_updated_idx").on(t.siteId, t.updatedAt),
+    /**
+     * The scheduler's due query is `status = 'scheduled' AND scheduled_at <= now()`
+     * ordered by `scheduled_at`, and it is cross-tenant - there is no `site_id` in it.
+     * `articles_site_status_idx` leads with `site_id`, so it cannot serve that query at
+     * all: with POLL_INTERVAL_MS=1000 the worker ran 86,400 sequential scans of the whole
+     * articles table per day.
+     *
+     * Partial, because `scheduled` is a vanishing fraction of rows in a real archive - the
+     * index stays small enough to sit in cache, and the ordering it provides is the exact
+     * ordering the query asks for, so the plan is an index scan with no sort.
+     */
+    index("articles_scheduled_due_idx")
+      .on(t.scheduledAt)
+      .where(sql`${t.status} = 'scheduled'`),
   ],
 );
 

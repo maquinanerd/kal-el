@@ -14,7 +14,7 @@ import {
   tags,
 } from "./editorial";
 import { media } from "./media";
-import { auditLog, idempotencyKeys, outboxEvents, redirects, webhookDeliveries, webhooks } from "./system";
+import { auditLog, idempotencyKeys, outboxEvents, redirects, webhookDeliveries, webhooks, workerHeartbeats } from "./system";
 
 export { sites };
 export { users, roles, permissions, rolePermissions, userRoles, sessions, serviceTokens };
@@ -32,7 +32,7 @@ export {
   tags,
 };
 export { media };
-export { auditLog, idempotencyKeys, outboxEvents, redirects, webhookDeliveries, webhooks };
+export { auditLog, idempotencyKeys, outboxEvents, redirects, webhookDeliveries, webhooks, workerHeartbeats };
 
 export const schema = {
   sites,
@@ -61,4 +61,5 @@ export const schema = {
   redirects,
   webhookDeliveries,
   webhooks,
+  workerHeartbeats,
 };
