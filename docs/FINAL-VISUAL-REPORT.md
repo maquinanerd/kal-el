@@ -179,6 +179,39 @@ que terminam nessas palavras.
 
 ---
 
+## Ambiente local
+
+```bash
+node packages/testkit/dev-db.mjs                 # PostgreSQL local na 55432
+set -a && . ./.env && set +a && pnpm dev:api     # API   http://localhost:3001
+set -a && . ./.env && set +a && pnpm --filter @kal-el/worker dev
+NEXT_PUBLIC_API_BASE_URL=http://localhost:3001 pnpm --filter @kal-el/cms dev   # CMS 3000
+```
+
+Login: `owner@kalel.dev` / `kalel-dev-password-1`.
+
+**Não rode `next build` com o `next dev` no ar.** Os dois compartilham `apps/cms/.next` e
+o build corrompe o dev server em execução — foi o que invalidou a primeira varredura
+visual.
+
+### Dados do product review
+
+Os resíduos do revisor (artigo "Teste Editorial Kal El" agendado para 15/09/2026, e a
+categoria/tag/autor criados junto) **não estão mais no banco**. Eles foram removidos como
+efeito colateral de uma execução da suíte de testes com `DATABASE_URL` apontando para o
+banco local — o harness derruba e recria o schema `public`. Isso era permitido para
+exatamente este banco (`postgresql://kalel:kalel@localhost:55432/kalel`, smoke local), mas
+aconteceu por acidente, não por limpeza deliberada.
+
+O defeito latente que permitiu isso foi corrigido: `freshTestDb` derrubava só o schema
+`public` e deixava a tabela de controle de migrations, no schema `drizzle`, afirmando que
+tudo já estava aplicado — o banco ficava vazio e a suíte inteira falhava com 42P01. Agora
+derruba os dois.
+
+O banco atual tem um dataset de smoke coerente: 10 artigos cobrindo os seis estados, 4
+categorias, 8 tags, 3 autores, o site com domínio `maquinanerd.com.br` e os cinco papéis
+padrão.
+
 ## Evolução de produto que continua aberta
 
 Coleções de mídia, usage tracking, author platform, busca global, bulk actions, saved
