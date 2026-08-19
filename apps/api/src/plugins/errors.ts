@@ -19,6 +19,20 @@ export const notFound = (message = "not found") =>
   new ApiHttpError(404, API_ERROR_CODES.NOT_FOUND, message);
 export const conflict = (message: string, details?: Record<string, unknown>) =>
   new ApiHttpError(409, API_ERROR_CODES.CONFLICT, message, details);
+
+/**
+ * 409s that an integrator must be able to branch on.
+ *
+ * These were previously thrown as a bare `CONFLICT` with the real code buried in
+ * `details`, so a client could not tell a version clash from a slug clash from an
+ * idempotency replay - all three arrived as `code: "CONFLICT"`.
+ */
+export const versionConflict = (message: string, details?: Record<string, unknown>) =>
+  new ApiHttpError(409, API_ERROR_CODES.VERSION_CONFLICT, message, details);
+export const idempotencyReplay = (message: string, details?: Record<string, unknown>) =>
+  new ApiHttpError(409, API_ERROR_CODES.IDEMPOTENCY_REPLAY, message, details);
+export const invalidTransition = (message: string, details?: Record<string, unknown>) =>
+  new ApiHttpError(409, API_ERROR_CODES.INVALID_TRANSITION, message, details);
 export const forbidden = (message = "forbidden", details?: Record<string, unknown>) =>
   new ApiHttpError(403, API_ERROR_CODES.FORBIDDEN, message, details);
 export const unauthorized = (message = "unauthenticated") =>

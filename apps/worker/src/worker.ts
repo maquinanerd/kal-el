@@ -2,6 +2,7 @@ import { loadConfig } from "./config.js";
 import { createDb, createPool } from "@kal-el/db";
 import { processDueEvents } from "./dispatcher.js";
 import { promoteScheduledArticles } from "./scheduler.js";
+import { purgeExpiredIdempotencyKeys } from "./maintenance.js";
 
 const config = loadConfig();
 const pool = createPool(config.DATABASE_URL);
@@ -27,6 +28,11 @@ async function tick() {
     const promoted = await promoteScheduledArticles(db);
     if (promoted.promoted > 0) {
       console.log(`[worker] scheduled publish ${JSON.stringify(promoted)}`);
+    }
+    // cheap and idempotent; keeps idempotency_keys from growing without bound
+    const purged = await purgeExpiredIdempotencyKeys(db);
+    if (purged > 0) {
+      console.log(`[worker] purged ${purged} expired idempotency keys`);
     }
   } catch (err) {
     console.error("[worker] tick failed", err);

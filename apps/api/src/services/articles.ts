@@ -16,7 +16,7 @@ import {
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
 
-import { badRequest, conflict, forbidden, notFound } from "../plugins/errors.js";
+import { badRequest, conflict, forbidden, invalidTransition, notFound, versionConflict } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import { upsertSlugRedirect } from "./redirects.js";
 import { assertMediaInSite, collectDocumentMediaIds } from "./media.js";
@@ -44,7 +44,7 @@ const WORKFLOW_TRANSITIONS: Record<ArticleStatus, ArticleStatus[]> = {
 function assertTransition(from: ArticleStatus, to: ArticleStatus): void {
   const allowed = WORKFLOW_TRANSITIONS[from] ?? [];
   if (!allowed.includes(to)) {
-    throw conflict(`cannot transition article from "${from}" to "${to}"`);
+    throw invalidTransition(`cannot transition article from "${from}" to "${to}"`, { from, to });
   }
 }
 
@@ -373,10 +373,9 @@ export async function updateArticle(
   }
 
   if (expectedVersion !== undefined && row.version !== expectedVersion) {
-    throw conflict("version mismatch: the article was modified by another actor", {
+    throw versionConflict("version mismatch: the article was modified by another actor", {
       currentVersion: row.version,
       expectedVersion,
-      code: "VERSION_CONFLICT",
     });
   }
 
@@ -674,6 +673,16 @@ async function applyStatusTransition(
     where: and(eq(articles.id, articleId), eq(articles.siteId, siteId)),
   });
   if (!row) throw notFound("article not found");
+
+  // Retry safety: an external pipeline whose response was lost re-sends the same
+  // transition. Re-applying it must be a no-op that returns the current article, not a
+  // 409 "cannot transition from in_review to in_review" - the write already succeeded,
+  // and reporting a hard failure for it makes the caller undo work that is correct.
+  // `publishArticle` already had this early return; every other transition 409'd.
+  if (row.status === to) {
+    return articleDto(db, row);
+  }
+
   assertTransition(row.status, to);
 
   const updatedBy = actorUserId(actor);

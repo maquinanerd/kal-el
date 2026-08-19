@@ -27,7 +27,7 @@ import {
 import { permissionDenied } from "../auth-context.js";
 import { badRequest, notFound } from "../plugins/errors.js";
 import { requireSiteScope } from "../plugins/auth.js";
-import { idempotencyRequestHash, respondIdempotent, withIdempotency } from "../plugins/idempotency.js";
+import { idempotencyRequestHash, idempotencyScope, respondIdempotent, respondIdempotentValue, withIdempotency } from "../plugins/idempotency.js";
 import {
   approveArticle,
   archiveArticle,
@@ -116,7 +116,7 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
           if (!parsedKey.success) throw badRequest("invalid Idempotency-Key header");
           const result = await withIdempotency(app.db, {
             key: parsedKey.data,
-            actorKey: actor.actorKey,
+            actorKey: idempotencyScope(actor.actorKey, siteId),
             requestHash: idempotencyRequestHash(req),
             run: async (tx) => {
               const { article, created } = await createArticle(tx as unknown as Db, siteId, actor, parsed.data);
@@ -165,58 +165,84 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         return { data: await listRevisions(app.db, siteId, articleId) };
       });
 
-      siteApp.post("/articles/:articleId/publish", { preHandler: guard("articles.publish") }, async (req) => {
+      siteApp.post("/articles/:articleId/publish", { preHandler: guard("articles.publish") }, async (req, reply) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const article = await publishArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note);
-        return { data: article };
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: { data: await publishArticle(tx as unknown as Db, siteId, articleId, actor, parsed.data.note) },
+        }));
       });
 
-      siteApp.post("/articles/:articleId/schedule", { preHandler: guard("articles.schedule") }, async (req) => {
+      siteApp.post("/articles/:articleId/schedule", { preHandler: guard("articles.schedule") }, async (req, reply) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const parsed = scheduleArticleBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         const scheduledAt = new Date(parsed.data.scheduledAt);
         if (Number.isNaN(scheduledAt.getTime())) throw badRequest("invalid scheduledAt");
-        const article = await scheduleArticle(app.db, siteId, articleId, scheduledAt, req.actor as ActorRef, parsed.data.note);
-        return { data: article };
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: { data: await scheduleArticle(tx as unknown as Db, siteId, articleId, scheduledAt, actor, parsed.data.note) },
+        }));
       });
 
       // ---- Editorial workflow ----
-      siteApp.post("/articles/:articleId/submit", { preHandler: guard("articles.submit") }, async (req) => {
+      siteApp.post("/articles/:articleId/submit", { preHandler: guard("articles.submit") }, async (req, reply) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        return { data: await submitArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: { data: await submitArticle(tx as unknown as Db, siteId, articleId, actor, parsed.data.note) },
+        }));
       });
 
-      siteApp.post("/articles/:articleId/approve", { preHandler: guard("articles.approve") }, async (req) => {
+      siteApp.post("/articles/:articleId/approve", { preHandler: guard("articles.approve") }, async (req, reply) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        return { data: await approveArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: { data: await approveArticle(tx as unknown as Db, siteId, articleId, actor, parsed.data.note) },
+        }));
       });
 
-      siteApp.post("/articles/:articleId/reject", { preHandler: guard("articles.approve") }, async (req) => {
+      siteApp.post("/articles/:articleId/reject", { preHandler: guard("articles.approve") }, async (req, reply) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        return { data: await rejectArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: { data: await rejectArticle(tx as unknown as Db, siteId, articleId, actor, parsed.data.note) },
+        }));
       });
 
-      siteApp.post("/articles/:articleId/unpublish", { preHandler: guard("articles.publish") }, async (req) => {
+      siteApp.post("/articles/:articleId/unpublish", { preHandler: guard("articles.publish") }, async (req, reply) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        return { data: await unpublishArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: { data: await unpublishArticle(tx as unknown as Db, siteId, articleId, actor, parsed.data.note) },
+        }));
       });
 
-      siteApp.post("/articles/:articleId/archive", { preHandler: guard("articles.publish") }, async (req) => {
+      siteApp.post("/articles/:articleId/archive", { preHandler: guard("articles.publish") }, async (req, reply) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const parsed = publishArticleBodySchema.safeParse(req.body ?? {});
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        return { data: await archiveArticle(app.db, siteId, articleId, req.actor as ActorRef, parsed.data.note) };
+        const actor = req.actor as ActorRef;
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: { data: await archiveArticle(tx as unknown as Db, siteId, articleId, actor, parsed.data.note) },
+        }));
       });
 
       siteApp.post("/articles/:articleId/preview", { preHandler: guard("articles.read") }, async (req) => {
@@ -234,7 +260,10 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const siteId = (req.params as { siteId: string }).siteId;
         const parsed = createCategoryBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const row = await createCategory(app.db, siteId, req.actor as ActorRef, parsed.data);
+        const actor = req.actor as ActorRef;
+        const row = await respondIdempotentValue(app.db, req, actor.actorKey, (tx) =>
+          createCategory(tx as unknown as Db, siteId, actor, parsed.data),
+        );
         return reply.status(201).send({
           data: {
             id: row.id,
@@ -257,7 +286,10 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const siteId = (req.params as { siteId: string }).siteId;
         const parsed = createTagBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const row = await createTag(app.db, siteId, req.actor as ActorRef, parsed.data);
+        const actor = req.actor as ActorRef;
+        const row = await respondIdempotentValue(app.db, req, actor.actorKey, (tx) =>
+          createTag(tx as unknown as Db, siteId, actor, parsed.data),
+        );
         return reply.status(201).send({
           data: {
             id: row.id,
@@ -294,7 +326,10 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const siteId = (req.params as { siteId: string }).siteId;
         const parsed = createAuthorBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
-        const row = await createAuthor(app.db, siteId, req.actor as ActorRef, parsed.data);
+        const actor = req.actor as ActorRef;
+        const row = await respondIdempotentValue(app.db, req, actor.actorKey, (tx) =>
+          createAuthor(tx as unknown as Db, siteId, actor, parsed.data),
+        );
         return reply.status(201).send({
           data: {
             id: row.id,

@@ -8,7 +8,12 @@ export const API_ERROR_CODES = {
   CONFLICT: "CONFLICT",
   SITE_SCOPE_MISMATCH: "SITE_SCOPE_MISMATCH",
   RATE_LIMITED: "RATE_LIMITED",
+  /** Same Idempotency-Key replayed with a different request. */
   IDEMPOTENCY_REPLAY: "IDEMPOTENCY_REPLAY",
+  /** `If-Match` did not match the article's current version. */
+  VERSION_CONFLICT: "VERSION_CONFLICT",
+  /** The requested workflow transition is not legal from the current status. */
+  INVALID_TRANSITION: "INVALID_TRANSITION",
   INTERNAL: "INTERNAL_ERROR",
   UNSUPPORTED: "UNSUPPORTED_MEDIA_TYPE",
   PAYLOAD_TOO_LARGE: "PAYLOAD_TOO_LARGE",

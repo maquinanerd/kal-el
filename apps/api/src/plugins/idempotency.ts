@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { idempotencyKeys } from "@kal-el/db/schema";
 import type { FastifyRequest } from "fastify";
 
-import { badRequest, conflict } from "./errors.js";
+import { badRequest, conflict, idempotencyReplay } from "./errors.js";
 import { idempotencyKeySchema } from "@kal-el/contracts";
 
-const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Canonical JSON: object keys sorted, so a retry that re-serialises the same payload in a
@@ -23,6 +23,25 @@ export function idempotencyRequestHash(req: FastifyRequest): string {
   return createHash("sha256")
     .update(`${req.method}\n${req.url}\n${canonical(req.body ?? {})}`)
     .digest("hex");
+}
+
+/**
+ * Identity of an idempotency record.
+ *
+ * Scoped by actor AND site. Scoping by actor alone meant the same key aimed at two
+ * different sites collided: the stored `requestHash` embeds the URL (which carries the
+ * siteId), so the second site got a 409 "reused with a different request" for a
+ * legitimately different write. Service tokens were accidentally safe because a token is
+ * pinned to one site - so the guarantee silently changed shape with the credential type.
+ */
+export function idempotencyScope(actorKey: string, siteId?: string): string {
+  return siteId ? `${actorKey}@site:${siteId}` : actorKey;
+}
+
+/** siteId from a `/v1/sites/:siteId/...` route, when there is one. */
+function siteOf(req: FastifyRequest): string | undefined {
+  const p = req.params as { siteId?: string } | undefined;
+  return typeof p?.siteId === "string" ? p.siteId : undefined;
 }
 
 /**
@@ -50,21 +69,33 @@ export async function withIdempotency(
   const lockKey = `${actorKey}:${key}`;
   return db.transaction(async (innerTx) => {
     await innerTx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+    // An expired record must behave as if it were absent: the TTL was written but never
+    // compared, so a key reused months later replayed a stale response body forever.
     const existing = await innerTx
       .select()
       .from(idempotencyKeys)
-      .where(and(eq(idempotencyKeys.key, key), eq(idempotencyKeys.actorKey, actorKey)));
+      .where(
+        and(
+          eq(idempotencyKeys.key, key),
+          eq(idempotencyKeys.actorKey, actorKey),
+          gt(idempotencyKeys.expiresAt, new Date()),
+        ),
+      );
 
     if (existing.length > 0) {
       const row = existing[0];
       if (!row) throw conflict("idempotency state unavailable");
       if (row.requestHash !== requestHash) {
-        throw conflict("idempotency key reused with a different request", { code: "IDEMPOTENCY_REPLAY" });
+        throw idempotencyReplay("idempotency key reused with a different request");
       }
       return { status: row.responseStatus, body: row.responseBody, replay: true };
     }
 
     const { status, body } = await opts.run(innerTx);
+    // clear any expired row for this identity before re-inserting (unique on key+actor)
+    await innerTx
+      .delete(idempotencyKeys)
+      .where(and(eq(idempotencyKeys.key, key), eq(idempotencyKeys.actorKey, actorKey)));
     await innerTx.insert(idempotencyKeys).values({
       key,
       actorKey,
@@ -99,10 +130,34 @@ export async function respondIdempotent(
   if (!parsed.success) throw badRequest("invalid Idempotency-Key header");
   const result = await withIdempotency(db, {
     key: parsed.data,
-    actorKey,
+    actorKey: idempotencyScope(actorKey, siteOf(req)),
     requestHash: idempotencyRequestHash(req),
     run,
   });
   return reply.status(result.status).send(result.body);
+}
+
+/**
+ * Same contract as `respondIdempotent`, but returns the produced value instead of
+ * sending it - for handlers that shape their own DTO after the write.
+ */
+export async function respondIdempotentValue<T>(
+  db: { transaction: <R>(cb: (tx: any) => Promise<R>) => Promise<R> },
+  req: FastifyRequest,
+  actorKey: string,
+  run: (tx: any) => Promise<T>,
+): Promise<T> {
+  const raw = req.headers["idempotency-key"];
+  if (typeof raw !== "string" || raw.length === 0) return run(db);
+
+  const parsed = idempotencyKeySchema.safeParse(raw);
+  if (!parsed.success) throw badRequest("invalid Idempotency-Key header");
+  const result = await withIdempotency(db, {
+    key: parsed.data,
+    actorKey: idempotencyScope(actorKey, siteOf(req)),
+    requestHash: idempotencyRequestHash(req),
+    run: async (tx) => ({ status: 200, body: await run(tx) }),
+  });
+  return result.body as T;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
