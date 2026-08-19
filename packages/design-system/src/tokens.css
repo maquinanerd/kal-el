@@ -1,44 +1,88 @@
-:root {
-  --peg-canvas: #fafafa;
-  --peg-surface: #ffffff;
-  --peg-surface-subtle: #f7f7f8;
-  --peg-surface-muted: #f2f2f3;
-  --peg-border: #e5e5e7;
-  /* Control boundaries need 3:1 (WCAG 1.4.11). #d5d5d8 measured 1.46:1 on white,
-     which made unchecked checkboxes and input outlines effectively invisible. */
-  --peg-border-strong: #949499;
-  --peg-text-primary: #171719;
-  --peg-text-secondary: #5f6065;
-  /* 4.62:1 on surface-muted (#f2f2f3), the darkest surface it sits on. The previous
-     #8e8f94 measured 2.88-3.23:1 and is used for 11-13px text everywhere. */
-  --peg-text-tertiary: #6e6f74;
-  --peg-text-disabled: #b6b7bb;
+/* ══════════════════════════════════════════════════════════════════════════
+   PEG / KAL EL — design tokens
 
-  --peg-success: #16a34a;
-  --peg-warning: #d97706;
-  --peg-danger: #dc2626;
+   Source of truth: design-system/references/kal-el-final/tokens/kal-el-tokens.css
+   (the calibrated Kal El package, 19 Aug 2026). The `--peg-*` names are kept
+   because the whole product consumes them; the VALUES are the Kal El ones.
+
+   ACCENT RULE (obligatory, PEG):
+   The accent identifies the product — brand mark, active-nav indicator, active
+   tab underline, selection and editorial text highlight. It does NOT paint large
+   surfaces, does NOT replace the semantic colours, and does NOT take over the
+   primary button, which stays ink (`--peg-ink`).
+
+   TWO DELIBERATE DEVIATIONS from the package, both for WCAG (the CMS ships an
+   axe gate where contrast is a `serious` violation). Both stay inside Kal El's
+   warm neutral family rather than reverting to the old cool greys:
+     · text-tertiary   #8B8D86 → #6B6E65   (2.95:1 → 4.56:1 on surface-muted)
+     · border-strong   #C7C7C7 → #8B8E86   (1.69:1 → 3.33:1 on surface; 1.4.11)
+   #C7C7C7 is preserved as `--peg-rule` for decorative hairlines that carry no
+   information, which is where the package actually uses it.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Product accent ─────────────────────────────────────────────── */
+  --peg-accent: #bf5252;
+  --peg-accent-strong: #b51b1b;
+  --peg-accent-hover: #a94a4a;
+  --peg-accent-wash: #f6e2e2; /* editorial text highlight */
+  --peg-accent-soft: rgba(191, 82, 82, 0.1);
+
+  /* ── Surfaces ───────────────────────────────────────────────────── */
+  --peg-canvas: #fcfcfc;
+  --peg-surface: #ffffff;
+  --peg-surface-subtle: #f7f7f6; /* sidebar */
+  --peg-surface-inspector: #fafaf9; /* right rail */
+  --peg-surface-muted: #f0f0f0;
+  --peg-surface-selected: #e8e8e6; /* active nav item */
+
+  /* ── Lines ──────────────────────────────────────────────────────── */
+  --peg-border: #e2e2e0; /* cards, rules */
+  --peg-border-strong: #8b8e86; /* interactive control boundaries (3:1) */
+  --peg-rule: #c7c7c7; /* decorative hairline, breadcrumb chevron */
+  --peg-divider: #d9d9d6; /* ALWAYS rendered 1px dotted */
+
+  /* ── Text ───────────────────────────────────────────────────────── */
+  --peg-ink: #2f332b; /* primary text AND primary button */
+  --peg-text-primary: #2f332b;
+  --peg-text-body: #3c4038; /* article body */
+  --peg-text-strong: #4e5249; /* secondary button label */
+  --peg-text-secondary: #5e6159;
+  --peg-text-tertiary: #6b6e65;
+  --peg-text-nav-label: #6b6e65; /* micro-caps section label */
+  --peg-text-disabled: #b3b5af;
+  --peg-text-on-ink: #ffffff; /* label on the ink primary button */
+
+  /* ── Semantic (independent of the accent) ───────────────────────── */
+  --peg-success: #15803d;
+  --peg-warning: #b45309;
+  --peg-danger: #b91c1c;
   --peg-info: #2563eb;
 
-  /* Badge foregrounds sit on a 10-12% tint of their own colour, where the base semantic
-     value measures 2.8-4.1:1. These are darkened to clear 4.5:1 on that tint. */
+  --peg-success-bg: #f0fdf4;
+  --peg-success-bd: #bbf7d0;
+  --peg-warning-bg: #fffbeb;
+  --peg-warning-bd: #fde68a;
+  --peg-danger-bg: #fef2f2;
+  --peg-danger-bd: #fecaca;
+  --peg-info-bg: #eef3fd;
+  --peg-info-bd: #c7d7f7;
+
+  /* Badge foregrounds sit on a tint of their own colour and are darkened to
+     clear 4.5:1 against that tint. */
   --peg-badge-success-fg: #166534;
   --peg-badge-warning-fg: #92400e;
   --peg-badge-danger-fg: #991b1b;
   --peg-badge-info-fg: #1e40af;
 
-  /* Kal El product accent (editorial red, used with moderation) */
-  --peg-accent: #c8102e;
-  --peg-accent-hover: #b00d29;
-  --peg-accent-soft: rgba(200, 16, 46, 0.08);
+  /* ── Focus ──────────────────────────────────────────────────────── */
+  --peg-focus: #2f332b;
+  --peg-focus-ring: 0 0 0 3px rgba(47, 51, 43, 0.12);
+  --peg-focus-ring-danger: 0 0 0 3px rgba(185, 28, 28, 0.1);
 
-  /* Solid outer ring: at 45% alpha the composited colour measured 1.6-2.0:1 against
-     the surface, under the 3:1 required for a focus indicator. */
-  --peg-focus: #1d4ed8;
-  --peg-focus-ring: 0 0 0 2px var(--peg-surface), 0 0 0 4px var(--peg-focus);
-
-  /* System-first sans stack: no external font dependency, consistent everywhere */
-  --peg-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-  --peg-font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Roboto Mono", monospace;
+  /* ── Typography ─────────────────────────────────────────────────── */
+  --peg-font-sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --peg-font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 
   /* Valid font shorthand: <weight> <size>/<line-height> <family> */
   --peg-font-display: 600 48px/56px var(--peg-font-sans);
@@ -46,13 +90,19 @@
   --peg-font-h2: 600 30px/38px var(--peg-font-sans);
   --peg-font-h3: 600 24px/32px var(--peg-font-sans);
   --peg-font-h4: 600 18px/26px var(--peg-font-sans);
+  --peg-font-dek: 400 18px/28px var(--peg-font-sans);
+  --peg-font-quote: 500 20px/30px var(--peg-font-sans);
+  --peg-font-read: 400 16px/27px var(--peg-font-sans); /* article body */
   --peg-font-body-lg: 400 16px/24px var(--peg-font-sans);
   --peg-font-body: 400 14px/21px var(--peg-font-sans);
+  --peg-font-nav: 500 13.5px/20px var(--peg-font-sans);
   --peg-font-body-sm: 400 13px/19px var(--peg-font-sans);
   --peg-font-label: 500 13px/18px var(--peg-font-sans);
+  --peg-font-label-strong: 600 13px/18px var(--peg-font-sans);
   --peg-font-caption: 400 12px/17px var(--peg-font-sans);
-  --peg-font-micro: 500 11px/16px var(--peg-font-sans);
+  --peg-font-micro: 600 11px/16px var(--peg-font-sans);
 
+  /* ── Spacing ────────────────────────────────────────────────────── */
   --peg-space-1: 4px;
   --peg-space-2: 8px;
   --peg-space-3: 12px;
@@ -64,61 +114,102 @@
   --peg-space-12: 48px;
   --peg-space-16: 64px;
 
+  /* ── Radius: 12 for surfaces, 8 for controls ────────────────────── */
   --peg-radius-xs: 4px;
-  --peg-radius-sm: 6px;
-  --peg-radius-md: 8px;
-  --peg-radius-lg: 12px;
-  --peg-radius-xl: 16px;
+  --peg-radius-sm: 6px; /* nav item, badge, chip */
+  --peg-radius-md: 8px; /* control */
+  --peg-radius-lg: 12px; /* card / surface */
+  --peg-radius-xl: 14px;
 
-  --peg-shadow-1: 0 1px 2px rgba(23, 23, 25, 0.06), 0 2px 8px rgba(23, 23, 25, 0.06);
-  --peg-shadow-2: 0 4px 12px rgba(23, 23, 25, 0.1), 0 1px 3px rgba(23, 23, 25, 0.08);
-  --peg-shadow-3: 0 8px 28px rgba(23, 23, 25, 0.16), 0 2px 6px rgba(23, 23, 25, 0.08);
-
+  /* ── Control heights ────────────────────────────────────────────── */
   --peg-control-xs: 28px;
   --peg-control-sm: 32px;
   --peg-control-md: 36px;
   --peg-control-lg: 40px;
+  --peg-touch: 44px; /* mobile minimum */
 
-  --peg-sidebar-width: 240px;
-  --peg-rail-width: 64px;
+  /* ── Layout ─────────────────────────────────────────────────────── */
+  --peg-sidebar-width: 248px;
+  --peg-rail-width: 60px;
   --peg-topbar-height: 52px;
   --peg-inspector-width: 336px;
-  --peg-editor-width: 840px;
-  --peg-table-row-height: 52px;
+  --peg-editor-width: 820px;
+  --peg-table-head-height: 38px;
+  --peg-table-row-height: 44px;
+  --peg-table-row-avatar: 48px;
+  --peg-page-pad: 24px;
+
+  /* ── Elevation: cards use border, never shadow ──────────────────── */
+  --peg-shadow-0: none;
+  --peg-shadow-1: 0 1px 2px rgba(47, 51, 43, 0.05); /* controls */
+  --peg-shadow-2: 0 6px 16px -4px rgba(47, 51, 43, 0.1), 0 2px 4px rgba(47, 51, 43, 0.05);
+  --peg-shadow-3: 0 20px 40px -12px rgba(47, 51, 43, 0.18), 0 4px 8px rgba(47, 51, 43, 0.05);
+
+  /* ── Icons (stroke 1.6) ─────────────────────────────────────────── */
+  --peg-icon-inline: 14px;
+  --peg-icon-action: 16px;
+  --peg-icon-nav: 18px;
+  --peg-icon-hero: 20px;
 }
 
+/* ── Dark mode: own surfaces, never an automatic inversion ─────────── */
 [data-theme="dark"] {
-  --peg-canvas: #19191b;
-  --peg-surface: #202022;
-  --peg-surface-subtle: #262629;
-  --peg-surface-muted: #2d2d30;
-  --peg-border: #353538;
-  --peg-border-strong: #454549;
-  --peg-text-primary: #f5f5f5;
-  --peg-text-secondary: #b6b6ba;
-  /* 4.91:1 on surface-muted (#2d2d30); #8c8c91 measured 4.10:1 */
-  --peg-text-tertiary: #9a9aa0;
-  --peg-text-disabled: #5a5a5f;
+  --peg-canvas: #101210;
+  --peg-surface: #181a17;
+  --peg-surface-subtle: #1e211d;
+  --peg-surface-inspector: #141613;
+  --peg-surface-muted: #262924;
+  --peg-surface-selected: #2e322c;
 
-  --peg-accent: #ff7089;
-  --peg-accent-hover: #ff8a9e;
-  --peg-accent-soft: rgba(255, 112, 137, 0.16);
+  --peg-border: #333730;
+  --peg-border-strong: #6d7268;
+  --peg-rule: #43483f;
+  --peg-divider: #383d34;
 
-  /* Semantic colours need their own dark values; the light ones measured 2.7-3.4:1
-     against the dark surfaces. Dark mode is not an inversion (PEG 00). */
+  --peg-ink: #f2f2f0;
+  --peg-text-primary: #f2f2f0;
+  --peg-text-body: #e2e2de;
+  --peg-text-strong: #c6c8c1;
+  --peg-text-secondary: #a9aca4;
+  --peg-text-tertiary: #9a9d94;
+  --peg-text-nav-label: #9a9d94;
+  --peg-text-disabled: #5d6058;
+  /* the primary button inverts to a light ink slab, so its label goes dark */
+  --peg-text-on-ink: #101210;
+
+  --peg-accent: #e08a8a;
+  --peg-accent-strong: #ef9a9a;
+  --peg-accent-hover: #eda0a0;
+  --peg-accent-wash: rgba(224, 138, 138, 0.18);
+  --peg-accent-soft: rgba(224, 138, 138, 0.16);
+
+  /* Semantic values need their own dark tones; the light ones measure 2.7–3.4:1
+     against these surfaces. Dark mode is not an inversion (PEG 00). */
   --peg-success: #4ade80;
   --peg-warning: #fbbf24;
   --peg-danger: #f87171;
-  --peg-info: #7aa5f5;
-  --peg-focus: #7aa5f5;
+  --peg-info: #8fb4f5;
+
+  --peg-success-bg: rgba(74, 222, 128, 0.12);
+  --peg-success-bd: rgba(74, 222, 128, 0.3);
+  --peg-warning-bg: rgba(251, 191, 36, 0.12);
+  --peg-warning-bd: rgba(251, 191, 36, 0.3);
+  --peg-danger-bg: rgba(248, 113, 113, 0.12);
+  --peg-danger-bd: rgba(248, 113, 113, 0.3);
+  --peg-info-bg: rgba(143, 180, 245, 0.12);
+  --peg-info-bd: rgba(143, 180, 245, 0.3);
 
   /* on dark the tint is dark too, so the bright semantic values are the readable ones */
   --peg-badge-success-fg: #4ade80;
   --peg-badge-warning-fg: #fbbf24;
   --peg-badge-danger-fg: #f87171;
-  --peg-badge-info-fg: #7aa5f5;
+  --peg-badge-info-fg: #8fb4f5;
 
-  --peg-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --peg-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --peg-shadow-3: 0 8px 28px rgba(0, 0, 0, 0.6);
+  --peg-focus: #f2f2f0;
+  --peg-focus-ring: 0 0 0 3px rgba(242, 242, 240, 0.14);
+  --peg-focus-ring-danger: 0 0 0 3px rgba(248, 113, 113, 0.18);
+
+  --peg-shadow-1: none;
+  --peg-shadow-2: 0 8px 20px -6px rgba(0, 0, 0, 0.55);
+  --peg-shadow-3: 0 24px 48px -12px rgba(0, 0, 0, 0.6);
 }

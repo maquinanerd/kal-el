@@ -1,0 +1,208 @@
+{
+  "meta": {
+    "name": "PEG Product Design System",
+    "version": "2.0.0-shared-palette",
+    "calibratedAgainst": "uploads/peg-product-design-system/references (49 screenshots)",
+    "typeface": "Geist / Geist Mono",
+    "sharedNeutralAnchors": {
+      "canvas": "#fcfcfc",
+      "surface": "#f0f0f0",
+      "mid": "#c7c7c7",
+      "ink": "#2f332b"
+    }
+  },
+  "color": {
+    "light": {
+      "canvas": "#fcfcfc",
+      "surface": "#ffffff",
+      "surfaceSubtle": "#f7f7f6",
+      "surfaceMuted": "#f0f0f0",
+      "surfaceSelected": "#e8e8e6",
+      "border": "#e2e2e0",
+      "borderStrong": "#c7c7c7",
+      "divider": "#d9d9d6",
+      "textPrimary": "#2f332b",
+      "textSecondary": "#5e6159",
+      "textTertiary": "#8b8d86",
+      "textDisabled": "#b3b5af"
+    },
+    "dark": {
+      "canvas": "#101210",
+      "surface": "#181a17",
+      "surfaceSubtle": "#1e211d",
+      "surfaceMuted": "#262924",
+      "surfaceSelected": "#2e322c",
+      "border": "#333730",
+      "borderStrong": "#43483f",
+      "divider": "#383d34",
+      "textPrimary": "#f2f2f0",
+      "textSecondary": "#a9aca4",
+      "textTertiary": "#7a7d75",
+      "textDisabled": "#5d6058"
+    },
+    "semantic": {
+      "success": "#15803d",
+      "warning": "#b45309",
+      "danger": "#b91c1c",
+      "info": "#2563eb"
+    },
+    "accent": {
+      "kalEl": {
+        "primary": "#bf5252",
+        "strong": "#b51b1b"
+      },
+      "commerceWayne": {
+        "primary": "#417194",
+        "strong": "#414d7d"
+      },
+      "alugueiApp": {
+        "primary": "#41945d",
+        "strong": "#417d55"
+      }
+    },
+    "accentRules": "Accent = marca, navegação ativa, focus, seleção, highlights e gráficos. Não substitui semantic colors nem pinta grandes superfícies. Botão primário permanece ink (#2f332b)."
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": "Geist",
+      "mono": "Geist Mono"
+    },
+    "styles": {
+      "display": {
+        "size": 48,
+        "lineHeight": 56,
+        "weight": 600,
+        "tracking": "-0.03em"
+      },
+      "h1": {
+        "size": 36,
+        "lineHeight": 44,
+        "weight": 600,
+        "tracking": "-0.025em"
+      },
+      "h2": {
+        "size": 30,
+        "lineHeight": 38,
+        "weight": 600,
+        "tracking": "-0.02em"
+      },
+      "h3": {
+        "size": 24,
+        "lineHeight": 32,
+        "weight": 600,
+        "tracking": "-0.02em"
+      },
+      "h4": {
+        "size": 18,
+        "lineHeight": 26,
+        "weight": 600
+      },
+      "bodyLg": {
+        "size": 16,
+        "lineHeight": 26,
+        "weight": 400
+      },
+      "body": {
+        "size": 14,
+        "lineHeight": 21,
+        "weight": 400
+      },
+      "bodySm": {
+        "size": 13,
+        "lineHeight": 19,
+        "weight": 400
+      },
+      "label": {
+        "size": 13,
+        "lineHeight": 18,
+        "weight": 600
+      },
+      "nav": {
+        "size": 13.5,
+        "lineHeight": 20,
+        "weight": 500
+      },
+      "caption": {
+        "size": 12,
+        "lineHeight": 17,
+        "weight": 400
+      },
+      "micro": {
+        "size": 11,
+        "lineHeight": 16,
+        "weight": 600,
+        "transform": "uppercase",
+        "tracking": "0.06em"
+      }
+    }
+  },
+  "radius": {
+    "xs": 4,
+    "sm": 6,
+    "control": 8,
+    "card": 12,
+    "xl": 16
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64
+  ],
+  "controlHeight": {
+    "xs": 28,
+    "sm": 32,
+    "md": 36,
+    "lg": 40,
+    "touch": 44
+  },
+  "border": {
+    "width": 1,
+    "dividerStyle": "1px dotted",
+    "cardsUseShadow": false,
+    "controlsUseHairlineShadow": true
+  },
+  "elevation": {
+    "0": "none",
+    "1": "0 1px 2px rgba(16,17,20,.05)",
+    "2": "0 6px 16px -4px rgba(16,17,20,.10), 0 2px 4px rgba(16,17,20,.05)",
+    "3": "0 20px 40px -12px rgba(16,17,20,.18), 0 4px 8px rgba(16,17,20,.05)"
+  },
+  "icon": {
+    "inline": 14,
+    "action": 16,
+    "nav": 18,
+    "hero": 20,
+    "strokeWidth": 1.6
+  },
+  "layout": {
+    "sidebar": 248,
+    "rail": 60,
+    "topbar": 52,
+    "inspector": 336,
+    "editorColumn": [
+      720,
+      860
+    ],
+    "rowHeight": 44,
+    "rowHeightAvatar": 48,
+    "pagePadding": 24,
+    "modalWidth": [
+      420,
+      560
+    ]
+  },
+  "breakpoints": {
+    "mobile": 360,
+    "largeMobile": 480,
+    "tablet": 768,
+    "desktop": 1024,
+    "desktopXl": 1440
+  }
+}

@@ -1,0 +1,96 @@
+/* PEG Product Design System — tokens calibrados contra references/ + paleta compartilhada
+   Anchors: #FCFCFC canvas · #F0F0F0 surface · #C7C7C7 mid · #2F332B ink
+   Accent por produto; a interface permanece predominantemente neutra. */
+:root {
+  /* light surfaces */
+  --peg-canvas: #fcfcfc;
+  --peg-surface: #ffffff;
+  --peg-surface-subtle: #f7f7f6;
+  --peg-surface-muted: #f0f0f0;
+  --peg-surface-selected: #e8e8e6;
+  --peg-border: #e2e2e0;
+  --peg-border-strong: #c7c7c7;
+  --peg-divider: #d9d9d6;            /* usado como 1px dotted */
+  --peg-text-primary: #2f332b;
+  --peg-text-secondary: #5e6159;
+  --peg-text-tertiary: #8b8d86;
+  --peg-text-disabled: #b3b5af;
+
+  /* semantic */
+  --peg-success: #15803d;
+  --peg-warning: #b45309;
+  --peg-danger: #b91c1c;
+  --peg-info: #2563eb;
+
+  /* product accents */
+  --peg-accent-kalel: #bf5252;
+  --peg-accent-kalel-strong: #b51b1b;
+  --peg-accent-wayne: #417194;
+  --peg-accent-wayne-strong: #414d7d;
+  --peg-accent-aluguei: #41945d;
+  --peg-accent-aluguei-strong: #417d55;
+
+  /* type */
+  --peg-font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
+  --peg-font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  /* radius */
+  --peg-radius-xs: 4px;
+  --peg-radius-sm: 6px;
+  --peg-radius-md: 8px;   /* controles */
+  --peg-radius-lg: 12px;  /* cards */
+  --peg-radius-xl: 16px;
+
+  /* spacing */
+  --peg-space-1: 4px;  --peg-space-2: 8px;  --peg-space-3: 12px;
+  --peg-space-4: 16px; --peg-space-5: 20px; --peg-space-6: 24px;
+  --peg-space-8: 32px; --peg-space-10: 40px; --peg-space-12: 48px; --peg-space-16: 64px;
+
+  /* controls */
+  --peg-control-xs: 28px;
+  --peg-control-sm: 32px;
+  --peg-control-md: 36px;
+  --peg-control-lg: 40px;
+  --peg-touch-target: 44px;
+
+  /* elevation */
+  --peg-elev-1: 0 1px 2px rgba(47,51,43,.05);
+  --peg-elev-2: 0 6px 16px -4px rgba(47,51,43,.10), 0 2px 4px rgba(47,51,43,.05);
+  --peg-elev-3: 0 20px 40px -12px rgba(47,51,43,.18), 0 4px 8px rgba(47,51,43,.05);
+  --peg-focus-ring: 0 0 0 3px rgba(47,51,43,.12);
+
+  /* layout */
+  --peg-sidebar-width: 248px;
+  --peg-rail-width: 60px;
+  --peg-topbar-height: 52px;
+  --peg-inspector-width: 336px;
+  --peg-editor-column: 820px;
+  --peg-row-height: 44px;
+  --peg-row-height-avatar: 48px;
+  --peg-page-padding: 24px;
+}
+
+[data-theme='dark'] {
+  --peg-canvas: #101210;
+  --peg-surface: #181a17;
+  --peg-surface-subtle: #1e211d;
+  --peg-surface-muted: #262924;
+  --peg-surface-selected: #2e322c;
+  --peg-border: #333730;
+  --peg-border-strong: #43483f;
+  --peg-divider: #383d34;
+  --peg-text-primary: #f2f2f0;
+  --peg-text-secondary: #a9aca4;
+  --peg-text-tertiary: #7a7d75;
+  --peg-text-disabled: #5d6058;
+
+  --peg-success: #4ade80;
+  --peg-warning: #fbbf24;
+  --peg-danger: #f87171;
+  --peg-info: #8fb4f5;
+
+  --peg-elev-1: none;
+  --peg-elev-2: 0 8px 20px -6px rgba(0,0,0,.55);
+  --peg-elev-3: 0 24px 48px -12px rgba(0,0,0,.60);
+  --peg-focus-ring: 0 0 0 3px rgba(244,244,245,.14);
+}

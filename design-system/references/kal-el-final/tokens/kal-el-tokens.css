@@ -1,0 +1,125 @@
+/* ══════════════════════════════════════════════════════════════
+   KAL EL — Editorial CMS · design tokens
+   Fundação neutra compartilhada do PEG Product Design System
+   + accent de produto Kal El.
+
+   REGRA DE ACCENT (obrigatória):
+   O accent identifica o produto — marca, indicador de nav ativa,
+   sublinhado de aba ativa, foco, seleção e highlight de texto.
+   NÃO pinta grandes superfícies. NÃO substitui semantic colors.
+   O botão primário permanece ink (--kal-ink).
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Accent do produto ───────────────────────────────── */
+  --kal-accent:        #BF5252;
+  --kal-accent-strong: #B51B1B;
+  --kal-accent-wash:   #F6E2E2;  /* highlight de texto no editor */
+
+  /* ── Neutros compartilhados (#FCFCFC #F0F0F0 #C7C7C7 #2F332B) */
+  --kal-canvas:           #FCFCFC;
+  --kal-surface:          #FFFFFF;
+  --kal-surface-subtle:   #F7F7F6;  /* sidebar */
+  --kal-surface-inspector:#FAFAF9;  /* rail direito */
+  --kal-surface-muted:    #F0F0F0;
+  --kal-surface-selected: #E8E8E6;  /* nav item ativo */
+  --kal-border:           #E2E2E0;  /* cards, rules */
+  --kal-border-strong:    #C7C7C7;  /* controles */
+  --kal-divider:          #D9D9D6;  /* SEMPRE 1px dotted */
+
+  --kal-ink:            #2F332B;  /* texto primário e botão primário */
+  --kal-text-body:      #3C4038;  /* corpo do artigo */
+  --kal-text-strong:    #4E5249;  /* label de botão secundário */
+  --kal-text-secondary: #5E6159;
+  --kal-text-tertiary:  #8B8D86;
+  --kal-text-nav-label: #97998F;  /* section label em micro caps */
+  --kal-text-disabled:  #B3B5AF;
+  --kal-text-chevron:   #C7C7C7;  /* separador de breadcrumb */
+
+  /* ── Semantic (independentes do accent) ──────────────── */
+  --kal-success: #15803D;  --kal-success-bg: #F0FDF4;  --kal-success-bd: #BBF7D0;
+  --kal-warning: #B45309;  --kal-warning-bg: #FFFBEB;  --kal-warning-bd: #FDE68A;
+  --kal-danger:  #B91C1C;  --kal-danger-bg:  #FEF2F2;  --kal-danger-bd:  #FECACA;
+  --kal-info:    #2563EB;  --kal-info-bg:    #EEF3FD;  --kal-info-bd:    #C7D7F7;
+
+  /* ── Tipografia ──────────────────────────────────────── */
+  --kal-font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
+  --kal-font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  /* h1 36/44 600 -0.025em · h3 24/32 600 -0.02em · h4 18/26 600
+     dek 18/28 400 · quote 20/30 500 · body-read 16/27 400
+     body 14/21 · nav 13.5/20 500 · body-sm 13/19 · label 13/18 600
+     caption 12/17 · micro 11/16 600 uppercase 0.06em */
+
+  /* ── Radius ──────────────────────────────────────────── */
+  --kal-radius-xs:      4px;
+  --kal-radius-sm:      6px;   /* nav item, badge, chip */
+  --kal-radius-control: 8px;
+  --kal-radius-card:    12px;
+  --kal-radius-frame:   14px;
+
+  /* ── Espaçamento ─────────────────────────────────────── */
+  --kal-space-1: 4px;   --kal-space-2: 8px;   --kal-space-3: 12px;
+  --kal-space-4: 16px;  --kal-space-5: 20px;  --kal-space-6: 24px;
+  --kal-space-8: 32px;  --kal-space-10: 40px; --kal-space-12: 48px;
+
+  /* ── Altura de controle ──────────────────────────────── */
+  --kal-control-xs: 28px;  /* filtro inline, ação em card */
+  --kal-control-sm: 32px;  /* toolbar */
+  --kal-control-md: 36px;  /* default de formulário */
+  --kal-control-lg: 40px;
+  --kal-touch:      44px;  /* mínimo em mobile */
+
+  /* ── Layout ──────────────────────────────────────────── */
+  --kal-sidebar:    248px;
+  --kal-rail:        60px;  /* sidebar colapsada em ícones */
+  --kal-topbar:      52px;
+  --kal-inspector:  336px;
+  --kal-editor-col: 820px;  /* coluna de escrita */
+  --kal-row:         44px;  /* linha de tabela */
+  --kal-row-avatar:  48px;
+  --kal-page-pad:    24px;
+
+  /* ── Elevação ────────────────────────────────────────── */
+  --kal-elev-0: none;                          /* cards: só border */
+  --kal-elev-1: 0 1px 2px rgba(47,51,43,.05);  /* controles */
+  --kal-elev-2: 0 6px 16px -4px rgba(47,51,43,.10), 0 2px 4px rgba(47,51,43,.05);
+  --kal-elev-3: 0 20px 40px -12px rgba(47,51,43,.18), 0 4px 8px rgba(47,51,43,.05);
+  --kal-focus:  0 0 0 3px rgba(47,51,43,.12);
+  --kal-focus-danger: 0 0 0 3px rgba(185,28,28,.10);
+
+  /* ── Ícones (stroke 1.6) ─────────────────────────────── */
+  --kal-icon-inline: 14px;
+  --kal-icon-action: 16px;
+  --kal-icon-nav:    18px;
+  --kal-icon-hero:   20px;
+}
+
+/* ── Dark mode: surfaces próprias, nunca inversão automática ── */
+[data-theme='dark'] {
+  --kal-canvas:           #101210;
+  --kal-surface:          #181A17;
+  --kal-surface-subtle:   #1E211D;
+  --kal-surface-inspector:#141613;
+  --kal-surface-muted:    #262924;
+  --kal-surface-selected: #2E322C;
+  --kal-border:           #333730;
+  --kal-border-strong:    #43483F;
+  --kal-divider:          #383D34;
+
+  --kal-ink:            #F2F2F0;
+  --kal-text-body:      #E2E2DE;
+  --kal-text-strong:    #C6C8C1;
+  --kal-text-secondary: #A9ACA4;
+  --kal-text-tertiary:  #7A7D75;
+  --kal-text-nav-label: #6E7169;
+  --kal-text-disabled:  #5D6058;
+
+  --kal-success: #4ADE80;  --kal-warning: #FBBF24;
+  --kal-danger:  #F87171;  --kal-info:    #8FB4F5;
+
+  --kal-elev-1: none;
+  --kal-elev-2: 0 8px 20px -6px rgba(0,0,0,.55);
+  --kal-elev-3: 0 24px 48px -12px rgba(0,0,0,.60);
+  --kal-focus:  0 0 0 3px rgba(242,242,240,.14);
+}

@@ -1,0 +1,276 @@
+{
+  "meta": {
+    "product": "Kal El",
+    "kind": "Editorial CMS",
+    "system": "PEG Product Design System",
+    "version": "2.0.0-shared-palette",
+    "typeface": {
+      "sans": "Geist",
+      "mono": "Geist Mono"
+    },
+    "accentRule": "Accent = marca, nav ativa, aba ativa, foco, seleção, highlight. Nunca superfície grande, nunca substitui semantic. Botão primário = ink."
+  },
+  "accent": {
+    "primary": "#BF5252",
+    "strong": "#B51B1B",
+    "wash": "#F6E2E2"
+  },
+  "neutralAnchors": {
+    "canvas": "#FCFCFC",
+    "surface": "#F0F0F0",
+    "mid": "#C7C7C7",
+    "ink": "#2F332B"
+  },
+  "color": {
+    "light": {
+      "canvas": "#FCFCFC",
+      "surface": "#FFFFFF",
+      "surfaceSubtle": "#F7F7F6",
+      "surfaceInspector": "#FAFAF9",
+      "surfaceMuted": "#F0F0F0",
+      "surfaceSelected": "#E8E8E6",
+      "border": "#E2E2E0",
+      "borderStrong": "#C7C7C7",
+      "divider": "#D9D9D6",
+      "ink": "#2F332B",
+      "textBody": "#3C4038",
+      "textStrong": "#4E5249",
+      "textSecondary": "#5E6159",
+      "textTertiary": "#8B8D86",
+      "textNavLabel": "#97998F",
+      "textDisabled": "#B3B5AF"
+    },
+    "dark": {
+      "canvas": "#101210",
+      "surface": "#181A17",
+      "surfaceSubtle": "#1E211D",
+      "surfaceInspector": "#141613",
+      "surfaceMuted": "#262924",
+      "surfaceSelected": "#2E322C",
+      "border": "#333730",
+      "borderStrong": "#43483F",
+      "divider": "#383D34",
+      "ink": "#F2F2F0",
+      "textSecondary": "#A9ACA4",
+      "textTertiary": "#7A7D75"
+    },
+    "semantic": {
+      "success": {
+        "fg": "#15803D",
+        "bg": "#F0FDF4",
+        "bd": "#BBF7D0"
+      },
+      "warning": {
+        "fg": "#B45309",
+        "bg": "#FFFBEB",
+        "bd": "#FDE68A"
+      },
+      "danger": {
+        "fg": "#B91C1C",
+        "bg": "#FEF2F2",
+        "bd": "#FECACA"
+      },
+      "info": {
+        "fg": "#2563EB",
+        "bg": "#EEF3FD",
+        "bd": "#C7D7F7"
+      }
+    },
+    "avatar": [
+      {
+        "bg": "#E2E2E0",
+        "fg": "#4E5249"
+      },
+      {
+        "bg": "#DCE7FF",
+        "fg": "#1D4FD1"
+      },
+      {
+        "bg": "#DCFCE7",
+        "fg": "#15803D"
+      },
+      {
+        "bg": "#EDE9FE",
+        "fg": "#6D28D9"
+      },
+      {
+        "bg": "#FEE2E2",
+        "fg": "#B91C1C"
+      }
+    ]
+  },
+  "typography": {
+    "h1": {
+      "size": 36,
+      "lineHeight": 44,
+      "weight": 600,
+      "tracking": "-0.025em",
+      "use": "título do artigo"
+    },
+    "h3": {
+      "size": 24,
+      "lineHeight": 32,
+      "weight": 600,
+      "tracking": "-0.02em",
+      "use": "título de página"
+    },
+    "h4": {
+      "size": 18,
+      "lineHeight": 26,
+      "weight": 600
+    },
+    "dek": {
+      "size": 18,
+      "lineHeight": 28,
+      "weight": 400,
+      "use": "linha fina"
+    },
+    "quote": {
+      "size": 20,
+      "lineHeight": 30,
+      "weight": 500
+    },
+    "bodyRead": {
+      "size": 16,
+      "lineHeight": 27,
+      "weight": 400,
+      "use": "corpo do editor"
+    },
+    "body": {
+      "size": 14,
+      "lineHeight": 21,
+      "weight": 400
+    },
+    "nav": {
+      "size": 13.5,
+      "lineHeight": 20,
+      "weight": 500
+    },
+    "bodySm": {
+      "size": 13,
+      "lineHeight": 19,
+      "weight": 400
+    },
+    "label": {
+      "size": 13,
+      "lineHeight": 18,
+      "weight": 600
+    },
+    "caption": {
+      "size": 12,
+      "lineHeight": 17,
+      "weight": 400
+    },
+    "micro": {
+      "size": 11,
+      "lineHeight": 16,
+      "weight": 600,
+      "transform": "uppercase",
+      "tracking": "0.06em"
+    }
+  },
+  "radius": {
+    "xs": 4,
+    "sm": 6,
+    "control": 8,
+    "card": 12,
+    "frame": 14
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    20,
+    24,
+    32,
+    40,
+    48
+  ],
+  "controlHeight": {
+    "xs": 28,
+    "sm": 32,
+    "md": 36,
+    "lg": 40,
+    "touch": 44
+  },
+  "layout": {
+    "sidebar": 248,
+    "rail": 60,
+    "topbar": 52,
+    "inspector": 336,
+    "editorColumn": 820,
+    "row": 44,
+    "rowAvatar": 48,
+    "pagePadding": 24
+  },
+  "border": {
+    "width": 1,
+    "dividerStyle": "1px dotted",
+    "cardsUseShadow": false,
+    "controlsUseHairlineShadow": true
+  },
+  "elevation": {
+    "0": "none",
+    "1": "0 1px 2px rgba(47,51,43,.05)",
+    "2": "0 6px 16px -4px rgba(47,51,43,.10), 0 2px 4px rgba(47,51,43,.05)",
+    "3": "0 20px 40px -12px rgba(47,51,43,.18), 0 4px 8px rgba(47,51,43,.05)",
+    "focus": "0 0 0 3px rgba(47,51,43,.12)"
+  },
+  "icon": {
+    "inline": 14,
+    "action": 16,
+    "nav": 18,
+    "hero": 20,
+    "strokeWidth": 1.6
+  },
+  "status": {
+    "draft": {
+      "label": "Rascunho",
+      "fg": "#5E6159",
+      "bg": "#FFFFFF",
+      "bd": "#C7C7C7"
+    },
+    "review": {
+      "label": "Em revisão",
+      "fg": "#B45309",
+      "bg": "#FFFBEB",
+      "bd": "#FDE68A"
+    },
+    "scheduled": {
+      "label": "Agendado",
+      "fg": "#2563EB",
+      "bg": "#EEF3FD",
+      "bd": "#C7D7F7"
+    },
+    "published": {
+      "label": "Publicado",
+      "fg": "#15803D",
+      "bg": "#F0FDF4",
+      "bd": "#BBF7D0"
+    },
+    "blocked": {
+      "label": "Bloqueado",
+      "fg": "#B91C1C",
+      "bg": "#FEF2F2",
+      "bd": "#FECACA"
+    }
+  },
+  "screens": [
+    {
+      "name": "Article Editor",
+      "shell": "B · sidebar + workspace + inspector",
+      "frame": "1440x900"
+    },
+    {
+      "name": "Articles Index",
+      "shell": "A · rail + workspace",
+      "frame": "1440x760"
+    },
+    {
+      "name": "Media Library",
+      "shell": "B · sidebar + workspace + inspector",
+      "frame": "1440x780"
+    }
+  ]
+}
