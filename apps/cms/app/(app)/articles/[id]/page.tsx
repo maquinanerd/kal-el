@@ -1,10 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Alert, Badge, Button, Input, Modal, PageHead, Search, Select, Textarea } from "@kal-el/design-system";
+import {
+  Alert,
+  Button,
+  CharacterCounter,
+  DateTimeDialog,
+  Input,
+  InspectorSection,
+  SaveState,
+  Search,
+  SegmentedControl,
+  Select,
+  StatusLabel,
+  Textarea,
+  TokenPicker,
+  WorkflowCommentDialog,
+  statusLabel,
+} from "@kal-el/design-system";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import { useAuth } from "../../../../lib/auth";
+import { useShellChrome } from "../../../../lib/chrome";
+import { slugIsLocked, slugify } from "../../../../lib/slug";
 import { DocumentRepair } from "../../../../components/DocumentRepair";
 import {
   ApiError,
@@ -33,7 +51,13 @@ import { MediaPicker } from "../../../../components/MediaPicker";
 import { ImageDetailsDialog, type ImageDetails } from "../../../../components/ImageDetailsDialog";
 
 const EMPTY_DOC: ArticleDocumentV2 = { version: 2, nodes: [] };
-const SAVE_LABEL: Record<string, string> = { idle: "", saving: "Salvando…", saved: "Salvo", error: "Erro ao salvar" };
+
+/** Google truncates around these; they are targets, not rules. */
+const SEO_TITLE_MAX = 60;
+const SEO_DESC_MIN = 120;
+const SEO_DESC_MAX = 160;
+
+type InspectorTab = "document" | "seo" | "qa";
 
 function docToText(doc: { version: number; nodes: unknown[] }): string {
   const lines: string[] = [];
@@ -81,32 +105,49 @@ function inlineToText(content: unknown): string {
     .join("");
 }
 
-const WORKFLOW_ACTIONS: Partial<Record<ArticleStatus, { key: string; label: string; variant: "primary" | "secondary" | "destructive" }[]>> = {
+function countWords(doc: { nodes: unknown[] }): number {
+  const text = docToText(doc as { version: number; nodes: unknown[] });
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length;
+}
+
+/**
+ * Actions available in each state, in the order an editor works through them.
+ *
+ * Only `primary` is ink; everything else is secondary or tertiary. The product review
+ * found Publicar reading as the loudest control on a draft simply because it was the one
+ * variant that rendered - once the primary button was fixed, the hierarchy had to say
+ * what the daily action actually is. On a draft that is "send for review", not "publish".
+ *
+ * Actions the backend would refuse are not offered: the API stays the authority, and this
+ * mirrors its transition table rather than inventing one.
+ */
+const WORKFLOW_ACTIONS: Partial<
+  Record<ArticleStatus, { key: string; label: string; variant: "primary" | "secondary" | "destructive"; comment?: "require" | "optional" }[]>
+> = {
   draft: [
-    { key: "submit", label: "Enviar p/ revisão", variant: "primary" },
-    { key: "publish", label: "Publicar", variant: "secondary" },
+    { key: "submit", label: "Enviar p/ revisão", variant: "primary", comment: "optional" },
     { key: "schedule", label: "Agendar", variant: "secondary" },
+    { key: "publish", label: "Publicar", variant: "secondary" },
   ],
   in_review: [
-    { key: "approve", label: "Aprovar", variant: "primary" },
-    { key: "reject", label: "Rejeitar", variant: "destructive" },
-    { key: "publish", label: "Publicar", variant: "secondary" },
-    // in_review -> scheduled and scheduled -> scheduled are both legal transitions, and
-    // for a while neither had a button anywhere: an editor could not schedule an
-    // approved piece, or move a scheduled date, without routing back through draft
+    { key: "approve", label: "Aprovar", variant: "primary", comment: "optional" },
+    { key: "reject", label: "Solicitar alterações", variant: "destructive", comment: "require" },
     { key: "schedule", label: "Agendar", variant: "secondary" },
+    { key: "publish", label: "Publicar", variant: "secondary" },
   ],
   scheduled: [
     { key: "publish", label: "Publicar agora", variant: "primary" },
     { key: "schedule", label: "Reagendar", variant: "secondary" },
   ],
-  published: [{ key: "unpublish", label: "Despublicar", variant: "destructive" }],
-  blocked: [{ key: "submit", label: "Reenviar", variant: "primary" }],
+  published: [{ key: "unpublish", label: "Despublicar", variant: "destructive", comment: "optional" }],
+  blocked: [{ key: "submit", label: "Reenviar p/ revisão", variant: "primary", comment: "optional" }],
+  archived: [],
 };
 
 export default function ArticlePage() {
   const params = useParams<{ id: string }>();
-  const { activeSiteId } = useAuth();
+  const { activeSiteId, sites } = useAuth();
   const editorRef = useRef<RichTextEditorHandle>(null);
 
   const [article, setArticle] = useState<ArticleDetail | null>(null);
@@ -126,14 +167,16 @@ export default function ArticlePage() {
   const [doc, setDoc] = useState<ArticleDocumentV2>(EMPTY_DOC);
   const [version, setVersion] = useState(0);
   const [status, setStatus] = useState<ArticleStatus>("draft");
+  const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<ArticleRevision[]>([]);
   const [editorKey, setEditorKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  // workflow buttons are disabled while their action is in flight
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("document");
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   const [cats, setCats] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -145,20 +188,32 @@ export default function ArticlePage() {
   const [selAuthors, setSelAuthors] = useState<Set<string>>(new Set());
 
   const [mediaPicker, setMediaPicker] = useState<"image" | "gallery" | "featured" | "social" | null>(null);
-  // an image chosen from the library, waiting for its alt text before it enters the document
   const [pendingImage, setPendingImage] = useState<{ id: string; filename: string; url: string; altText: string | null; caption: string | null; credit: string | null } | null>(null);
   const [compareRevision, setCompareRevision] = useState<ArticleRevision | null>(null);
-  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [commentFor, setCommentFor] = useState<{ key: string; label: string; require: boolean } | null>(null);
+  const [preview, setPreview] = useState<{ url: string } | null>(null);
 
   const loadedRef = useRef(false);
-  // Every autosave sent `document`, including one triggered by editing the title. If the
-  // stored body could not be read the API returns an empty document, the editor loads it,
-  // and the first keystroke anywhere on the page writes that empty document over the
-  // original bytes. The body is sent only when the body was actually touched.
   const docTouchedRef = useRef(false);
+  /**
+   * Whether the slug has stopped following the title. Seeded from the loaded article, so
+   * a deliberate slug set in an earlier session survives; set on the first manual edit.
+   */
+  const slugLockedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef({ title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version });
   draftRef.current = { title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version };
+
+  const site = sites.find((s) => s.id === activeSiteId);
+  const domain = site?.primaryDomain ?? null;
+
+  // The topbar owns the trail and the save state. The H1 below is the article title and
+  // tracks local state, so it is live from the first keystroke - no reload, no remount.
+  useShellChrome(
+    useMemo(() => [{ label: "Artigos", href: "/articles" }, { label: title.trim() || "Novo artigo" }], [title]),
+    <SaveState state={saveState} error={saveError} />,
+  );
 
   useEffect(() => {
     if (!activeSiteId) return;
@@ -168,6 +223,7 @@ export default function ArticlePage() {
         setTitle(a.title);
         setDek(a.dek ?? "");
         setSlug(a.slug ?? "");
+        slugLockedRef.current = slugIsLocked(a.title, a.slug, a.status);
         setSeoTitle(a.seo?.seoTitle ?? "");
         setSeoDesc(a.seo?.metaDescription ?? "");
         setCanonical(a.seo?.canonicalUrl ?? "");
@@ -181,6 +237,7 @@ export default function ArticlePage() {
         setDoc((a.document as ArticleDocumentV2) ?? EMPTY_DOC);
         setVersion(a.version);
         setStatus(a.status);
+        setScheduledAt(a.scheduledAt ?? null);
         setSelCats(new Set(a.categories ?? []));
         setSelTags(new Set(a.tags ?? []));
         setSelEntities(new Set(a.entities ?? []));
@@ -226,6 +283,9 @@ export default function ArticlePage() {
           ...overrides,
         };
         const updated = await updateArticle(activeSiteId, params.id, body, s.version);
+        // Only the version moves. Nothing here replaces the document, remounts the editor
+        // or refreshes the route, so the caret, the selection and the scroll position all
+        // survive an autosave - the product review watched saves throw it back to the top.
         setVersion(updated.version);
         setSaveState("saved");
         setSaveError(null);
@@ -247,24 +307,22 @@ export default function ArticlePage() {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
-  /**
-   * Scheduling needs a date the generic action helper has no way to supply - it posted an
-   * empty body against a `.strict()` schema, so the button always 400d and no CMS user
-   * could produce a scheduled article at all.
-   */
-  async function doSchedule() {
+  /** Title edits carry the slug along until someone claims it. */
+  function onTitleChange(next: string) {
+    setTitle(next);
+    if (!slugLockedRef.current) setSlug(slugify(next));
+    scheduleSave();
+  }
+
+  function onSlugChange(next: string) {
+    slugLockedRef.current = true;
+    setSlug(next);
+    scheduleSave();
+  }
+
+  async function doSchedule(when: Date) {
     if (!activeSiteId || pendingAction) return;
-    const raw = window.prompt("Publicar em (AAAA-MM-DD HH:MM)", "");
-    if (!raw) return;
-    const when = new Date(raw.replace(" ", "T"));
-    if (Number.isNaN(when.getTime())) {
-      setActionError("Data inválida. Use AAAA-MM-DD HH:MM.");
-      return;
-    }
-    if (when.getTime() <= Date.now()) {
-      setActionError("A data de agendamento precisa estar no futuro.");
-      return;
-    }
+    setScheduleOpen(false);
     setActionError(null);
     setPendingAction("schedule");
     const key = `cms.${params.id}.schedule.v${version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
@@ -272,6 +330,7 @@ export default function ArticlePage() {
       const updated = await scheduleArticle(activeSiteId, params.id, when.toISOString(), key);
       setStatus(updated.status);
       setVersion(updated.version);
+      setScheduledAt(updated.scheduledAt ?? when.toISOString());
     } catch (err) {
       setActionError(err instanceof ApiError ? (err.status === 403 ? "Sem permissão para esta ação" : err.message) : "Falha ao agendar");
     } finally {
@@ -279,26 +338,18 @@ export default function ArticlePage() {
     }
   }
 
-  async function doAction(action: string) {
+  async function doAction(action: string, note?: string) {
     if (!activeSiteId || pendingAction) return;
     setActionError(null);
     setPendingAction(action);
-    // One key per (article, action, current status): a double click or a lost response
-    // replays the same intent instead of being re-derived. `approve` and `unpublish`
-    // both target `draft`, so the server cannot tell a retry from a call that was never
-    // legal - the key is what makes those two safe from the UI.
-    // Per click, not per (article, action, status). A key derived only from state was
-    // stable across the whole 24h TTL, so a SECOND legitimate approval - writer
-    // re-submits, editor approves again the same day - replayed the first response:
-    // no transition, no audit row, and a UI that reported success. That is the exact
-    // defect this round exists to close, reintroduced from the client.
-    // `version` moves on every accepted transition, so it separates real attempts
-    // while still collapsing a double click on the same one.
+    // One key per click, keyed by the version, so a double click collapses but a second
+    // legitimate approval on the same day is not replayed as the first one.
     const key = `cms.${params.id}.${action}.v${version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
     try {
-      const updated = await articleAction(activeSiteId, params.id, action, key);
+      const updated = await articleAction(activeSiteId, params.id, action, key, note);
       setStatus(updated.status);
       setVersion(updated.version);
+      setScheduledAt(updated.scheduledAt ?? null);
     } catch (err) {
       setActionError(err instanceof ApiError ? (err.status === 403 ? "Sem permissão para esta ação" : err.message) : "Falha na ação");
     } finally {
@@ -306,24 +357,41 @@ export default function ArticlePage() {
     }
   }
 
+  function startAction(a: { key: string; comment?: "require" | "optional"; label: string }) {
+    if (a.key === "schedule") {
+      setScheduleOpen(true);
+      return;
+    }
+    if (a.comment) {
+      setCommentFor({ key: a.key, label: a.label, require: a.comment === "require" });
+      return;
+    }
+    void doAction(a.key);
+  }
+
+  /**
+   * Preview opens in a drawer over the editor rather than a popup.
+   *
+   * The old flow called `window.open` AFTER awaiting the POST, so the call had lost its
+   * user gesture and Chrome blocked it silently: the request returned 200 and nothing
+   * appeared. Rendering the preview in-app removes the popup from the path entirely, and
+   * it is what the spec asks for anyway - the writer never leaves the editor. The drawer
+   * still offers a real anchor to open it in a tab, which is user-initiated and therefore
+   * never blocked.
+   */
   async function openPreview() {
     if (!activeSiteId) return;
     setActionError(null);
     try {
       const { url } = await getPreviewUrl(activeSiteId, params.id);
-      window.open(url, "_blank", "noopener");
+      setPreview({ url });
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Falha ao abrir preview");
+      setActionError(err instanceof ApiError ? err.message : "Falha ao gerar o preview");
     }
   }
 
   function restore(revision: ArticleRevision) {
     const target = (revision.document as ArticleDocumentV2) ?? EMPTY_DOC;
-    // A revision whose stored document could not be read comes back empty, and this writes
-    // it straight over the live article. Confirm on every empty revision, not only when the
-    // editor's own copy is non-empty: when the article itself is the unreadable one - the
-    // case that motivates the guard - the editor is holding an empty document too, and a
-    // guard that compared against it was inert exactly then.
     if (target.nodes.length === 0) {
       const ok = window.confirm(
         `A revisão ${revision.revisionNumber} está vazia. Restaurá-la deixa o artigo sem conteúdo. Continuar?`,
@@ -346,77 +414,133 @@ export default function ArticlePage() {
     scheduleSave();
   }
 
-  if (loadError) return <p className="peg-field__error">{loadError}</p>;
+  const words = useMemo(() => countWords(doc), [doc]);
+  const readingMinutes = Math.max(1, Math.round(words / 200));
+
+  /** The editorial checklist from the package inspector: five concrete, checkable items. */
+  const qa = [
+    { ok: title.trim().length > 0, label: "Título preenchido" },
+    { ok: selCats.size > 0, label: "Ao menos uma categoria" },
+    { ok: selAuthors.size > 0, label: "Autor atribuído" },
+    { ok: featuredMediaId !== "", label: "Imagem destacada" },
+    { ok: seoDesc.trim().length >= SEO_DESC_MIN && seoDesc.trim().length <= SEO_DESC_MAX, label: "Meta descrição na faixa" },
+  ];
+  const qaDone = qa.filter((q) => q.ok).length;
+
+  const actions = WORKFLOW_ACTIONS[status] ?? [];
+  const serpUrl = canonical || `https://${domain ?? "seu-dominio.com.br"}/${slug || "slug-do-artigo"}`;
+
+  if (loadError) {
+    return (
+      <Alert tone="danger" title="Não foi possível abrir o artigo">
+        {loadError}
+      </Alert>
+    );
+  }
 
   return (
-    <>
-      <PageHead title={article?.title ?? "Carregando…"} />
-      <p className="peg-save-state" role="status" aria-live="polite">
-        {saveState ? SAVE_LABEL[saveState] : "Editor"}
-      </p>
+    <div className="kalel-editor">
+      <div className="kalel-editor__main">
+        {actionError && <Alert tone="danger">{actionError}</Alert>}
+        {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
 
-      {actionError && <Alert tone="danger">{actionError}</Alert>}
-      {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
+        {activeSiteId && article?.qualityFlags?.includes("document_unreadable") && (
+          <DocumentRepair
+            siteId={activeSiteId}
+            articleId={params.id}
+            version={version}
+            onRepaired={() => window.location.reload()}
+          />
+        )}
 
-      {/* The API flags an article whose stored body could not be parsed. Without this the
-          editor shows an empty document that is indistinguishable from an unwritten one,
-          and the first save destroys whatever is really in the column. */}
-      {activeSiteId && article?.qualityFlags?.includes("document_unreadable") && (
-        <DocumentRepair
-          siteId={activeSiteId}
-          articleId={params.id}
-          version={version}
-          onRepaired={() => window.location.reload()}
-        />
-      )}
-
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <Badge tone="neutral">{status}</Badge>
-        <Button size="sm" variant="secondary" onClick={() => void openPreview()}>Preview</Button>
-        <Button size="sm" variant="secondary" onClick={() => setLinkPickerOpen(true)}>Link interno</Button>
-        {WORKFLOW_ACTIONS[status]?.map((a) => (
-          <Button
-            key={a.key}
-            size="sm"
-            variant={a.variant}
-            disabled={pendingAction !== null}
-            onClick={() => void (a.key === "schedule" ? doSchedule() : doAction(a.key))}
-          >
-            {pendingAction === a.key ? "…" : a.label}
+        {/* Action bar. Publish is deliberately not the loudest thing on a draft. */}
+        <div className="kalel-editor__actions">
+          <StatusLabel status={status} />
+          {status === "scheduled" && scheduledAt && (
+            <span className="kalel-editor__scheduled">
+              {new Date(scheduledAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          <span className="kalel-editor__actions-spacer" />
+          <Button size="sm" variant="secondary" onClick={() => void openPreview()}>
+            Preview
           </Button>
-        ))}
-      </div>
+          {actions.map((a) => (
+            <Button
+              key={a.key}
+              size="sm"
+              variant={a.variant}
+              disabled={pendingAction !== null}
+              onClick={() => startAction(a)}
+            >
+              {pendingAction === a.key ? "…" : a.label}
+            </Button>
+          ))}
+          <button
+            type="button"
+            className="peg-btn peg-btn--secondary peg-btn--sm kalel-editor__inspector-toggle"
+            onClick={() => setInspectorOpen(true)}
+          >
+            Documento
+          </button>
+        </div>
 
-      <div className="kalel-editor-layout">
-        <div className="kalel-editor-layout__main">
-          <Input label="Título" value={title} onChange={(e) => { setTitle(e.target.value); scheduleSave(); }} />
-          <Input label="Subtítulo (dek)" value={dek} onChange={(e) => { setDek(e.target.value); scheduleSave(); }} />
+        {/* The article canvas: 820px of prose, exactly as the executable design has it. */}
+        <article className="kalel-canvas">
+          <p className="kalel-canvas__kicker">
+            {statusLabel(status)} · {words} {words === 1 ? "palavra" : "palavras"} · {readingMinutes} min de leitura
+          </p>
+          <textarea
+            className="kalel-canvas__title"
+            rows={1}
+            value={title}
+            placeholder="Novo artigo"
+            aria-label="Título do artigo"
+            onChange={(e) => onTitleChange(e.target.value)}
+            ref={(el) => {
+              // the title is a heading that happens to be editable: it grows with its
+              // content instead of scrolling inside a fixed box
+              if (el) {
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }
+            }}
+          />
+          <textarea
+            className="kalel-canvas__dek"
+            rows={1}
+            value={dek}
+            placeholder="Subtítulo (dek)"
+            aria-label="Subtítulo"
+            onChange={(e) => {
+              setDek(e.target.value);
+              scheduleSave();
+            }}
+            ref={(el) => {
+              if (el) {
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }
+            }}
+          />
 
           <RichTextEditor
             key={`${article?.id ?? "loading"}-${editorKey}`}
             ref={editorRef}
             document={doc}
-            onChange={(next) => { docTouchedRef.current = true; setDoc(next); scheduleSave(); }}
-            statusSlot={
-              <>
-                <span className="peg-save-state" role="status" aria-live="polite">
-                  {saveState ? SAVE_LABEL[saveState] : "Editor"}
-                </span>
-                {saveError && saveState === "error" && (
-                  <span className="peg-field__error" role="alert">
-                    Falha ao salvar: {saveError}
-                  </span>
-                )}
-              </>
-            }
+            onChange={(next) => {
+              docTouchedRef.current = true;
+              setDoc(next);
+              scheduleSave();
+            }}
+            statusSlot={<SaveState state={saveState} error={saveError} />}
+            renderLinkBrowser={(select) => <InternalLinkBrowser onSelect={select} />}
             onRequestImage={() => setMediaPicker("image")}
             onRequestGallery={() => setMediaPicker("gallery")}
             onUploadFile={async (file) => {
               if (!activeSiteId) return null;
               try {
                 const created = await uploadMedia(activeSiteId, file);
-                // route it through the same alt-text dialog the picker uses, so a pasted
-                // or dropped image cannot land in the document with alt=""
                 setPendingImage({
                   id: created.id,
                   filename: created.filename,
@@ -432,121 +556,338 @@ export default function ArticlePage() {
               }
             }}
           />
-        </div>
+        </article>
 
-        <aside className="kalel-editor-layout__aside" aria-label="Inspector do artigo">
+        {compareRevision && (
           <div className="peg-card">
-            <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <Input label="Slug" value={slug} onChange={(e) => { setSlug(e.target.value); scheduleSave(); }} />
-              <Input label="SEO — título" value={seoTitle} onChange={(e) => { setSeoTitle(e.target.value); scheduleSave(); }} />
-              <Textarea label="SEO — meta descrição" rows={3} value={seoDesc} onChange={(e) => { setSeoDesc(e.target.value); scheduleSave(); }} />
-              <Input label="Canonical (URL)" value={canonical} onChange={(e) => { setCanonical(e.target.value); scheduleSave(); }} />
-              <div style={{ display: "flex", gap: 8 }}>
-                <Select label="Robots index" value={robotsIndex} onChange={(e) => { setRobotsIndex(e.target.value); scheduleSave(); }}>
-                  <option value="index">index</option>
-                  <option value="noindex">noindex</option>
-                </Select>
-                <Select label="Robots follow" value={robotsFollow} onChange={(e) => { setRobotsFollow(e.target.value); scheduleSave(); }}>
-                  <option value="follow">follow</option>
-                  <option value="nofollow">nofollow</option>
-                </Select>
-              </div>
-              <Input label="Social — título" value={socialTitle} onChange={(e) => { setSocialTitle(e.target.value); scheduleSave(); }} />
-              <Textarea label="Social — descrição" rows={2} value={socialDesc} onChange={(e) => { setSocialDesc(e.target.value); scheduleSave(); }} />
+            <div className="peg-card__header">
+              <h3 className="peg-card__title">Comparar r{compareRevision.revisionNumber} com o atual</h3>
+              <Button size="xs" variant="secondary" onClick={() => setCompareRevision(null)}>
+                Fechar
+              </Button>
+            </div>
+            <div className="peg-card__body kalel-diff">
               <div>
-                <span className="peg-field__label">Social — imagem</span>
-                {socialImageId ? (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className="peg-table__muted">{socialImageId.slice(0, 8)}…</span>
-                    <Button size="xs" variant="secondary" aria-label="Trocar imagem social" onClick={() => setMediaPicker("social")}>Trocar</Button>
-                  </div>
-                ) : (
-                  <Button size="sm" variant="secondary" aria-label="Selecionar imagem social" onClick={() => setMediaPicker("social")}>Selecionar</Button>
-                )}
+                <span className="peg-field__label">Revisão r{compareRevision.revisionNumber}</span>
+                <pre className="kalel-diff__pane">{docToText(compareRevision.document)}</pre>
               </div>
-              <Select label="Categoria primária" value={primaryCategoryId} onChange={(e) => { setPrimaryCategoryId(e.target.value); scheduleSave(); }}>
-                <option value="">—</option>
-                {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
               <div>
-                <span className="peg-field__label">Imagem de destaque</span>
-                {featuredMediaId ? (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className="peg-table__muted">{featuredMediaId.slice(0, 8)}…</span>
-                    <Button size="xs" variant="secondary" aria-label="Trocar imagem de destaque" onClick={() => setMediaPicker("featured")}>Trocar</Button>
-                  </div>
-                ) : (
-                  <Button size="sm" variant="secondary" aria-label="Selecionar imagem de destaque" onClick={() => setMediaPicker("featured")}>Selecionar</Button>
-                )}
+                <span className="peg-field__label">Atual</span>
+                <pre className="kalel-diff__pane">{docToText(doc)}</pre>
               </div>
             </div>
           </div>
-
-          <div className="peg-card">
-            <div className="peg-card__header"><h3 className="peg-card__title">SERP preview</h3></div>
-            <div className="peg-card__body" style={{ fontFamily: "Arial, sans-serif" }}>
-              <div style={{ color: "#1a0dab", fontSize: 18, lineHeight: 1.2 }}>{seoTitle || title || "Título da página"}</div>
-              <div style={{ color: "#006621", fontSize: 13 }}>{canonical || `https://exemplo.com/${slug || "slug"}`}</div>
-              <div style={{ color: "#545454", fontSize: 13 }}>{seoDesc || "Descrição aparece aqui."}</div>
-            </div>
-          </div>
-
-          <div className="peg-card">
-            <div className="peg-card__header"><h3 className="peg-card__title">Social preview</h3></div>
-            <div className="peg-card__body" style={{ borderLeft: "3px solid #e5e7eb", paddingLeft: 10 }}>
-              <div style={{ fontSize: 13, color: "#777", textTransform: "uppercase" }}>kalel.app</div>
-              <div style={{ fontWeight: 600 }}>{socialTitle || seoTitle || title}</div>
-              <div style={{ color: "#555", fontSize: 13 }}>{socialDesc || seoDesc || ""}</div>
-            </div>
-          </div>
-
-          <div className="peg-card">
-            <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <CheckboxGroup label="Categorias" items={cats.map((c) => ({ id: c.id, name: c.name }))} selected={selCats} onToggle={(id) => toggleSet(setSelCats, id)} />
-              <CheckboxGroup label="Tags" items={tags.map((t) => ({ id: t.id, name: t.name }))} selected={selTags} onToggle={(id) => toggleSet(setSelTags, id)} />
-              <CheckboxGroup label="Entidades" items={entities.map((e) => ({ id: e.id, name: e.name }))} selected={selEntities} onToggle={(id) => toggleSet(setSelEntities, id)} />
-              <CheckboxGroup label="Autores" items={authors.map((a) => ({ id: a.id, name: a.name }))} selected={selAuthors} onToggle={(id) => toggleSet(setSelAuthors, id)} />
-            </div>
-          </div>
-
-          <div className="peg-card">
-            <div className="peg-card__header"><h3 className="peg-card__title">Revisões</h3></div>
-            <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {revisions.length === 0 && <span className="peg-table__muted">Sem revisões</span>}
-              {revisions.map((r) => (
-                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <span>
-                    <span className="peg-table__muted">r{r.revisionNumber}</span> {new Date(r.createdAt).toLocaleString("pt-BR")}
-                  </span>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <Button size="xs" variant="secondary" onClick={() => setCompareRevision(r)}>Comparar</Button>
-                    <Button size="xs" variant="secondary" onClick={() => restore(r)}>Restaurar</Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
+        )}
       </div>
 
-      {compareRevision && (
-        <div className="peg-card" style={{ marginTop: 16 }}>
-          <div className="peg-card__header">
-            <h3 className="peg-card__title">Comparar r{compareRevision.revisionNumber} com o atual</h3>
-            <Button size="xs" variant="secondary" onClick={() => setCompareRevision(null)}>Fechar</Button>
-          </div>
-          <div className="peg-card__body" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <span className="peg-field__label">Revisão r{compareRevision.revisionNumber}</span>
-              <pre style={{ whiteSpace: "pre-wrap", font: "var(--peg-font-body)", background: "var(--peg-surface-hover, #f9fafb)", padding: 8, borderRadius: 6 }}>{docToText(compareRevision.document)}</pre>
-            </div>
-            <div>
-              <span className="peg-field__label">Atual</span>
-              <pre style={{ whiteSpace: "pre-wrap", font: "var(--peg-font-body)", background: "var(--peg-surface-hover, #f9fafb)", padding: 8, borderRadius: 6 }}>{docToText(doc)}</pre>
-            </div>
-          </div>
+      {/* Inspector: 336px rail on desktop, bottom sheet on mobile. */}
+      {inspectorOpen && <div className="peg-scrim kalel-inspector-scrim" onClick={() => setInspectorOpen(false)} aria-hidden="true" />}
+      <aside className={`kalel-inspector ${inspectorOpen ? "kalel-inspector--open" : ""}`} aria-label="Inspector do artigo">
+        <div className="kalel-inspector__head">
+          <SegmentedControl
+            options={[
+              { value: "document", label: "Documento" },
+              { value: "seo", label: "SEO" },
+              { value: "qa", label: "QA" },
+            ]}
+            value={inspectorTab}
+            onChange={(v) => setInspectorTab(v as InspectorTab)}
+          />
+          <button type="button" className="peg-btn peg-btn--icon kalel-inspector__close" aria-label="Fechar inspector" onClick={() => setInspectorOpen(false)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-      )}
+
+        <div className="kalel-inspector__body">
+          {inspectorTab === "document" && (
+            <>
+              <InspectorSection title="Publicação">
+                <div className="peg-row">
+                  <StatusLabel status={status} />
+                  {status === "scheduled" && scheduledAt && (
+                    <span className="peg-table__muted">
+                      {new Date(scheduledAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                    </span>
+                  )}
+                </div>
+                <Input
+                  label="Slug"
+                  value={slug}
+                  hint={
+                    slugLockedRef.current
+                      ? "Definido manualmente — o título não altera mais este endereço."
+                      : "Gerado a partir do título. Editar aqui congela o valor."
+                  }
+                  onChange={(e) => onSlugChange(e.target.value)}
+                />
+                {domain && (
+                  <p className="peg-field__hint kalel-url-preview">
+                    {domain}/{slug || "…"}
+                  </p>
+                )}
+              </InspectorSection>
+
+              <InspectorSection title="Autores">
+                <TokenPicker
+                  label="Autores"
+                  options={authors.map((a) => ({ id: a.id, name: a.name }))}
+                  selected={selAuthors}
+                  onToggle={(id) => toggleSet(setSelAuthors, id)}
+                  placeholder="Buscar autor…"
+                />
+              </InspectorSection>
+
+              <InspectorSection title="Editoria">
+                <TokenPicker
+                  label="Categorias"
+                  options={cats.map((c) => ({ id: c.id, name: c.name }))}
+                  selected={selCats}
+                  onToggle={(id) => toggleSet(setSelCats, id)}
+                  placeholder="Buscar categoria…"
+                />
+                <Select
+                  label="Categoria primária"
+                  hint="A editoria sob a qual o artigo é catalogado e que define sua URL canônica. As demais categorias continuam valendo para navegação."
+                  value={primaryCategoryId}
+                  onChange={(e) => {
+                    setPrimaryCategoryId(e.target.value);
+                    scheduleSave();
+                  }}
+                >
+                  <option value="">—</option>
+                  {cats
+                    .filter((c) => selCats.size === 0 || selCats.has(c.id))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </Select>
+              </InspectorSection>
+
+              <InspectorSection title="Tags e entidades">
+                <TokenPicker
+                  label="Tags"
+                  options={tags.map((t) => ({ id: t.id, name: t.name }))}
+                  selected={selTags}
+                  onToggle={(id) => toggleSet(setSelTags, id)}
+                  placeholder="Buscar tag…"
+                />
+                <TokenPicker
+                  label="Entidades"
+                  options={entities.map((e) => ({ id: e.id, name: e.name }))}
+                  selected={selEntities}
+                  onToggle={(id) => toggleSet(setSelEntities, id)}
+                  placeholder="Buscar entidade…"
+                />
+              </InspectorSection>
+
+              <InspectorSection
+                title="Imagem destacada"
+                actions={
+                  featuredMediaId ? (
+                    <Button size="xs" variant="tertiary" onClick={() => { setFeaturedMediaId(""); scheduleSave(); }}>
+                      Remover
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {featuredMediaId ? (
+                  <div className="peg-row">
+                    <span className="peg-table__muted">{featuredMediaId.slice(0, 8)}…</span>
+                    <Button size="xs" variant="secondary" onClick={() => setMediaPicker("featured")}>
+                      Trocar
+                    </Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={() => setMediaPicker("featured")}>
+                    Selecionar imagem
+                  </Button>
+                )}
+              </InspectorSection>
+
+              <InspectorSection title="Revisões">
+                <RevisionList revisions={revisions} onCompare={setCompareRevision} onRestore={restore} />
+              </InspectorSection>
+            </>
+          )}
+
+          {inspectorTab === "seo" && (
+            <>
+              <InspectorSection title="Busca">
+                <Input
+                  label="Título SEO"
+                  value={seoTitle}
+                  placeholder={title}
+                  hint="Usado pelo Google no lugar do título editorial quando preenchido."
+                  onChange={(e) => {
+                    setSeoTitle(e.target.value);
+                    scheduleSave();
+                  }}
+                />
+                <CharacterCounter value={seoTitle || title} max={SEO_TITLE_MAX} />
+                <Textarea
+                  label="Meta descrição"
+                  rows={3}
+                  value={seoDesc}
+                  hint="O resumo que aparece sob o título no resultado de busca."
+                  onChange={(e) => {
+                    setSeoDesc(e.target.value);
+                    scheduleSave();
+                  }}
+                />
+                <CharacterCounter value={seoDesc} min={SEO_DESC_MIN} max={SEO_DESC_MAX} />
+              </InspectorSection>
+
+              <InspectorSection title="Prévia do resultado">
+                <SerpPreview url={serpUrl} title={seoTitle || title} description={seoDesc} />
+              </InspectorSection>
+
+              <InspectorSection
+                title="Endereço canônico"
+                hint="Quando o mesmo conteúdo existe em mais de um endereço, o canônico diz ao Google qual é o original. Deixe vazio para usar o endereço deste artigo."
+              >
+                <Input
+                  label="Canonical"
+                  optional
+                  value={canonical}
+                  placeholder={domain ? `https://${domain}/${slug || "slug"}` : "https://…"}
+                  onChange={(e) => {
+                    setCanonical(e.target.value);
+                    scheduleSave();
+                  }}
+                />
+              </InspectorSection>
+
+              <InspectorSection title="Indexação">
+                <Select
+                  label="Aparecer na busca"
+                  hint={robotsIndex === "index" ? "O artigo pode ser listado nos resultados de busca." : "O artigo fica fora dos resultados de busca."}
+                  value={robotsIndex}
+                  onChange={(e) => {
+                    setRobotsIndex(e.target.value);
+                    scheduleSave();
+                  }}
+                >
+                  <option value="index">Sim — indexar</option>
+                  <option value="noindex">Não — manter fora da busca</option>
+                </Select>
+                <Select
+                  label="Seguir links"
+                  hint={robotsFollow === "follow" ? "Buscadores seguem os links do texto e passam autoridade a eles." : "Buscadores não seguem os links deste artigo."}
+                  value={robotsFollow}
+                  onChange={(e) => {
+                    setRobotsFollow(e.target.value);
+                    scheduleSave();
+                  }}
+                >
+                  <option value="follow">Sim — seguir</option>
+                  <option value="nofollow">Não — ignorar os links</option>
+                </Select>
+              </InspectorSection>
+
+              <InspectorSection title="Compartilhamento">
+                <Input
+                  label="Título social"
+                  optional
+                  value={socialTitle}
+                  placeholder={seoTitle || title}
+                  onChange={(e) => {
+                    setSocialTitle(e.target.value);
+                    scheduleSave();
+                  }}
+                />
+                <Textarea
+                  label="Descrição social"
+                  optional
+                  rows={2}
+                  value={socialDesc}
+                  placeholder={seoDesc}
+                  onChange={(e) => {
+                    setSocialDesc(e.target.value);
+                    scheduleSave();
+                  }}
+                />
+                <div>
+                  <span className="peg-field__label">Imagem social</span>
+                  {socialImageId ? (
+                    <div className="peg-row">
+                      <span className="peg-table__muted">{socialImageId.slice(0, 8)}…</span>
+                      <Button size="xs" variant="secondary" onClick={() => setMediaPicker("social")}>
+                        Trocar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="secondary" onClick={() => setMediaPicker("social")}>
+                      Selecionar
+                    </Button>
+                  )}
+                </div>
+                <SocialPreview
+                  domain={domain}
+                  title={socialTitle || seoTitle || title}
+                  description={socialDesc || seoDesc}
+                />
+              </InspectorSection>
+            </>
+          )}
+
+          {inspectorTab === "qa" && (
+            <InspectorSection title="Checklist editorial">
+              <div className="kalel-qa">
+                <div className="kalel-qa__count">
+                  {qaDone} de {qa.length}
+                </div>
+                <div className="kalel-qa__bar" aria-hidden="true">
+                  {qa.map((q, i) => (
+                    <span key={i} className={`kalel-qa__seg ${q.ok ? "kalel-qa__seg--on" : ""}`} />
+                  ))}
+                </div>
+              </div>
+              <ul className="kalel-qa__list">
+                {qa.map((q) => (
+                  <li key={q.label} className={q.ok ? "kalel-qa__item kalel-qa__item--ok" : "kalel-qa__item"}>
+                    <span aria-hidden="true">{q.ok ? "✓" : "!"}</span>
+                    {q.label}
+                  </li>
+                ))}
+              </ul>
+            </InspectorSection>
+          )}
+        </div>
+      </aside>
+
+      <DateTimeDialog
+        open={scheduleOpen}
+        title={status === "scheduled" ? "Reagendar publicação" : "Agendar publicação"}
+        confirmLabel={status === "scheduled" ? "Reagendar" : "Agendar"}
+        initial={scheduledAt ? new Date(scheduledAt) : null}
+        onConfirm={(when) => void doSchedule(when)}
+        onClose={() => setScheduleOpen(false)}
+      />
+
+      <WorkflowCommentDialog
+        open={commentFor !== null}
+        title={commentFor?.label ?? ""}
+        confirmLabel={commentFor?.label ?? ""}
+        tone={commentFor?.require ? "destructive" : "primary"}
+        require={commentFor?.require ?? false}
+        hint={
+          commentFor?.require
+            ? "O comentário volta para quem escreveu, junto com o artigo. Diga o que precisa mudar."
+            : "Opcional. Fica registrado no histórico do artigo."
+        }
+        onConfirm={(comment) => {
+          const key = commentFor?.key;
+          setCommentFor(null);
+          if (key) void doAction(key, comment || undefined);
+        }}
+        onClose={() => setCommentFor(null)}
+      />
+
+      {preview && <PreviewDrawer url={preview.url} onClose={() => setPreview(null)} />}
 
       <MediaPicker
         open={mediaPicker !== null}
@@ -559,7 +900,6 @@ export default function ArticlePage() {
           } else if (mediaPicker === "gallery") {
             editorRef.current?.insertGallery(ids);
           } else if (mediaPicker === "image") {
-            // ask for alt text before the node exists, instead of writing alt="" silently
             const first = picked[0];
             if (first) {
               setPendingImage({
@@ -600,65 +940,209 @@ export default function ArticlePage() {
           setPendingImage(null);
         }}
       />
-
-      <InternalLinkPicker
-        open={linkPickerOpen}
-        onClose={() => setLinkPickerOpen(false)}
-        onSelect={(href) => {
-          editorRef.current?.insertLink(href);
-          setLinkPickerOpen(false);
-        }}
-      />
-    </>
+    </div>
   );
 }
 
-function InternalLinkPicker({ open, onClose, onSelect }: { open: boolean; onClose: () => void; onSelect: (href: string) => void }) {
+/**
+ * Revision list.
+ *
+ * Autosave files a revision on a cadence, so an hour of writing produces a wall of
+ * indistinguishable rows. Consecutive autosaves by the same actor within the same hour
+ * collapse into one entry that says how many there were; the individual revisions are
+ * still restorable through it, so nothing becomes unrecoverable in exchange for the
+ * tidier list.
+ */
+function RevisionList({
+  revisions,
+  onCompare,
+  onRestore,
+}: {
+  revisions: ArticleRevision[];
+  onCompare: (r: ArticleRevision) => void;
+  onRestore: (r: ArticleRevision) => void;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const groups = useMemo(() => {
+    const out: { lead: ArticleRevision; items: ArticleRevision[]; named: boolean }[] = [];
+    for (const r of revisions) {
+      const named = Boolean(r.note && r.note.trim());
+      const prev = out[out.length - 1];
+      const sameHour =
+        prev &&
+        !named &&
+        !prev.named &&
+        Math.abs(new Date(prev.lead.createdAt).getTime() - new Date(r.createdAt).getTime()) < 60 * 60 * 1000;
+      if (sameHour && prev) prev.items.push(r);
+      else out.push({ lead: r, items: [r], named });
+    }
+    return out;
+  }, [revisions]);
+
+  if (revisions.length === 0) return <p className="peg-table__muted">Sem revisões ainda.</p>;
+
+  return (
+    <ul className="kalel-revisions">
+      {groups.map((g) => {
+        const open = expanded === g.lead.id;
+        return (
+          <li key={g.lead.id} className="kalel-revisions__group">
+            <div className="kalel-revisions__row">
+              <div className="kalel-revisions__meta">
+                <span className="kalel-revisions__label">
+                  {g.named ? g.lead.note : g.items.length > 1 ? `${g.items.length} salvamentos automáticos` : "Salvamento automático"}
+                </span>
+                <span className="kalel-revisions__time">
+                  r{g.lead.revisionNumber} · {new Date(g.lead.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                </span>
+              </div>
+              <div className="kalel-revisions__actions">
+                <Button size="xs" variant="tertiary" onClick={() => onCompare(g.lead)}>
+                  Comparar
+                </Button>
+                <Button size="xs" variant="tertiary" onClick={() => onRestore(g.lead)}>
+                  Restaurar
+                </Button>
+              </div>
+            </div>
+            {g.items.length > 1 && (
+              <button type="button" className="kalel-revisions__toggle" onClick={() => setExpanded(open ? null : g.lead.id)}>
+                {open ? "Ocultar" : `Ver as ${g.items.length} versões`}
+              </button>
+            )}
+            {open && (
+              <ul className="kalel-revisions__nested">
+                {g.items.map((r) => (
+                  <li key={r.id}>
+                    <span className="kalel-revisions__time">
+                      r{r.revisionNumber} · {new Date(r.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <Button size="xs" variant="tertiary" onClick={() => onRestore(r)}>
+                      Restaurar
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** SERP preview using the site's real domain and realistic truncation. */
+function SerpPreview({ url, title, description }: { url: string; title: string; description: string }) {
+  const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
+  return (
+    <div className="kalel-serp">
+      <div className="kalel-serp__url">{clip(url.replace(/^https?:\/\//, ""), 70)}</div>
+      <div className="kalel-serp__title">{clip(title || "Título da página", SEO_TITLE_MAX)}</div>
+      <div className="kalel-serp__desc">
+        {clip(description || "A meta descrição aparece aqui. Sem ela, o Google escolhe um trecho do texto.", SEO_DESC_MAX)}
+      </div>
+    </div>
+  );
+}
+
+function SocialPreview({ domain, title, description }: { domain: string | null; title: string; description: string }) {
+  return (
+    <div className="kalel-social">
+      <div className="kalel-social__domain">{(domain ?? "seu-dominio.com.br").toUpperCase()}</div>
+      <div className="kalel-social__title">{title || "Título do compartilhamento"}</div>
+      <div className="kalel-social__desc">{description || "Descrição usada por redes sociais e mensageiros."}</div>
+    </div>
+  );
+}
+
+const PREVIEW_DEVICES = [
+  { value: "desktop", label: "Desktop", width: 1280 },
+  { value: "tablet", label: "Tablet", width: 768 },
+  { value: "mobile", label: "Mobile", width: 390 },
+] as const;
+
+/**
+ * Preview without leaving the editor.
+ *
+ * The previous flow awaited the POST and then called `window.open`, by which point the
+ * user gesture was gone and Chrome blocked the popup silently - 200 from the API and
+ * nothing on screen. An iframe removes the popup from the path; the "abrir em nova aba"
+ * control is a real anchor, so it carries its own gesture and is never blocked.
+ */
+function PreviewDrawer({ url, onClose }: { url: string; onClose: () => void }) {
+  const [device, setDevice] = useState<string>("desktop");
+  const width = PREVIEW_DEVICES.find((d) => d.value === device)?.width ?? 1280;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="peg-overlay kalel-preview" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="kalel-preview__frame" role="dialog" aria-modal="true" aria-label="Prévia do artigo">
+        <header className="kalel-preview__bar">
+          <SegmentedControl
+            options={PREVIEW_DEVICES.map((d) => ({ value: d.value, label: d.label }))}
+            value={device}
+            onChange={setDevice}
+          />
+          <span className="kalel-preview__spacer" />
+          <a className="peg-btn peg-btn--secondary peg-btn--sm" href={url} target="_blank" rel="noopener noreferrer">
+            Abrir em nova aba
+          </a>
+          <Button size="sm" variant="secondary" onClick={onClose}>
+            Fechar
+          </Button>
+        </header>
+        <div className="kalel-preview__stage">
+          <iframe className="kalel-preview__iframe" style={{ width }} src={url} title="Prévia do artigo" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Internal-article search, rendered inside the editor's link dialog. */
+function InternalLinkBrowser({ onSelect }: { onSelect: (href: string) => void }) {
   const { activeSiteId } = useAuth();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<{ id: string; title: string; slug: string | null }[]>([]);
 
   useEffect(() => {
-    if (!open || !activeSiteId) return;
-    listArticles(activeSiteId, { q: q || undefined }).then((p) => setResults(p.items.map((a) => ({ id: a.id, title: a.title, slug: a.slug })))).catch(() => {});
-  }, [open, activeSiteId, q]);
-
-  if (!open) return null;
+    if (!activeSiteId) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      listArticles(activeSiteId, { q: q || undefined, limit: 8 })
+        .then((p) => {
+          if (!cancelled) setResults(p.items.map((a) => ({ id: a.id, title: a.title, slug: a.slug })));
+        })
+        .catch(() => {});
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [activeSiteId, q]);
 
   return (
-    <Modal title="Link interno" onClose={onClose}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 360 }}>
-        <Search placeholder="Buscar artigo…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 280, overflowY: "auto" }}>
-          {results.length === 0 && <p className="peg-table__muted">Nenhum artigo.</p>}
-          {results.map((r) => (
-            <button key={r.id} type="button" style={{ background: "none", border: 0, textAlign: "left", padding: "6px 8px", cursor: "pointer", borderRadius: 6, font: "inherit" }} onClick={() => r.slug && onSelect(`/${r.slug}`)}>
-              {r.title} <span className="peg-table__muted">/ {r.slug}</span>
+    <div className="kalel-linkbrowser">
+      <span className="peg-field__label">Ou escolha um artigo deste site</span>
+      <Search placeholder="Buscar artigo…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="kalel-linkbrowser__list">
+        {results.length === 0 && <p className="peg-table__muted">Nenhum artigo encontrado.</p>}
+        {results
+          .filter((r) => r.slug)
+          .map((r) => (
+            <button key={r.id} type="button" className="kalel-linkbrowser__item" onClick={() => onSelect(`/${r.slug}`)}>
+              <span>{r.title}</span>
+              <span className="peg-table__muted">/{r.slug}</span>
             </button>
           ))}
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function CheckboxGroup({ label, items, selected, onToggle }: { label: string; items: { id: string; name: string }[]; selected: Set<string>; onToggle: (id: string) => void }) {
-  return (
-    <div>
-      <span className="peg-field__label">{label}</span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 140, overflowY: "auto" }}>
-        {items.length === 0 && <span className="peg-table__muted">—</span>}
-        {items.map((it) => (
-          <label key={it.id} className="peg-checkbox" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="checkbox" checked={selected.has(it.id)} onChange={() => onToggle(it.id)} />
-            <span className="peg-checkbox__box" aria-hidden="true">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="m5 13 4 4L19 7" />
-              </svg>
-            </span>
-            <span>{it.name}</span>
-          </label>
-        ))}
       </div>
     </div>
   );

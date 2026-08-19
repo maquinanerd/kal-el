@@ -173,13 +173,39 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
   );
 }
 
-export function Breadcrumb({ items }: { items: { label: string; current?: boolean }[] }) {
+export type CrumbItem = {
+  label: string;
+  current?: boolean;
+  /** When present the crumb becomes a button that navigates. */
+  onNavigate?: () => void;
+};
+
+/**
+ * PEG topbar trail. The leaf is the current page: it is never a link, and it carries the
+ * muted pill treatment from the package so the eye finds "where am I" without reading.
+ */
+export function Breadcrumb({ items }: { items: CrumbItem[] }) {
+  if (items.length === 0) return null;
   return (
     <nav className="peg-breadcrumb" aria-label="Trilha">
       {items.map((it, i) => (
-        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-          {i > 0 && <span className="peg-breadcrumb__sep">/</span>}
-          <span className={it.current ? "peg-breadcrumb__current" : ""}>{it.label}</span>
+        <span key={i} className="peg-breadcrumb__item">
+          {i > 0 && (
+            <span className="peg-breadcrumb__sep" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </span>
+          )}
+          {it.onNavigate && !it.current ? (
+            <button type="button" className="peg-breadcrumb__link" onClick={it.onNavigate}>
+              {it.label}
+            </button>
+          ) : (
+            <span className={it.current ? "peg-breadcrumb__current" : ""} aria-current={it.current ? "page" : undefined}>
+              {it.label}
+            </span>
+          )}
         </span>
       ))}
     </nav>

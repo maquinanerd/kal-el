@@ -78,37 +78,345 @@ a {
 }
 .peg-editor__surface .ProseMirror a { color: var(--peg-accent); text-decoration: underline; }
 
-/* --- Article editor layout ---
-   The inspector was a hard 320px column with flex-shrink:0, so below ~1024px it
-   crushed the writing surface. Content stays dominant; the inspector stacks under it. */
-.kalel-editor-layout {
-  display: flex;
-  gap: var(--peg-space-5);
-  align-items: flex-start;
+/* ═══════════════════════════════════════════════════════════════════════════
+   ARTICLE EDITOR — matches design-system/references/kal-el-final/standalone
+   Shell B: workspace + contextual inspector. Content dominates; the inspector
+   is contextual and never competes with the prose.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The editor supplies its own gutters, so it takes the workspace padding off.
+   :has() keeps this out of the shell — no route table in AppShell, no remount. */
+.peg-content:has(> #conteudo > .kalel-editor) {
+  padding: 0;
 }
-.kalel-editor-layout__main {
+.peg-content:has(> #conteudo > .kalel-editor) > #conteudo {
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.kalel-editor {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  min-height: 100%;
+}
+.kalel-editor__main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--peg-space-4);
-}
-.kalel-editor-layout__aside {
-  width: 320px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--peg-space-4);
+  padding: var(--peg-space-4) var(--peg-space-6) var(--peg-space-12);
 }
 
+/* ── Action bar ─────────────────────────────────────────────────────────────
+   Publish is NOT the loudest control on a draft. Exactly one ink primary, and it
+   is the action the state actually calls for: send for review on a draft,
+   approve in review. Hierarchy comes from placement and variant, never colour. */
+.kalel-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  flex-wrap: wrap;
+  max-width: var(--peg-editor-width);
+  width: 100%;
+  margin: 0 auto;
+}
+.kalel-editor__actions-spacer { flex: 1; }
+.kalel-editor__scheduled { font: var(--peg-font-caption); color: var(--peg-text-secondary); }
+/* the inspector toggle only exists below the desktop breakpoint */
+.kalel-editor__inspector-toggle { display: none; }
+
+/* ── Article canvas: 820px of prose ─────────────────────────────────────── */
+.kalel-canvas {
+  max-width: var(--peg-editor-width);
+  width: 100%;
+  margin: 0 auto;
+  padding-top: var(--peg-space-6);
+}
+.kalel-canvas__kicker {
+  font: var(--peg-font-caption);
+  color: var(--peg-text-tertiary);
+  margin: 0 0 var(--peg-space-3);
+}
+/* The title is a heading that happens to be editable: no box, no border, it just
+   grows. A 36px input with a visible frame reads as a form field, and the
+   executable design is explicit that the article is the page, not a form. */
+.kalel-canvas__title,
+.kalel-canvas__dek {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  resize: none;
+  overflow: hidden;
+  color: var(--peg-text-primary);
+  font-family: var(--peg-font-sans);
+}
+.kalel-canvas__title {
+  font-size: 36px;
+  line-height: 44px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  text-wrap: pretty;
+  margin-bottom: var(--peg-space-3);
+}
+.kalel-canvas__dek {
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--peg-text-secondary);
+  text-wrap: pretty;
+  margin-bottom: var(--peg-space-5);
+}
+.kalel-canvas__title::placeholder,
+.kalel-canvas__dek::placeholder { color: var(--peg-text-disabled); }
+.kalel-canvas__title:focus-visible,
+.kalel-canvas__dek:focus-visible { outline: none; box-shadow: none; }
+
+/* the editor body inside the canvas loses its card chrome: the prose IS the surface */
+.kalel-canvas .peg-editor { border: 0; background: none; border-radius: 0; }
+.kalel-canvas .peg-editor__toolbar {
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-md);
+  background: var(--peg-surface);
+  padding: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 12;
+}
+.kalel-canvas .peg-editor__surface { padding: var(--peg-space-4) 0 0; }
+.kalel-canvas .peg-editor__surface .ProseMirror {
+  font: var(--peg-font-read);
+  color: var(--peg-text-body);
+  text-wrap: pretty;
+}
+
+/* ── Inspector ──────────────────────────────────────────────────────────── */
+.kalel-inspector {
+  width: var(--peg-inspector-width);
+  flex-shrink: 0;
+  align-self: stretch;
+  background: var(--peg-surface-inspector);
+  border-left: 1px solid var(--peg-border);
+  display: flex;
+  flex-direction: column;
+  /* sticky inside the workspace scroller: the article scrolls under it and the
+     inspector scrolls internally only when its own content is taller */
+  position: sticky;
+  top: 0;
+  max-height: calc(100dvh - var(--peg-topbar-height));
+}
+.kalel-inspector__head {
+  height: var(--peg-topbar-height);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  padding: 0 var(--peg-space-3);
+  border-bottom: 1px solid var(--peg-border);
+}
+.kalel-inspector__head .peg-segmented { flex: 1; }
+.kalel-inspector__head .peg-segmented__btn { flex: 1; }
+.kalel-inspector__close { display: none; }
+.kalel-inspector__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: var(--peg-space-6);
+}
+.kalel-inspector-scrim { display: none; }
+
+.kalel-url-preview {
+  font-family: var(--peg-font-mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* ── QA checklist ───────────────────────────────────────────────────────── */
+.kalel-qa { display: flex; flex-direction: column; gap: var(--peg-space-2); }
+.kalel-qa__count { font: var(--peg-font-label-strong); color: var(--peg-text-primary); }
+.kalel-qa__bar { display: flex; gap: 3px; }
+.kalel-qa__seg { flex: 1; height: 4px; border-radius: 2px; background: var(--peg-border); }
+.kalel-qa__seg--on { background: var(--peg-success); }
+.kalel-qa__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--peg-space-2); }
+.kalel-qa__item {
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  font: var(--peg-font-body-sm);
+  color: var(--peg-warning);
+}
+.kalel-qa__item--ok { color: var(--peg-text-secondary); }
+.kalel-qa__item--ok span { color: var(--peg-success); }
+
+/* ── SERP / social previews ─────────────────────────────────────────────── */
+.kalel-serp {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--peg-space-3);
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  font-family: Arial, sans-serif;
+}
+.kalel-serp__url { font-size: 12px; color: var(--peg-text-secondary); word-break: break-all; }
+.kalel-serp__title { font-size: 18px; line-height: 24px; color: #1a0dab; }
+[data-theme="dark"] .kalel-serp__title { color: #8ab4f8; }
+.kalel-serp__desc { font-size: 13px; line-height: 19px; color: var(--peg-text-secondary); }
+
+.kalel-social {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--peg-space-3);
+  border: 1px solid var(--peg-border);
+  border-left: 3px solid var(--peg-border-strong);
+  border-radius: var(--peg-radius-lg);
+  background: var(--peg-surface);
+}
+.kalel-social__domain { font: var(--peg-font-micro); color: var(--peg-text-tertiary); letter-spacing: 0.04em; }
+.kalel-social__title { font: var(--peg-font-label-strong); color: var(--peg-text-primary); }
+.kalel-social__desc { font: var(--peg-font-caption); color: var(--peg-text-secondary); }
+
+/* ── Revisions ──────────────────────────────────────────────────────────── */
+.kalel-revisions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.kalel-revisions__group { padding: var(--peg-space-2) 0; }
+.kalel-revisions__group + .kalel-revisions__group { border-top: 1px dotted var(--peg-divider); }
+.kalel-revisions__row { display: flex; align-items: center; justify-content: space-between; gap: var(--peg-space-2); }
+.kalel-revisions__meta { display: flex; flex-direction: column; min-width: 0; }
+.kalel-revisions__label { font: var(--peg-font-body-sm); color: var(--peg-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kalel-revisions__time { font: var(--peg-font-caption); color: var(--peg-text-tertiary); font-variant-numeric: tabular-nums; }
+.kalel-revisions__actions { display: flex; gap: 2px; flex-shrink: 0; }
+.kalel-revisions__toggle {
+  background: none;
+  border: 0;
+  padding: 2px 0 0;
+  font: var(--peg-font-caption);
+  color: var(--peg-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.kalel-revisions__nested { list-style: none; margin: var(--peg-space-1) 0 0; padding: 0 0 0 var(--peg-space-3); border-left: 1px dotted var(--peg-divider); }
+.kalel-revisions__nested li { display: flex; align-items: center; justify-content: space-between; gap: var(--peg-space-2); }
+
+/* ── Diff ───────────────────────────────────────────────────────────────── */
+.kalel-diff { display: grid; grid-template-columns: 1fr 1fr; gap: var(--peg-space-3); }
+.kalel-diff__pane {
+  white-space: pre-wrap;
+  font: var(--peg-font-body-sm);
+  background: var(--peg-canvas);
+  border: 1px solid var(--peg-border);
+  padding: var(--peg-space-2);
+  border-radius: var(--peg-radius-md);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* ── Preview drawer ─────────────────────────────────────────────────────── */
+.kalel-preview { align-items: stretch; justify-content: stretch; padding: var(--peg-space-6); }
+.kalel-preview__frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  overflow: hidden;
+}
+.kalel-preview__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  padding: var(--peg-space-2) var(--peg-space-3);
+  border-bottom: 1px solid var(--peg-border);
+  flex-shrink: 0;
+}
+.kalel-preview__spacer { flex: 1; }
+.kalel-preview__stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  background: var(--peg-surface-muted);
+  padding: var(--peg-space-4);
+}
+.kalel-preview__iframe {
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-md);
+  background: #fff;
+  max-width: 100%;
+  height: 100%;
+  min-height: 480px;
+  flex-shrink: 0;
+}
+
+/* ── Link browser inside the link dialog ────────────────────────────────── */
+.kalel-linkbrowser { display: flex; flex-direction: column; gap: var(--peg-space-2); border-top: 1px dotted var(--peg-divider); padding-top: var(--peg-space-3); }
+.kalel-linkbrowser__list { display: flex; flex-direction: column; max-height: 180px; overflow-y: auto; }
+.kalel-linkbrowser__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peg-space-2);
+  width: 100%;
+  padding: 6px var(--peg-space-2);
+  border: 0;
+  border-radius: var(--peg-radius-sm);
+  background: none;
+  font: var(--peg-font-body-sm);
+  color: var(--peg-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.kalel-linkbrowser__item:hover { background: var(--peg-surface-muted); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Responsive: below 1024 the inspector becomes a bottom sheet.
+   PEG rule 7 — the inspector does not simply stack 2000px under the article.
+   ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 1023px) {
-  .kalel-editor-layout {
-    flex-direction: column;
-  }
-  .kalel-editor-layout__aside {
+  .kalel-editor__main { padding: var(--peg-space-3) var(--peg-space-4) var(--peg-space-10); }
+  .kalel-editor__inspector-toggle { display: inline-flex; }
+
+  .kalel-inspector-scrim { display: block; z-index: 46; }
+  .kalel-inspector {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: 47;
     width: 100%;
-    flex-shrink: 1;
+    max-height: 86dvh;
+    border-left: 0;
+    border-top: 1px solid var(--peg-border);
+    border-radius: var(--peg-radius-lg) var(--peg-radius-lg) 0 0;
+    box-shadow: var(--peg-shadow-3);
+    transform: translateY(100%);
+    visibility: hidden;
+    transition: transform 180ms ease, visibility 180ms ease;
   }
+  .kalel-inspector--open { transform: translateY(0); visibility: visible; }
+  .kalel-inspector__close { display: inline-flex; }
+
+  .kalel-canvas__title { font-size: 28px; line-height: 34px; }
+  .kalel-canvas__dek { font-size: 16px; line-height: 24px; }
+  .kalel-diff { grid-template-columns: 1fr; }
+  .kalel-preview { padding: 0; }
+  .kalel-preview__frame { border-radius: 0; border: 0; }
+
+  /* PEG: 44px touch targets for the actions that matter on mobile */
+  .kalel-editor__actions .peg-btn { min-height: var(--peg-touch); }
+  .kalel-inspector .peg-btn { min-height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kalel-inspector { transition: none; }
 }
 
 /* --- Slash command menu (docs/02-EDITOR-UX.md) ---

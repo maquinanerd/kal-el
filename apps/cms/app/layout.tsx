@@ -5,6 +5,7 @@ import "@kal-el/design-system/styles.css";
 import "./globals.css";
 
 import { AuthProvider } from "../lib/auth";
+import { ChromeProvider } from "../lib/chrome";
 
 export const metadata: Metadata = {
   title: "Kal El CMS",
@@ -31,7 +32,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
       <body className="peg-body">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ChromeProvider>{children}</ChromeProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -1464,3 +1464,42 @@
   color: var(--peg-text-nav-label);
 }
 .peg-perm-matrix__items { display: flex; flex-wrap: wrap; gap: var(--peg-space-1); }
+
+/* ── Topbar composition (PEG) ──────────────────────────────────────────────
+   breadcrumb · [free centre] · save state · site · theme · account
+   The status slot has a reserved minimum width so a page that publishes no
+   status does not change the position of everything to its right. */
+.peg-topbar__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 92px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.peg-topbar__site { width: auto; min-width: 132px; max-width: 200px; height: var(--peg-control-sm); }
+
+.peg-breadcrumb__item { display: inline-flex; align-items: center; gap: var(--peg-space-1); min-width: 0; }
+.peg-breadcrumb__sep { display: inline-flex; color: var(--peg-rule); }
+.peg-breadcrumb__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--peg-text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.peg-breadcrumb__link:hover { color: var(--peg-text-primary); text-decoration: underline; }
+/* the leaf gets the muted pill from the package, so "where am I" reads without parsing */
+.peg-breadcrumb__current {
+  color: var(--peg-text-primary);
+  font-weight: 500;
+  background: var(--peg-surface-muted);
+  border-radius: 5px;
+  padding: 2px 7px;
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

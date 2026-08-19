@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   AppLayout,
+  Breadcrumb,
   Button,
   Content,
   IconBolt,
@@ -24,13 +25,56 @@ import {
 } from "@kal-el/design-system";
 
 import { useAuth } from "../lib/auth";
+import { useChrome, type Crumb } from "../lib/chrome";
 import { ThemeToggle } from "./ThemeToggle";
+
+/**
+ * Fallback trail for a page that has not published its own. Derived from the path so a
+ * screen is never breadcrumb-less, which is what makes the topbar slot stable.
+ */
+const SECTION_LABELS: Record<string, string> = {
+  articles: "Artigos",
+  media: "Mídia",
+  workflow: "Workflow",
+  calendar: "Calendário",
+  categories: "Categorias",
+  tags: "Tags",
+  entities: "Entidades",
+  authors: "Autores",
+  sources: "Fontes",
+  sites: "Sites",
+  users: "Usuários",
+  roles: "Papéis",
+  tokens: "Service tokens",
+  webhooks: "Webhooks",
+  audit: "Audit log",
+  settings: "Configurações",
+};
+
+const ADMIN_SECTIONS = new Set(["sites", "users", "roles", "tokens", "webhooks", "audit", "settings"]);
+
+function fallbackCrumbs(pathname: string): Crumb[] {
+  const segments = pathname.split("/").filter(Boolean);
+  const head = segments[0];
+  if (!head) return [{ label: "Dashboard" }];
+  const label = SECTION_LABELS[head] ?? head;
+  const trail: Crumb[] = [];
+  if (ADMIN_SECTIONS.has(head)) trail.push({ label: "Administração" });
+  trail.push(segments.length > 1 ? { label, href: `/${head}` } : { label });
+  return trail;
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, sites, activeSiteId, setActiveSite, signOut } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
+  const chrome = useChrome();
+  const crumbs = (chrome.breadcrumb.length > 0 ? chrome.breadcrumb : fallbackCrumbs(pathname)).map((c, i, all) => ({
+    ...c,
+    current: i === all.length - 1,
+    onNavigate: c.href ? () => router.push(c.href as string) : undefined,
+  }));
 
   // navigating from inside the drawer must close it, otherwise the scrim covers the page
   useEffect(() => {
@@ -98,9 +142,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           left={
             <>
               <MenuButton onClick={() => setNavOpen(true)} expanded={navOpen} />
+              {/* PEG topbar: breadcrumb on the left, so every screen says where it is */}
+              <Breadcrumb items={crumbs} />
+            </>
+          }
+          right={
+            <>
+              {/* Fixed-height slot. The autosave indicator lives HERE, not under the
+                  article H1 where it grew and collapsed the page on every cycle. */}
+              <div className="peg-topbar__status">{chrome.status}</div>
               <select
-                className="peg-select"
-                style={{ minWidth: 140, maxWidth: 220 }}
+                className="peg-select peg-topbar__site"
                 value={activeSiteId ?? ""}
                 onChange={(e) => setActiveSite(e.target.value)}
                 aria-label="Selecionar site"
@@ -112,10 +164,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </option>
                 ))}
               </select>
-            </>
-          }
-          right={
-            <>
               <ThemeToggle />
               <Button size="sm" variant="secondary" onClick={signOutAndGo}>
                 Sair
