@@ -37,6 +37,9 @@ export const SURFACES: Surface[] = [
   { id: "roles", label: "Roles", path: "/roles" },
   { id: "sites", label: "Sites", path: "/sites" },
   { id: "tokens", label: "Service tokens", path: "/tokens" },
+  // in the sweep for the same reason every other admin page is: a surface reachable from
+  // the sidebar and excluded from the scan is a surface nothing checks
+  { id: "webhooks", label: "Webhooks", path: "/webhooks" },
   { id: "audit", label: "Audit log", path: "/audit" },
   { id: "settings", label: "Settings", path: "/settings" },
 ];

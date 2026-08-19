@@ -168,7 +168,7 @@ export const authPlugin = fp(async (app: FastifyInstance) => {
     }
     // `rotateSessionToken` already stamps lastSeenAt, so only the non-rotating path needs
     // to; the idle clock reads this.
-    await touchSession(app.db, resolved.session.id);
+    await touchSession(app.db, resolved.session);
   });
 });
 

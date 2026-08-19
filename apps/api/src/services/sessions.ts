@@ -82,9 +82,21 @@ export async function resolveSession(db: Db, config: AppConfig, token: string): 
   return { ok: true, session, user };
 }
 
-/** Record use, for the idle clock. */
-export async function touchSession(db: Db, sessionId: string): Promise<void> {
-  await db.update(sessions).set({ lastSeenAt: new Date() }).where(eq(sessions.id, sessionId));
+/**
+ * How stale `lastSeenAt` may get before it is written again.
+ *
+ * The idle timeout is measured in hours, so recording activity to the minute is ample -
+ * and writing on every request means an UPDATE (and row contention) per request for an
+ * active editor, on a table every authenticated request already reads.
+ */
+const TOUCH_INTERVAL_MS = 60_000;
+
+/** Record use, for the idle clock. Throttled; see TOUCH_INTERVAL_MS. */
+export async function touchSession(db: Db, session: SessionRow): Promise<void> {
+  const last = session.lastSeenAt ?? session.createdAt;
+  const now = new Date();
+  if (now.getTime() - last.getTime() < TOUCH_INTERVAL_MS) return;
+  await db.update(sessions).set({ lastSeenAt: now }).where(eq(sessions.id, session.id));
 }
 
 export function rotationDue(config: AppConfig, session: SessionRow, now = new Date()): boolean {

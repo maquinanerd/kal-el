@@ -79,8 +79,20 @@ export const guardedFetch: typeof fetch = (input, init = {}) => {
   }
 
   const transport = url.protocol === "https:" ? https : http;
+  // HeadersInit is three shapes and the dispatcher only uses one, but this is typed as
+  // `fetch` - a caller passing a Headers instance would otherwise send no headers at all,
+  // silently dropping the signature.
   const headers: Record<string, string> = {};
-  for (const [k, v] of Object.entries((init.headers ?? {}) as Record<string, string>)) headers[k] = v;
+  const init_headers = init.headers;
+  if (init_headers instanceof Headers) {
+    init_headers.forEach((v, k) => {
+      headers[k] = v;
+    });
+  } else if (Array.isArray(init_headers)) {
+    for (const [k, v] of init_headers) if (k) headers[k] = v ?? "";
+  } else if (init_headers) {
+    for (const [k, v] of Object.entries(init_headers as Record<string, string>)) headers[k] = v;
+  }
   const body = typeof init.body === "string" ? init.body : undefined;
   if (body !== undefined) headers["content-length"] = String(Buffer.byteLength(body));
 
