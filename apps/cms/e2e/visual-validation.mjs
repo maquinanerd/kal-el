@@ -114,8 +114,16 @@ function measure() {
   }
 
   return {
+    /**
+     * Did the CMS shell actually render?
+     *
+     * Without this the sweep happily measured Next's error overlay and reported zero
+     * defects on every screen - the most dangerous possible result, because it looks like
+     * a pass. Every other number below is only meaningful when this is true.
+     */
+    shellRendered: !!app && !!content,
     frameHeight: app ? app.clientHeight : null,
-    viewport: window.innerHeight,
+    innerHeight: window.innerHeight,
     scroll,
     bodyScrolls: document.body.scrollHeight > window.innerHeight + 1,
     invisibleButtons: invisible,
@@ -193,23 +201,36 @@ async function main() {
 
   // ---- summary ----
   const errors = report.filter((r) => r.error);
-  const invisible = report.filter((r) => (r.invisibleButtons ?? []).some((b) => !b.disabled));
-  const unreachable = report.filter((r) => r.scroll && !r.scroll.reachesEnd);
-  const doubleScroll = report.filter((r) => r.bodyScrolls);
-  const enums = report.filter((r) => (r.rawEnums ?? []).length > 0);
+  const noShell = report.filter((r) => !r.error && !r.shellRendered);
+  const measured = report.filter((r) => !r.error && r.shellRendered);
+  const invisible = measured.filter((r) => (r.invisibleButtons ?? []).some((b) => !b.disabled));
+  const unreachable = measured.filter((r) => r.scroll && !r.scroll.reachesEnd);
+  const doubleScroll = measured.filter((r) => r.bodyScrolls);
+  const enums = measured.filter((r) => (r.rawEnums ?? []).length > 0);
 
   console.log(`\ncaptured ${report.length} combinations -> ${OUT}`);
+  console.log(`actually measured     : ${measured.length}`);
   console.log(`nav errors            : ${errors.length}`);
+  console.log(`shell did NOT render  : ${noShell.length}`);
   console.log(`invisible CTAs        : ${invisible.length}`);
   console.log(`unreachable content   : ${unreachable.length}`);
   console.log(`double scrollbars     : ${doubleScroll.length}`);
   console.log(`raw enums in UI       : ${enums.length}`);
   for (const r of errors.slice(0, 5)) console.log(`  ERROR ${r.surface}/${r.viewport}/${r.theme}: ${r.error}`);
+  for (const r of noShell.slice(0, 8)) console.log(`  NO SHELL ${r.surface}/${r.viewport}/${r.theme}`);
   for (const r of invisible.slice(0, 8)) {
     console.log(`  INVISIBLE ${r.surface}/${r.viewport}/${r.theme}:`, JSON.stringify(r.invisibleButtons.filter((b) => !b.disabled)));
   }
   for (const r of unreachable.slice(0, 8)) console.log(`  UNREACHABLE ${r.surface}/${r.viewport}/${r.theme}:`, JSON.stringify(r.scroll));
   for (const r of enums.slice(0, 8)) console.log(`  ENUM ${r.surface}/${r.viewport}/${r.theme}:`, r.rawEnums.join(","));
+
+  // A sweep whose subject never rendered must not read as a pass.
+  if (measured.length === 0 || noShell.length > 0 || errors.length > 0) {
+    console.log("\nSWEEP INCONCLUSIVE — the numbers above do not describe the product.");
+    process.exitCode = 1;
+  } else {
+    console.log("\nSWEEP OK");
+  }
 }
 
 main().catch((e) => {
