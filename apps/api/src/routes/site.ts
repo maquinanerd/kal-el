@@ -303,6 +303,7 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
             slug: row.slug,
             bio: row.bio ?? null,
             email: row.email ?? null,
+            userId: row.userId ?? null,
             avatarMediaId: row.avatarMediaId ?? null,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),

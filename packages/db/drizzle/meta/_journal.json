@@ -8,6 +8,13 @@
       "when": 1786745685890,
       "tag": "0000_furry_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787110433556,
+      "tag": "0001_flaky_stellaris",
+      "breakpoints": true
     }
   ]
 }

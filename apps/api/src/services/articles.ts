@@ -353,9 +353,20 @@ export async function updateArticle(
   if (opts.requireOwnership && actor.kind === "user") {
     const userId = actor.userId ?? null;
     const isCreator = row.createdBy === userId;
+    // `articleAuthors.authorId` is an FK to `authors.id` - an editorial byline, not an
+    // account. Comparing it directly to a user id compares two disjoint UUID spaces and
+    // can never match, so a legitimately credited co-author was always refused. The join
+    // has to go through `authors.userId`.
     const isListedAuthor =
       userId != null &&
-      (await db.query.articleAuthors.findFirst({ where: and(eq(articleAuthors.articleId, articleId), eq(articleAuthors.authorId, userId)) })) != null;
+      (
+        await db
+          .select({ id: articleAuthors.authorId })
+          .from(articleAuthors)
+          .innerJoin(authors, eq(authors.id, articleAuthors.authorId))
+          .where(and(eq(articleAuthors.articleId, articleId), eq(authors.userId, userId)))
+          .limit(1)
+      ).length > 0;
     if (!isCreator && !isListedAuthor) {
       throw forbidden("you can only edit your own articles");
     }

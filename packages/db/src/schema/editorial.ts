@@ -74,11 +74,25 @@ export const authors = pgTable(
     slug: text("slug").notNull(),
     bio: text("bio"),
     email: text("email"),
+    /**
+     * Optional link to the authenticated account behind this byline.
+     *
+     * An author is an editorial byline, not an account: guest contributors and imported
+     * WordPress authors have no user, and one person can have a separate byline per site.
+     * When the link exists, ownership checks can resolve "is the caller an author of this
+     * article?" - `articleAuthors.authorId` points at `authors.id`, so comparing it to a
+     * user id compares two disjoint UUID spaces and never matches.
+     */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     avatarMediaId: uuid("avatar_media_id").references(() => media.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("authors_site_slug_unique").on(t.siteId, t.slug)],
+  (t) => [
+    uniqueIndex("authors_site_slug_unique").on(t.siteId, t.slug),
+    // at most one byline per account per site; NULL user_id rows are exempt
+    uniqueIndex("authors_site_user_unique").on(t.siteId, t.userId),
+  ],
 );
 
 export const sources = pgTable(

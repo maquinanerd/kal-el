@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
-import { authors, categories, entities, sources, tags } from "@kal-el/db/schema";
+import { authors, categories, entities, sources, tags, userRoles } from "@kal-el/db/schema";
 import type {
   CreateAuthorBody,
   CreateCategoryBody,
@@ -14,9 +14,28 @@ import type {
   UpdateTagBody,
 } from "@kal-el/contracts";
 
-import { conflict, isUniqueViolation, notFound } from "../plugins/errors.js";
+import { badRequest, conflict, isUniqueViolation, notFound, pgConstraint } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import type { ActorRef } from "./articles.js";
+
+/**
+ * A byline may only be linked to an account that actually belongs to this site -
+ * otherwise linking would hand a user from another tenant edit rights here.
+ */
+/** Distinguishes the two unique constraints on `authors` so the message is not a lie. */
+function authorConflict(err: unknown, slug?: string) {
+  if (pgConstraint(err) === "authors_site_user_unique") {
+    return conflict("this account already has an author byline on this site", { field: "userId" });
+  }
+  return conflict(slug ? `author slug "${slug}" already exists` : "author already exists", { field: "slug" });
+}
+
+async function assertUserIsSiteMember(db: Db, siteId: string, userId: string): Promise<void> {
+  const membership = await db.query.userRoles.findFirst({
+    where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, siteId)),
+  });
+  if (!membership) throw badRequest("user is not a member of this site", { userId });
+}
 
 function iso(row: { createdAt: Date; updatedAt: Date }) {
   return { createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
@@ -147,7 +166,11 @@ export async function listEntities(db: Db, siteId: string, type?: string) {
 export async function createAuthor(db: Db, siteId: string, actor: ActorRef, body: CreateAuthorBody) {
   try {
     const row = await db.transaction(async (tx) => {
-      const [inserted] = await tx.insert(authors).values({ siteId, name: body.name, slug: body.slug, bio: body.bio ?? null, email: body.email ?? null }).returning();
+      if (body.userId) await assertUserIsSiteMember(tx as unknown as Db, siteId, body.userId);
+      const [inserted] = await tx
+        .insert(authors)
+        .values({ siteId, name: body.name, slug: body.slug, bio: body.bio ?? null, email: body.email ?? null, userId: body.userId ?? null })
+        .returning();
       if (!inserted) throw new Error("createAuthor failed");
       await writeAudit(tx, {
         siteId,
@@ -164,9 +187,7 @@ export async function createAuthor(db: Db, siteId: string, actor: ActorRef, body
     });
     return row;
   } catch (err) {
-    if (isUniqueViolation(err)) {
-      throw conflict(`author slug "${body.slug}" already exists`, { field: "slug" });
-    }
+    if (isUniqueViolation(err)) throw authorConflict(err, body.slug);
     throw err;
   }
 }
@@ -180,6 +201,7 @@ export async function listAuthors(db: Db, siteId: string) {
     slug: r.slug,
     bio: r.bio ?? null,
     email: r.email ?? null,
+    userId: r.userId ?? null,
     avatarMediaId: r.avatarMediaId ?? null,
     ...iso(r),
   }));
@@ -339,22 +361,34 @@ export async function deleteEntity(db: Db, siteId: string, entityId: string, act
 export async function updateAuthor(db: Db, siteId: string, authorId: string, actor: ActorRef, body: UpdateAuthorBody) {
   const existing = await db.query.authors.findFirst({ where: and(eq(authors.id, authorId), eq(authors.siteId, siteId)) });
   if (!existing) throw notFound("author not found");
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(authors)
-      .set({
-        name: body.name ?? existing.name,
-        slug: body.slug ?? existing.slug,
-        bio: body.bio !== undefined ? body.bio : existing.bio,
-        email: body.email !== undefined ? body.email : existing.email,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(authors.id, authorId), eq(authors.siteId, siteId)))
-      .returning();
-    if (!row) throw notFound("author not found");
-    await writeUpdateAudit(tx, siteId, actor, "authors.update", "author", authorId, Object.keys(body));
-    return row;
-  });
+  if (body.userId) await assertUserIsSiteMember(db, siteId, body.userId);
+
+  const next = {
+    name: body.name ?? existing.name,
+    slug: body.slug ?? existing.slug,
+    bio: body.bio !== undefined ? body.bio : existing.bio,
+    email: body.email !== undefined ? body.email : existing.email,
+    userId: body.userId !== undefined ? body.userId : existing.userId,
+    updatedAt: new Date(),
+  };
+
+  let updated: typeof authors.$inferSelect;
+  try {
+    updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(authors)
+        .set(next)
+        .where(and(eq(authors.id, authorId), eq(authors.siteId, siteId)))
+        .returning();
+      if (!row) throw notFound("author not found");
+      await writeUpdateAudit(tx, siteId, actor, "authors.update", "author", authorId, Object.keys(body));
+      return row;
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) throw authorConflict(err, body.slug);
+    throw err;
+  }
+
   return {
     id: updated.id,
     siteId: updated.siteId,
@@ -362,6 +396,7 @@ export async function updateAuthor(db: Db, siteId: string, authorId: string, act
     slug: updated.slug,
     bio: updated.bio ?? null,
     email: updated.email ?? null,
+    userId: updated.userId ?? null,
     avatarMediaId: updated.avatarMediaId ?? null,
     ...iso(updated),
   };

@@ -289,6 +289,12 @@ export const authorSchema = z.object({
   slug: z.string().min(1).max(140),
   bio: z.string().max(2000).nullable(),
   email: z.string().email().nullable(),
+  /**
+   * The account behind this byline, when there is one. An author is an editorial byline,
+   * not an account: guest contributors and imported authors have no user. When set, the
+   * linked user is treated as an owner of articles carrying this byline.
+   */
+  userId: uuidSchema.nullable(),
   avatarMediaId: uuidSchema.nullable(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
@@ -300,6 +306,7 @@ export const createAuthorBodySchema = z
     slug: authorSchema.shape.slug,
     bio: z.string().max(2000).nullable().optional(),
     email: z.string().email().nullable().optional(),
+    userId: uuidSchema.nullable().optional(),
   })
   .strict();
 
@@ -355,6 +362,7 @@ export const updateAuthorBodySchema = z
     slug: authorSchema.shape.slug.optional(),
     bio: z.string().max(2000).nullable().optional(),
     email: z.string().email().nullable().optional(),
+    userId: uuidSchema.nullable().optional(),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
