@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { serviceTokens, sessions, users, userRoles } from "@kal-el/db/schema";
+import { serviceTokens, userRoles } from "@kal-el/db/schema";
 import { hashToken, getEffectivePermissions } from "@kal-el/auth";
 import {
   createSiteBodySchema,
@@ -15,6 +15,7 @@ import {
 } from "@kal-el/contracts";
 
 import { badRequest, forbidden, unauthorized } from "../plugins/errors.js";
+import { csrfFailed } from "../plugins/auth.js";
 import { getSite, listSites, createSite, updateSite } from "../services/sites.js";
 import { createUser, listUsers } from "../services/users.js";
 import { createRole, listRoles, assignRoleToUser, getRolePermissions, grantOwnerOnSite, type RoleAuditActor } from "../services/roles.js";
@@ -64,23 +65,20 @@ async function requireAdminPermission(
     };
   }
 
-  const session = await app.db.query.sessions.findFirst({
-    where: and(eq(sessions.tokenHash, hashToken(credentials.token)), gt(sessions.expiresAt, new Date())),
-  });
-  if (!session) throw unauthorized("invalid or expired session");
+  // Resolved once per request by the auth plugin: expiry, idle timeout, absolute timeout
+  // and the disabled-account check all apply here identically to /v1/sites/*.
+  const resolved = req.session;
+  if (!resolved) throw unauthorized("invalid or expired session");
+  if (!resolved.ok) {
+    if (resolved.status === 403) throw forbidden(resolved.message);
+    throw unauthorized(resolved.message);
+  }
+  const { session, user } = resolved;
 
   // Same double-submit check `/v1/sites/*` runs. Without it every mutating admin route -
   // create site, create user, assign role, mint token, register webhook - was reachable
   // cross-origin from any same-site subdomain, because the cookie is sameSite=lax.
-  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
-    const csrfHeader = req.headers["x-kal-el-csrf"];
-    if (typeof csrfHeader !== "string" || hashToken(csrfHeader) !== session.csrfTokenHash) {
-      throw forbidden("CSRF validation failed");
-    }
-  }
-
-  const user = await app.db.query.users.findFirst({ where: eq(users.id, session.userId) });
-  if (!user || user.status === "disabled") throw forbidden("user is not active");
+  if (csrfFailed(req, session.csrfTokenHash)) throw forbidden("CSRF validation failed");
 
   const memberships = await app.db
     .selectDistinct({ siteId: userRoles.siteId })

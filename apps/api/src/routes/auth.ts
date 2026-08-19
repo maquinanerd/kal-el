@@ -1,14 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Db } from "@kal-el/db";
 import { users, sites, userRoles, sessions, roles, permissions, rolePermissions, serviceTokens } from "@kal-el/db/schema";
-import { hashToken, verifyPassword, generateOpaqueToken, sessionTokenPrefix, generateCsrfToken, hashPassword } from "@kal-el/auth";
+import { hashToken, verifyPassword, hashPassword } from "@kal-el/auth";
 import { loginBodySchema, initBootstrapBodySchema } from "@kal-el/contracts";
 
 import { badRequest, forbidden, unauthorized } from "../plugins/errors.js";
+import { csrfFailed } from "../plugins/auth.js";
 import { writeAudit } from "../plugins/audit.js";
 import { OWNER_ROLE_KEY } from "../services/roles.js";
+import { createSession, revokeUserSessions } from "../services/sessions.js";
 import { toUserDto } from "../services/users.js";
 
 /**
@@ -23,6 +25,23 @@ function constantTimeEquals(a: string, b: string): boolean {
 
 const SESSION_COOKIE = "ke_session";
 const CSRF_COOKIE = "ke_csrf";
+
+/**
+ * The session the auth plugin already resolved, or the refusal it produced.
+ *
+ * Every reader here used to run its own token lookup with a different subset of the
+ * checks - which is how `/v1/auth/me` and `/v1/me/sites` ended up answering for disabled
+ * accounts until that was patched into each of them separately.
+ */
+function requireValidSession(req: FastifyRequest) {
+  const resolved = req.session;
+  if (!resolved) throw unauthorized();
+  if (!resolved.ok) {
+    if (resolved.status === 403) throw forbidden(resolved.message);
+    throw unauthorized(resolved.message);
+  }
+  return resolved;
+}
 
 function sessionCookieOptions(app: FastifyInstance) {
   const config = app.config;
@@ -60,21 +79,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const ok = await verifyPassword(password, user.passwordHash);
       if (!ok) throw unauthorized("invalid credentials");
 
-      const token = generateOpaqueToken(sessionTokenPrefix());
-      const csrf = generateCsrfToken();
-      const ttlDays = app.config.SESSION_TTL_DAYS;
-      const [session] = await app.db
-        .insert(sessions)
-        .values({
-          userId: user.id,
-          tokenHash: hashToken(token),
-          csrfTokenHash: hashToken(csrf),
-          expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
-          ip: req.ip,
-          userAgent: req.headers["user-agent"] ?? null,
-        })
-        .returning();
-      if (!session) throw new Error("login failed to create session");
+      const { session, token, csrf } = await createSession(app.db, app.config, user, {
+        ip: req.ip,
+        userAgent: req.headers["user-agent"] ?? null,
+      });
 
       reply.setCookie(SESSION_COOKIE, token, sessionCookieOptions(app));
       reply.setCookie(CSRF_COOKIE, csrf, { ...sessionCookieOptions(app), httpOnly: false });
@@ -94,13 +102,35 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post("/v1/auth/logout", async (req, reply) => {
-    const token = req.cookies?.[SESSION_COOKIE];
-    if (token && token.startsWith("ke_s.")) {
-      await app.db.delete(sessions).where(eq(sessions.tokenHash, hashToken(token)));
+    // Delete the row rather than clearing the cookie alone: a cookie the browser forgot
+    // is still a valid credential to anyone who copied it.
+    const resolved = req.session;
+    if (resolved?.ok) {
+      await app.db.delete(sessions).where(eq(sessions.id, resolved.session.id));
+    } else {
+      const token = req.cookies?.[SESSION_COOKIE];
+      if (token && token.startsWith("ke_s.")) {
+        await app.db.delete(sessions).where(eq(sessions.tokenHash, hashToken(token)));
+      }
     }
     reply.clearCookie(SESSION_COOKIE, sessionCookieOptions(app));
     reply.clearCookie(CSRF_COOKIE, { ...sessionCookieOptions(app), httpOnly: false });
     return { data: { loggedOut: true } };
+  });
+
+  /**
+   * Log out everywhere.
+   *
+   * A password compromise is not answered by changing the password alone while every
+   * previously issued cookie keeps working for up to SESSION_TTL_DAYS.
+   */
+  app.post("/v1/auth/logout-all", async (req, reply) => {
+    const resolved = requireValidSession(req);
+    if (csrfFailed(req, resolved.session.csrfTokenHash)) throw forbidden("CSRF validation failed");
+    const revoked = await revokeUserSessions(app.db, resolved.user.id);
+    reply.clearCookie(SESSION_COOKIE, sessionCookieOptions(app));
+    reply.clearCookie(CSRF_COOKIE, { ...sessionCookieOptions(app), httpOnly: false });
+    return { data: { loggedOut: true, revoked } };
   });
 
   app.get("/v1/auth/me", async (req) => {
@@ -117,34 +147,17 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       if (row.expiresAt && row.expiresAt < new Date()) throw unauthorized("service token expired");
       return { data: { kind: "service", id: row.id, name: row.name, siteId: row.siteId, scopes: row.scopes } };
     }
-    const sessionByToken = await app.db.query.sessions.findFirst({
-      where: eq(sessions.tokenHash, hashToken(credentials.token)),
-    });
-    if (!sessionByToken || sessionByToken.expiresAt < new Date()) throw unauthorized("session expired");
-    const user = await app.db.query.users.findFirst({ where: eq(users.id, sessionByToken.userId) });
-    if (!user) throw unauthorized();
-    // a disabled account keeps an unexpired session; every data route rejects it, so this
-    // one should not keep answering with the profile either
-    if (user.status === "disabled") throw forbidden("user is not active");
-    return { data: { kind: "user", user: toUserDto(user), sessionId: sessionByToken.id } };
+    const resolved = requireValidSession(req);
+    return { data: { kind: "user", user: toUserDto(resolved.user), sessionId: resolved.session.id } };
   });
 
   app.get("/v1/me/sites", async (req) => {
-    const credentials = req.credentials;
-    if (!credentials || credentials.kind !== "session") throw unauthorized();
-    const session = await app.db.query.sessions.findFirst({
-      where: eq(sessions.tokenHash, hashToken(credentials.token)),
-    });
-    if (!session || session.expiresAt < new Date()) throw unauthorized("session expired");
-    // same checks /v1/auth/me makes: a disabled account keeps an unexpired cookie for up
-    // to SESSION_TTL_DAYS, and this route discloses every site they belonged to
-    const sitesUser = await app.db.query.users.findFirst({ where: eq(users.id, session.userId) });
-    if (!sitesUser) throw unauthorized();
-    if (sitesUser.status === "disabled") throw forbidden("user is not active");
+    if (req.credentials?.kind !== "session") throw unauthorized();
+    const resolved = requireValidSession(req);
     const memberships = await app.db
       .selectDistinct({ siteId: userRoles.siteId })
       .from(userRoles)
-      .where(eq(userRoles.userId, session.userId));
+      .where(eq(userRoles.userId, resolved.user.id));
     const ids = memberships.map((m) => m.siteId);
     if (ids.length === 0) return { data: [] };
     const rows = await app.db.select().from(sites).where(inArray(sites.id, ids));
@@ -160,13 +173,40 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.post("/v1/bootstrap/init", async (req, reply) => {
+  /**
+   * One-time provisioning.
+   *
+   * Hardening here is about a single credential that creates a full-permission owner:
+   *
+   *  - a dedicated rate limit, far below the global one. Without it the bootstrap token
+   *    was guessable at 600 attempts a minute, and it is the only secret in the system
+   *    that is compared against a value an unauthenticated caller supplies.
+   *  - one refusal for every failure mode. Answering "bootstrap token required" for a bad
+   *    token and "system is already initialized" for a good one turns the endpoint into
+   *    an oracle: a caller learns their guess was correct from a system that then refuses
+   *    to act on it, which is exactly the signal an offline search needs.
+   *  - the advisory lock and the already-initialized check inside one transaction, so two
+   *    concurrent calls cannot both create an owner.
+   */
+  app.post("/v1/bootstrap/init", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req, reply) => {
+    // Identical refusal for a missing token, a wrong token, and an already-provisioned
+    // system. The caller who legitimately holds the token knows which it is; nobody else
+    // learns anything from the difference.
+    const refuse = () => forbidden("bootstrap is not available");
+
     const header = req.headers["x-bootstrap-token"];
-    if (!app.config.BOOTSTRAP_TOKEN || typeof header !== "string" || !constantTimeEquals(header, app.config.BOOTSTRAP_TOKEN)) {
-      throw forbidden("bootstrap token required");
-    }
+    const tokenOk =
+      Boolean(app.config.BOOTSTRAP_TOKEN) &&
+      typeof header === "string" &&
+      constantTimeEquals(header, app.config.BOOTSTRAP_TOKEN as string);
 
     const parsed = initBootstrapBodySchema.safeParse(req.body);
+    if (!tokenOk) {
+      // Logged, not returned: an operator debugging a failed provisioning run needs to be
+      // able to tell these apart, and the server log is the right place for that.
+      req.log.warn({ reason: app.config.BOOTSTRAP_TOKEN ? "bad-token" : "not-configured" }, "bootstrap refused");
+      throw refuse();
+    }
     if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
     const { site, user } = parsed.data;
 
@@ -178,7 +218,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       // surfacing the duplicate. The unique constraints only stop identical payloads.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('kal-el:bootstrap', 0))`);
       const existing = await tx.select({ id: users.id }).from(users).limit(1);
-      if (existing.length > 0) throw forbidden("system is already initialized");
+      if (existing.length > 0) {
+        req.log.warn({ reason: "already-initialized" }, "bootstrap refused");
+        throw refuse();
+      }
 
       const [siteRow] = await tx.insert(sites).values(site).returning();
       if (!siteRow) throw new Error("bootstrap site failed");

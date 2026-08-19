@@ -43,7 +43,10 @@ export async function buildApp(opts: { connectionString: string; config: AppConf
     trustProxy: trustProxySetting(opts.config),
     genReqId: () => requestId(),
     bodyLimit: 5 * 1024 * 1024,
-    maxParamLength: 1024,
+    // Top-level `maxParamLength` is deprecated in Fastify 5 and printed a FSTDEP022
+    // warning on every boot and in every test run - noise that trains an operator to
+    // ignore startup warnings.
+    routerOptions: { maxParamLength: 1024 },
   });
   app.decorate("config", opts.config);
   app.decorate("storage", createStorageProvider(opts.config));

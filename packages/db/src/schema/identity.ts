@@ -96,9 +96,26 @@ export const sessions = pgTable(
      * `createdAt`, which anchors the absolute timeout and must not move.
      */
     rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+    /**
+     * The token this session had immediately before the last rotation, honoured until
+     * `previousTokenExpiresAt`.
+     *
+     * Rotation without a grace window breaks the common case rather than a rare one. The
+     * CMS issues several requests in parallel; if two of them cross the rotation
+     * threshold together, one wins the guarded update and the others are still carrying a
+     * token that no longer exists - so half a page load 401s. The same happens whenever a
+     * response carrying the new cookie is lost. A short overlap makes rotation invisible
+     * to a working client while still bounding how long a copied token stays usable.
+     */
+    previousTokenHash: text("previous_token_hash"),
+    previousTokenExpiresAt: timestamp("previous_token_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("sessions_token_hash_unique").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
+  (t) => [
+    uniqueIndex("sessions_token_hash_unique").on(t.tokenHash),
+    index("sessions_user_idx").on(t.userId),
+    index("sessions_previous_token_hash_idx").on(t.previousTokenHash),
+  ],
 );
 
 export const serviceTokens = pgTable(
