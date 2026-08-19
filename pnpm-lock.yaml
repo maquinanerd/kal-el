@@ -188,6 +188,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@kal-el/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@kal-el/db':
         specifier: workspace:*
         version: link:../../packages/db

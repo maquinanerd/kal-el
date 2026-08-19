@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@kal-el/db": "workspace:*",
+    "@kal-el/contracts": "workspace:*",
     "@kal-el/events": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.13.1",

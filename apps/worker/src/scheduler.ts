@@ -1,6 +1,7 @@
 import { and, eq, lte, sql } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
 import { articleRevisions, articles, auditLog, outboxEvents } from "@kal-el/db/schema";
+import { migrateDocumentToV2 } from "@kal-el/contracts";
 
 export type PromoteSummary = { promoted: number };
 
@@ -53,7 +54,10 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
       await tx.insert(articleRevisions).values({
         articleId: id,
         revisionNumber: Number(maxRev[0]?.n ?? 0) + 1,
-        document: (row.document ?? DEFAULT_DOCUMENT) as never,
+        // every other publish path migrates first; this one filed the raw column, so a
+        // scheduled publish of a still-v1 article wrote a v1 body into a table whose
+        // schema says v2 - the `as never` cast is what kept the compiler quiet about it
+        document: (row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT) as never,
         createdBy: null,
         note: "scheduled publish",
       });

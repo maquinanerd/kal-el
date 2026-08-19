@@ -22,15 +22,24 @@ export type DispatchSummary = {
   delivered: number;
   failed: number;
   noSubscribers: number;
+  /** hooks skipped because they already succeeded for that event in an earlier pass */
+  alreadyDelivered: number;
 };
 
-const LOCK_MS = 60_000;
+const LOCK_FLOOR_MS = 60_000;
 
 /**
  * Claim due outbox events (SKIP LOCKED) and dispatch them to matching
  * webhooks. Delivery is at-least-once and idempotent: every request carries
  * `X-Kal-El-Idempotency` so subscribers can dedupe, and deliveries upsert on
  * (webhook, event).
+ *
+ * Retry state is tracked per (hook, event) in `webhook_deliveries`; the event row only
+ * carries the aggregate. Reading it the other way around - one shared retry counter for
+ * every subscriber of an event - made a single broken hook corrupt its healthy siblings:
+ * they were re-POSTed on every pass, their attempt counter climbed with each one, and the
+ * moment the broken hook exhausted its budget the whole event went to `failed`, which the
+ * claim query never looks at again.
  */
 export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Promise<DispatchSummary> {
   const {
@@ -43,6 +52,10 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     allowPrivateTargets = process.env.ALLOW_PRIVATE_WEBHOOKS === "true",
   } = opts;
   const now = new Date();
+  // The loop below is sequential over every claimed event and every one of its hooks, so
+  // the worst case is well past a flat minute. A lock that expires mid-pass lets a second
+  // replica claim rows that are still in flight.
+  const lockMs = Math.max(LOCK_FLOOR_MS, limit * timeoutMs * 2);
 
   const due = await db.transaction(async (tx) => {
     const rows = await tx
@@ -62,42 +75,68 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     if (rows.length > 0) {
       await tx
         .update(outboxEvents)
-        .set({ lockedUntil: new Date(now.getTime() + LOCK_MS) })
+        .set({ lockedUntil: new Date(now.getTime() + lockMs) })
         .where(inArray(outboxEvents.id, rows.map((r) => r.id)));
     }
     return rows;
   });
 
-  const summary: DispatchSummary = { claimed: due.length, delivered: 0, failed: 0, noSubscribers: 0 };
+  const summary: DispatchSummary = { claimed: due.length, delivered: 0, failed: 0, noSubscribers: 0, alreadyDelivered: 0 };
 
   for (const event of due) {
     const subscribers = await db
       .select()
       .from(webhooks)
-      .where(and(eq(webhooks.siteId, event.siteId), sql`${webhooks.events} ? ${event.eventType}`));
+      .where(and(eq(webhooks.siteId, event.siteId), sql`${webhooks.events} ? ${event.eventType}`))
+      // heap order made which hook ran first - and so which one shaped the shared state -
+      // effectively random between passes
+      .orderBy(asc(webhooks.createdAt), asc(webhooks.id));
 
     if (subscribers.length === 0) {
-      await db.update(outboxEvents).set({ status: "published", publishedAt: new Date() }).where(eq(outboxEvents.id, event.id));
+      await db.update(outboxEvents).set({ status: "published", publishedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
       summary.noSubscribers++;
-      summary.delivered++;
       continue;
     }
 
-    let allSuccess = true;
+    const pendingRetries: Date[] = [];
+    let lastError: string | null = null;
+    let exhausted = 0;
+    let failures = 0;
+
     for (const hook of subscribers) {
-      const ok = await dispatchOne(db, event, hook, { fetchImpl, maxAttempts, baseDelayMs, timeoutMs, onLog, allowPrivateTargets });
-      if (ok) summary.delivered++;
-      else {
-        summary.failed++;
-        allSuccess = false;
+      const outcome = await dispatchOne(db, event, hook, { fetchImpl, maxAttempts, baseDelayMs, timeoutMs, onLog, allowPrivateTargets });
+      if (outcome.kind === "skipped") {
+        summary.alreadyDelivered++;
+        continue;
       }
+      if (outcome.kind === "success") {
+        summary.delivered++;
+        continue;
+      }
+      summary.failed++;
+      failures++;
+      lastError = outcome.error;
+      if (outcome.retryAt) pendingRetries.push(outcome.retryAt);
+      else exhausted++;
     }
 
-    if (allSuccess) {
-      await db.update(outboxEvents).set({ status: "published", publishedAt: new Date() }).where(eq(outboxEvents.id, event.id));
+    if (failures === 0) {
+      await db.update(outboxEvents).set({ status: "published", publishedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+    } else if (pendingRetries.length === 0) {
+      // every failing subscriber is out of attempts - only now is the event itself dead
+      await db
+        .update(outboxEvents)
+        .set({ status: "failed", attempts: event.attempts + 1, lastError, lockedUntil: null })
+        .where(eq(outboxEvents.id, event.id));
     } else {
-      // leave pending; clear the claim so the next poll can retry
-      await db.update(outboxEvents).set({ lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+      const soonest = pendingRetries.reduce((a, b) => (a < b ? a : b));
+      await db
+        .update(outboxEvents)
+        .set({ availableAt: soonest, attempts: event.attempts + 1, lastError, lockedUntil: null })
+        .where(eq(outboxEvents.id, event.id));
+      if (exhausted > 0) {
+        onLog(`event ${event.id}: ${exhausted} subscriber(s) dead-lettered, ${pendingRetries.length} still retrying`);
+      }
     }
   }
 
@@ -106,6 +145,11 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
 
 type OutboxRow = typeof outboxEvents.$inferSelect;
 type WebhookRow = typeof webhooks.$inferSelect;
+
+type HookOutcome =
+  | { kind: "success" }
+  | { kind: "skipped" }
+  | { kind: "failure"; retryAt: Date | null; error: string };
 
 async function dispatchOne(
   db: Db,
@@ -119,15 +163,19 @@ async function dispatchOne(
     onLog: (l: string) => void;
     allowPrivateTargets: boolean;
   },
-): Promise<boolean> {
+): Promise<HookOutcome> {
+  const existing = await db.query.webhookDeliveries.findFirst({
+    where: and(eq(webhookDeliveries.webhookId, hook.id), eq(webhookDeliveries.outboxEventId, event.id)),
+  });
+  // A hook that already took this event must never see it again. The event stays pending
+  // while any sibling is still failing, so without this a healthy subscriber received the
+  // same `article.published` once per retry cycle.
+  if (existing?.status === "success") return { kind: "skipped" };
+
   const body = JSON.stringify(event.payload);
   const signature = signWebhook(hook.secret, body);
   const deliveryId = randomUUID();
   const idempotencyKey = event.idempotencyKey ?? `${event.id}`;
-
-  const existing = await db.query.webhookDeliveries.findFirst({
-    where: and(eq(webhookDeliveries.webhookId, hook.id), eq(webhookDeliveries.outboxEventId, event.id)),
-  });
   const attempt = existing ? existing.attempt + 1 : 1;
 
   try {
@@ -164,22 +212,23 @@ async function dispatchOne(
         })
         .onConflictDoUpdate({
           target: [webhookDeliveries.webhookId, webhookDeliveries.outboxEventId],
-          set: { status: "success", attempt, responseStatus: res.status, deliveredAt: new Date(), error: null },
+          set: { status: "success", attempt, responseStatus: res.status, deliveredAt: new Date(), error: null, nextAttemptAt: null },
         });
-      return true;
+      return { kind: "success" };
     }
 
-    const willRetry = await recordFailure(db, hook, event, attempt, res.status, `HTTP ${res.status}`, opts);
-    opts.onLog(`delivery ${deliveryId} -> ${hook.url}: HTTP ${res.status} (${willRetry ? "retrying" : "dead-letter"})`);
-    return false;
+    const retryAt = await recordFailure(db, hook, event, attempt, res.status, `HTTP ${res.status}`, opts);
+    opts.onLog(`delivery ${deliveryId} -> ${hook.url}: HTTP ${res.status} (${retryAt ? "retrying" : "dead-letter"})`);
+    return { kind: "failure", retryAt, error: `HTTP ${res.status}` };
   } catch (err) {
     const message = err instanceof Error ? err.message.slice(0, 500) : "unknown error";
-    const willRetry = await recordFailure(db, hook, event, attempt, null, message, opts);
-    opts.onLog(`delivery ${deliveryId} -> ${hook.url}: ${message} (${willRetry ? "retrying" : "dead-letter"})`);
-    return false;
+    const retryAt = await recordFailure(db, hook, event, attempt, null, message, opts);
+    opts.onLog(`delivery ${deliveryId} -> ${hook.url}: ${message} (${retryAt ? "retrying" : "dead-letter"})`);
+    return { kind: "failure", retryAt, error: message };
   }
 }
 
+/** Records the per-hook attempt. Returns when this hook may be retried, or null if spent. */
 async function recordFailure(
   db: Db,
   hook: WebhookRow,
@@ -188,9 +237,9 @@ async function recordFailure(
   responseStatus: number | null,
   error: string,
   opts: { maxAttempts: number; baseDelayMs: number },
-): Promise<boolean> {
+): Promise<Date | null> {
   const willRetry = attempt < opts.maxAttempts;
-  const nextAttemptAt = new Date(Date.now() + opts.baseDelayMs * 2 ** (attempt - 1));
+  const nextAttemptAt = willRetry ? new Date(Date.now() + opts.baseDelayMs * 2 ** (attempt - 1)) : null;
 
   await db
     .insert(webhookDeliveries)
@@ -201,27 +250,12 @@ async function recordFailure(
       attempt,
       responseStatus,
       error,
-      nextAttemptAt: willRetry ? nextAttemptAt : null,
+      nextAttemptAt,
     })
     .onConflictDoUpdate({
       target: [webhookDeliveries.webhookId, webhookDeliveries.outboxEventId],
-      set: {
-        status: willRetry ? "pending" : "failed",
-        attempt,
-        responseStatus,
-        error,
-        nextAttemptAt: willRetry ? nextAttemptAt : null,
-      },
+      set: { status: willRetry ? "pending" : "failed", attempt, responseStatus, error, nextAttemptAt },
     });
 
-  if (willRetry) {
-    await db
-      .update(outboxEvents)
-      .set({ availableAt: nextAttemptAt, attempts: event.attempts + 1, lastError: error })
-      .where(eq(outboxEvents.id, event.id));
-  } else {
-    await db.update(outboxEvents).set({ status: "failed", attempts: event.attempts + 1, lastError: error }).where(eq(outboxEvents.id, event.id));
-  }
-
-  return willRetry;
+  return nextAttemptAt;
 }

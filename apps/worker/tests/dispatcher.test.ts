@@ -102,6 +102,53 @@ describe("outbox dispatcher", () => {
     return row;
   }
 
+  it("tracks retry state per hook: a broken subscriber neither re-delivers to a healthy one nor kills the event", async () => {
+    // Retry state used to live on the shared event row while delivery was per hook. With
+    // two subscribers - a healthy CDN hook and a partner endpoint that has been down for
+    // a week - the event stayed pending for the broken one, so every pass re-POSTed to
+    // the healthy one, and the moment the broken one ran out of attempts the whole event
+    // went to `failed` and stopped being claimed at all.
+    const dead = createServer((_req: IncomingMessage, res: ServerResponse) => {
+      res.writeHead(500);
+      res.end("down");
+    });
+    await new Promise<void>((resolve) => dead.listen(0, "127.0.0.1", resolve));
+    const deadAddr = dead.address() as import("node:net").AddressInfo;
+
+    try {
+      const healthy = await seedWebhook();
+      await db
+        .insert(webhooks)
+        .values({ siteId, url: `http://127.0.0.1:${deadAddr.port}/hook`, events: ["article.published"], secret: "broken-secret" });
+      const event = await seedEvent();
+
+      const first = await processDueEvents(db, { allowPrivateTargets: true, maxAttempts: 2, baseDelayMs: 1 });
+      expect(first.delivered).toBe(1);
+      expect(first.failed).toBe(1);
+      expect(calls).toBe(1);
+
+      // one subscriber still has attempts left, so the event is not dead yet
+      const afterFirst = await db.query.outboxEvents.findFirst({ where: eq(outboxEvents.id, event.id) });
+      expect(afterFirst?.status).toBe("pending");
+
+      await db.update(outboxEvents).set({ availableAt: new Date(Date.now() - 5_000) }).where(eq(outboxEvents.id, event.id));
+      const second = await processDueEvents(db, { allowPrivateTargets: true, maxAttempts: 2, baseDelayMs: 1 });
+
+      // the healthy subscriber is never asked twice
+      expect(calls).toBe(1);
+      expect(second.alreadyDelivered).toBe(1);
+      const okRow = await db.query.webhookDeliveries.findFirst({ where: eq(webhookDeliveries.webhookId, healthy.id) });
+      expect(okRow?.status).toBe("success");
+      expect(okRow?.attempt).toBe(1);
+
+      // and only now, with every failing subscriber exhausted, is the event itself failed
+      const afterSecond = await db.query.outboxEvents.findFirst({ where: eq(outboxEvents.id, event.id) });
+      expect(afterSecond?.status).toBe("failed");
+    } finally {
+      await new Promise<void>((resolve) => dead.close(() => resolve()));
+    }
+  });
+
   it("delivers an event to a subscriber with signed, idempotent headers", async () => {
     received = [];
     await seedWebhook();
