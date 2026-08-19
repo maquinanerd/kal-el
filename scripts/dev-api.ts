@@ -3,6 +3,7 @@ import { users } from "../packages/db/src/schema/index.js";
 import { buildApp } from "../apps/api/src/app.js";
 import { loadConfig } from "../apps/api/src/config.js";
 import { seedPermissions } from "../apps/api/src/services/seed.js";
+import { ensurePresetRoles } from "../apps/api/src/services/roles.js";
 
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
@@ -21,6 +22,10 @@ async function main(): Promise<void> {
   const config = loadConfig(process.env);
   const app = await buildApp({ connectionString: config.DATABASE_URL, config });
   await seedPermissions(app.db);
+  // `server.ts` does this and this script did not, so a local stack had only the Owner
+  // role: the roles screen and every "assign a role" flow were unrepresentative of a real
+  // install, which is exactly what a smoke environment exists to avoid.
+  await ensurePresetRoles(app.db);
 
   // one-shot local bootstrap so the API is immediately usable
   const existing = await app.db.select({ id: users.id }).from(users).limit(1);

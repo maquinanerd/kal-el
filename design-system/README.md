@@ -5,6 +5,54 @@ Base visual compartilhada para:
 - **Kal El** — CMS editorial.
 - **Commerce Wayne** — CRM / Commerce OS.
 
+---
+
+## ⚠️ Referência visual final do Kal El
+
+**`references/kal-el-final/` é a referência visual final do Kal El** e tem precedência
+sobre os documentos genéricos deste pacote para tudo que diga respeito ao CMS.
+
+```
+references/kal-el-final/
+├── standalone/kal-el.html        design executável — abra no navegador, funciona offline
+├── source/Kal El.dc.html         mesma coisa, editável (precisa de support.js ao lado)
+├── KAL_EL_INVENTORY.md           valores literais de cada componente + regras invioláveis
+├── spec/10_KAL_EL_COMPLETE_DESIGN.md
+├── spec/00_AUDIT_RESULT.md       auditoria das 49 referências
+└── tokens/                       kal-el-tokens.* e peg-tokens.calibrated.*
+```
+
+**Nada disso é dependência de runtime.** Nenhum arquivo daqui é importado pelo produto;
+`packages/design-system/src/tokens.css` é a implementação, derivada de
+`tokens/kal-el-tokens.css`. O pacote existe para consulta e para regressão visual.
+
+Três telas têm design executável e devem ser comparadas lado a lado com o produto antes
+de qualquer alteração visual nelas: **Article Editor**, **Articles Index** e **Media
+Library**.
+
+### Ordem de precedência quando houver conflito
+
+1. `standalone/kal-el.html`
+2. `KAL_EL_INVENTORY.md`
+3. `spec/10_KAL_EL_COMPLETE_DESIGN.md`
+4. `tokens/kal-el-tokens.*`
+5. os documentos genéricos do PEG abaixo
+
+### Erros conhecidos no pacote
+
+- `spec/00_AUDIT_RESULT.md` traz a linha `Kal El #2F6BFF` na tabela de divergências.
+  É resíduo cross-product e deve ser **ignorada**. O accent do Kal El é `#BF5252`
+  (primary) / `#B51B1B` (strong), como está no README do pacote, no inventário e nos
+  tokens.
+- Os `#C7C7C7` (borda de controle) e `#8B8D86` (texto terciário) do pacote medem 1.69:1
+  e 2.95:1 e reprovam no gate de acessibilidade do CMS. A implementação usa `#8B8E86`
+  (3.33:1) e `#6B6E65` (4.56:1) — mesma família neutra quente, contraste aprovado. Ver o
+  comentário no topo de `packages/design-system/src/tokens.css`.
+
+O relatório da rodada que implementou este pacote está em `docs/FINAL-VISUAL-REPORT.md`.
+
+---
+
 Este pacote transforma os screenshots de referência em uma especificação operacional para reconstrução no Claude Design e posterior implementação no código.
 
 ## Regra principal
