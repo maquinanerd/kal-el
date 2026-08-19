@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { auditLog } from "@kal-el/db/schema";
 
-import { assignRole, bootstrap, createRole, createUser, createTestApp, login, type Session, type TestContext } from "./helpers.js";
+import { assignRole, bootstrap, createRole, createServiceToken, createUser, createTestApp, login, type Session, type TestContext } from "./helpers.js";
 
 /**
  * The two writes that decide who can do what: creating the system's first owner, and
@@ -54,6 +54,36 @@ describe("privilege operations leave a trail", () => {
     expect(log.statusCode).toBe(200);
     const actions = (log.json() as { data: { action: string }[] }).data.map((r) => r.action);
     expect(actions).toContain("roles.assign");
+  });
+
+  it("a service token cannot grant permissions it does not itself hold", async () => {
+    // The escalation guard read `actor.kind === "user"` only, so a token carrying
+    // `roles.manage` could hand out the owner role - every permission in the system -
+    // while holding none of them.
+    const tokenRes = await createServiceToken(ctx, owner, siteId, ["roles.manage"]);
+    expect(tokenRes.statusCode).toBe(201);
+    const token = (tokenRes.json() as { data: { token: string } }).data.token;
+
+    const victim = await createUser(ctx, owner, "escalation@kalel.test", "another-secure-password-2");
+    const victimId = (victim.json() as { data: { id: string } }).data.id;
+
+    const ownerRole = await ctx.app.inject({
+      method: "GET",
+      url: "/v1/admin/roles",
+      headers: { Cookie: owner.cookieHeader },
+    });
+    const roles = (ownerRole.json() as { data: { id: string; key: string }[] }).data;
+    const ownerRoleId = roles.find((r) => r.key === "owner")?.id;
+    expect(ownerRoleId).toBeTruthy();
+
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/admin/users/${victimId}/roles`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { roleId: ownerRoleId, siteId },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toMatch(/cannot grant permissions/);
   });
 
   it("attributes role creation to the acting user, inside the same transaction", async () => {

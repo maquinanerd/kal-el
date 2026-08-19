@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { outboxEvents } from "@kal-el/db/schema";
+import { articleRevisions, outboxEvents } from "@kal-el/db/schema";
 import { bootstrap, createTestApp, login, type Session, type TestContext } from "./helpers.js";
 
 describe("articles", () => {
@@ -105,6 +105,36 @@ describe("articles", () => {
     expect(revisions.statusCode).toBe(200);
     expect(revisions.json().data.length).toBeGreaterThanOrEqual(2);
     expect(revisions.json().data[0].revisionNumber).toBeGreaterThan(1);
+  });
+
+  it("serves the revision history even when one stored document is unreadable", async () => {
+    // `migrateDocumentToV2` has no `version === 1` branch, so anything not literally 2
+    // takes the v1 path - and a NOT NULL jsonb column still accepts 'null'::jsonb. One
+    // such row used to 500 the entire revision history for the article.
+    const created = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles`,
+      headers: articleHeaders(),
+      payload: { title: "Histórico frágil", slug: "historico-fragil" },
+    });
+    expect(created.statusCode).toBe(201);
+    const article = created.json().data;
+
+    await ctx.db.execute(
+      sql`insert into ${articleRevisions} (article_id, revision_number, document, note)
+          values (${article.id}::uuid, 99, 'null'::jsonb, 'corrupted')`,
+    );
+
+    const revisions = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteId}/articles/${article.id}/revisions`,
+      headers: { Cookie: session.cookieHeader },
+    });
+    expect(revisions.statusCode).toBe(200);
+    const bad = (revisions.json().data as { revisionNumber: number; document: { version: number } }[]).find(
+      (r) => r.revisionNumber === 99,
+    );
+    expect(bad?.document).toEqual({ version: 2, nodes: [] });
   });
 
   it("publishes an article exactly once and emits an outbox event", async () => {

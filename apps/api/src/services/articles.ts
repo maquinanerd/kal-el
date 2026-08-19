@@ -423,7 +423,7 @@ export async function updateArticle(
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
+    if (!result) throw await concurrentChange(tx, siteId, articleId, row.version);
 
     if (body.document && JSON.stringify(document) !== JSON.stringify(row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT)) {
       const maxRev = await tx
@@ -560,8 +560,15 @@ export async function listRevisions(db: Db, siteId: string, articleId: string) {
  * A guarded transition lost its race. Re-read so the 409 says what to retry against
  * instead of only saying no: PIPELINE_API documents `currentVersion` and
  * `expectedVersion` on VERSION_CONFLICT, and these sites were sending neither.
+ *
+ * Reads on the caller's transaction, deliberately. Taking a second connection from the
+ * pool here meant that the contention this code exists to report - ten simultaneous
+ * transitions on one article, each holding a client and asking for an eleventh - hit
+ * `connectionTimeoutMillis` and returned a 500 after ten seconds instead of an immediate
+ * 409. Nothing sets an isolation level, so the transaction is READ COMMITTED and this
+ * statement already sees the row the winner committed.
  */
-async function concurrentChange(db: Db, siteId: string, articleId: string, expectedVersion: number) {
+async function concurrentChange(db: Pick<Db, "query">, siteId: string, articleId: string, expectedVersion: number) {
   const current = await db.query.articles.findFirst({
     where: and(eq(articles.id, articleId), eq(articles.siteId, siteId)),
   });
@@ -598,7 +605,7 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
+    if (!result) throw await concurrentChange(tx, siteId, articleId, row.version);
 
     const maxRev = await tx
       .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
@@ -664,7 +671,7 @@ export async function scheduleArticle(db: Db, siteId: string, articleId: string,
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
+    if (!result) throw await concurrentChange(tx, siteId, articleId, row.version);
 
     await writeAudit(tx, {
       siteId,
@@ -734,7 +741,7 @@ async function applyStatusTransition(
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
+    if (!result) throw await concurrentChange(tx, siteId, articleId, row.version);
 
     await writeAudit(tx, {
       siteId,

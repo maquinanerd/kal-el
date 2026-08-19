@@ -37,16 +37,23 @@ describe("bootstrap is a singleton", () => {
     expect(all).toHaveLength(1);
   });
 
-  it("rejects a token of the wrong length without comparing it directly", async () => {
+  // Constant-time comparison cannot be observed from a response, so this asserts only
+  // what it can see: both a wrong-length token and a same-length wrong token are refused,
+  // and neither reaches `timingSafeEqual` in a state that throws.
+  it.each([
+    ["shorter than the real token", "short"],
+    ["the same length as the real token", "test-bootstrap-tokeX"],
+  ])("refuses a token %s", async (_label, token) => {
     const res = await ctx.app.inject({
       method: "POST",
       url: "/v1/bootstrap/init",
-      headers: { "x-bootstrap-token": "short" },
+      headers: { "x-bootstrap-token": token },
       payload: {
         site: { slug: "nope", name: "Nope" },
         user: { email: "nope@kalel.test", name: "Nope", password: "super-secure-password-123" },
       },
     });
     expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
   });
 });

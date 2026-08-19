@@ -220,14 +220,16 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         req.actor = actor;
 
         // No escalation: you cannot grant a permission you do not hold at this site.
-        if (actor.kind === "user") {
-          const granted = await getRolePermissions(app.db, roleId);
-          const escalation = [...granted].filter((p) => !actor.permissions.has(p));
-          if (escalation.length > 0) {
-            throw forbidden("cannot grant permissions you do not hold at this site", {
-              missing: escalation.sort(),
-            });
-          }
+        // This checked `actor.kind === "user"` only, so a service token carrying
+        // `roles.manage` could grant the owner role - every permission in the system -
+        // while holding none of them.
+        const held = actor.kind === "service" ? actor.scopes : actor.permissions;
+        const granted = await getRolePermissions(app.db, roleId);
+        const escalation = [...granted].filter((p) => !held.has(p));
+        if (escalation.length > 0) {
+          throw forbidden("cannot grant permissions you do not hold at this site", {
+            missing: escalation.sort(),
+          });
         }
 
         await assignRoleToUser(app.db, userId, roleId, siteId, {
