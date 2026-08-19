@@ -72,10 +72,17 @@ export function listMySites(): Promise<SiteInfo[]> {
   return request<SiteInfo[]>("GET", "/v1/me/sites");
 }
 
-export function listArticles(siteId: string, opts: { q?: string; status?: ArticleStatus } = {}): Promise<ArticlePage> {
+export function listArticles(
+  siteId: string,
+  // `nextCursor` was in the response type from the start and read by nobody: every list
+  // surface silently stopped at the API default of 25 rows
+  opts: { q?: string; status?: ArticleStatus; limit?: number; cursor?: string } = {},
+): Promise<ArticlePage> {
   const params = new URLSearchParams();
   if (opts.q) params.set("q", opts.q);
   if (opts.status) params.set("status", opts.status);
+  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.cursor) params.set("cursor", opts.cursor);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return request<ArticlePage>("GET", `/v1/sites/${siteId}/articles${suffix}`);
 }

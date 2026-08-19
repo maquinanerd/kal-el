@@ -12,7 +12,28 @@ export default function CalendarPage() {
   const [items, setItems] = useState<ArticleSummary[]>([]);
 
   useEffect(() => {
-    if (activeSiteId) listArticles(activeSiteId, { status: "scheduled" }).then((p) => setItems(p.items)).catch(() => {});
+    if (!activeSiteId) return;
+    let cancelled = false;
+    // an editorial calendar that stops at the API default of 25 is worse than no
+    // calendar: the missing rows look like nothing is scheduled
+    void (async () => {
+      const all: ArticleSummary[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 20; page++) {
+        try {
+          const res = await listArticles(activeSiteId, { status: "scheduled", limit: 100, cursor });
+          all.push(...res.items);
+          if (!res.nextCursor) break;
+          cursor = res.nextCursor;
+        } catch {
+          break;
+        }
+      }
+      if (!cancelled) setItems(all);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [activeSiteId]);
 
   const columns: Column<ArticleSummary>[] = [

@@ -157,6 +157,67 @@ test.describe("workflow", () => {
     expect(published.publishedAt).toBeTruthy();
   });
 
+  test("the queue refuses to act on a row another tab has already moved", async ({ page }) => {
+    // The idempotency key the CMS sends is scoped to the version the action was issued
+    // against. The queue read that version once, on load, so a second tab could move the
+    // article and leave this list holding a version that had already been used as a key -
+    // and a used key replays its stored response: 200, no transition, no audit row, and a
+    // queue reporting success. The server cannot catch it; the replay happens before the
+    // handler runs.
+    const articleId = await newArticle(page);
+    const siteId = await activeSiteId(page);
+    const title = `Fila obsoleta ${Date.now()}`;
+    await page.getByLabel("Título", { exact: true }).fill(title);
+    await savedResponse(page);
+
+    await page.getByRole("button", { name: "Enviar p/ revisão" }).click();
+    await expect(page.getByText("in_review", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+    const staleVersion = (await readArticle(page, siteId, articleId)).version as number;
+
+    // the queue loads while the article is at `staleVersion`
+    await page.goto("/workflow");
+    await expect(page.getByText(title)).toBeVisible({ timeout: 30_000 });
+
+    // meanwhile, another tab approves it with exactly the key this queue would send,
+    // and the writer resubmits
+    const transition = (action: string, key?: string) =>
+      page.evaluate(
+        async ({ api, site, id, act, idem }) => {
+          const token = document.cookie.split("; ").find((c) => c.startsWith("ke_csrf="))?.slice("ke_csrf=".length) ?? "";
+          const headers: Record<string, string> = {
+            "content-type": "application/json",
+            "x-kal-el-csrf": decodeURIComponent(token),
+          };
+          if (idem) headers["idempotency-key"] = idem;
+          const res = await fetch(`${api}/v1/sites/${site}/articles/${id}/${act}`, {
+            method: "POST",
+            credentials: "include",
+            headers,
+            body: "{}",
+          });
+          return res.status;
+        },
+        { api: API, site: siteId, id: articleId, act: action, idem: key },
+      );
+
+    expect(await transition("approve", `cms.${articleId}.approve.v${staleVersion}`)).toBe(200);
+    expect(await transition("submit")).toBe(200);
+    expect((await readArticle(page, siteId, articleId)).status).toBe("in_review");
+
+    // the stale queue still shows the row; clicking must not report a phantom success
+    await page.getByRole("button", { name: "Aprovar" }).first().click();
+    await expect(page.getByText(/mudou desde que a fila foi carregada/)).toBeVisible({ timeout: 30_000 });
+    expect((await readArticle(page, siteId, articleId)).status).toBe("in_review");
+
+    // and the refreshed queue still works - the guard blocks the stale action, not the action
+    await page.getByRole("button", { name: "Aprovar" }).first().click();
+    await expect(page.getByText(/mudou desde que a fila foi carregada/)).toBeHidden({ timeout: 30_000 });
+    await expect
+      .poll(async () => (await readArticle(page, siteId, articleId)).status, { timeout: 30_000 })
+      .toBe("draft");
+  });
+
   test("publishing exactly once emits exactly one outbox event", async ({ page }) => {
     const articleId = await newArticle(page);
     const siteId = await activeSiteId(page);

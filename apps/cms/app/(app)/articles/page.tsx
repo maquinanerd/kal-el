@@ -19,7 +19,10 @@ export default function ArticlesPage() {
   const router = useRouter();
   const { activeSiteId } = useAuth();
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
+  // the list stopped at the API default of 25 with no control and no indication
+  const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -27,14 +30,29 @@ export default function ArticlesPage() {
     setLoading(true);
     setError(null);
     try {
-      const page = await listArticles(siteId);
+      const page = await listArticles(siteId, { limit: 50 });
       setArticles(page.items);
+      setCursor(page.nextCursor);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao carregar artigos");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  async function loadMore() {
+    if (!activeSiteId || !cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await listArticles(activeSiteId, { limit: 50, cursor });
+      setArticles((prev) => [...prev, ...page.items]);
+      setCursor(page.nextCursor);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Falha ao carregar mais");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (activeSiteId) void load(activeSiteId);
@@ -97,7 +115,16 @@ export default function ArticlesPage() {
           }
         />
       ) : (
-        <Table columns={columns} rows={articles} />
+        <>
+          <Table columns={columns} rows={articles} />
+          {cursor && (
+            <div style={{ marginTop: 12 }}>
+              <Button size="sm" variant="secondary" disabled={loadingMore} onClick={() => void loadMore()}>
+                {loadingMore ? "Carregando…" : "Carregar mais"}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </>
   );

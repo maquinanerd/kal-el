@@ -90,8 +90,15 @@ const WORKFLOW_ACTIONS: Partial<Record<ArticleStatus, { key: string; label: stri
     { key: "approve", label: "Aprovar", variant: "primary" },
     { key: "reject", label: "Rejeitar", variant: "destructive" },
     { key: "publish", label: "Publicar", variant: "secondary" },
+    // in_review -> scheduled and scheduled -> scheduled are both legal transitions, and
+    // for a while neither had a button anywhere: an editor could not schedule an
+    // approved piece, or move a scheduled date, without routing back through draft
+    { key: "schedule", label: "Agendar", variant: "secondary" },
   ],
-  scheduled: [{ key: "publish", label: "Publicar agora", variant: "primary" }],
+  scheduled: [
+    { key: "publish", label: "Publicar agora", variant: "primary" },
+    { key: "schedule", label: "Reagendar", variant: "secondary" },
+  ],
   published: [{ key: "unpublish", label: "Despublicar", variant: "destructive" }],
   blocked: [{ key: "submit", label: "Reenviar", variant: "primary" }],
 };
