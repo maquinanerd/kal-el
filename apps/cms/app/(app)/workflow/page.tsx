@@ -2,43 +2,70 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Alert, Badge, Button, EmptyState, PageHead, Table, type BadgeTone, type Column } from "@kal-el/design-system";
+import {
+  Alert,
+  Button,
+  EmptyState,
+  PageHead,
+  StatusLabel,
+  Tabs,
+  WorkflowCommentDialog,
+  statusLabel,
+} from "@kal-el/design-system";
 import { useAuth } from "../../../lib/auth";
-import { ApiError, articleAction, getArticle, listArticles, type ArticleStatus, type ArticleSummary } from "../../../lib/api";
+import {
+  ApiError,
+  articleAction,
+  getArticle,
+  listArticles,
+  listAuthors,
+  listObjectAudit,
+  type ArticleStatus,
+  type ArticleSummary,
+  type Author,
+} from "../../../lib/api";
 
-const STATUS_TONE: Record<string, BadgeTone> = { draft: "neutral", in_review: "info", scheduled: "warning", published: "success", blocked: "danger", archived: "neutral" };
+/** Review first: the queue exists to answer "what is waiting on me". */
+const TABS: ArticleStatus[] = ["in_review", "draft", "scheduled", "published", "blocked", "archived"];
 
-const TABS: { id: ArticleStatus; label: string }[] = [
-  { id: "in_review", label: "Em revisão" },
-  { id: "draft", label: "Rascunhos" },
-  { id: "scheduled", label: "Agendados" },
-  { id: "published", label: "Publicados" },
-  { id: "blocked", label: "Bloqueados" },
-  { id: "archived", label: "Arquivados" },
-];
-
-const ACTIONS: Record<ArticleStatus, { key: string; label: string; variant: "primary" | "secondary" | "destructive" }[]> = {
+/**
+ * `comment` marks the transitions that carry an editorial note.
+ *
+ * Rejection requires one - sending work back without saying why is the most expensive
+ * thing an editor can do to a writer, and the queue previously did it with a bare button.
+ */
+const ACTIONS: Record<ArticleStatus, { key: string; label: string; variant: "primary" | "secondary" | "destructive"; comment?: "require" | "optional" }[]> = {
   draft: [
-    { key: "submit", label: "Enviar p/ revisão", variant: "primary" },
+    { key: "submit", label: "Enviar p/ revisão", variant: "primary", comment: "optional" },
     { key: "publish", label: "Publicar", variant: "secondary" },
     { key: "archive", label: "Arquivar", variant: "secondary" },
   ],
   in_review: [
-    { key: "approve", label: "Aprovar", variant: "primary" },
-    { key: "reject", label: "Rejeitar", variant: "destructive" },
+    { key: "approve", label: "Aprovar", variant: "primary", comment: "optional" },
+    { key: "reject", label: "Solicitar alterações", variant: "destructive", comment: "require" },
     { key: "publish", label: "Publicar", variant: "secondary" },
   ],
   scheduled: [
     { key: "publish", label: "Publicar agora", variant: "primary" },
     { key: "unpublish", label: "Voltar p/ rascunho", variant: "secondary" },
   ],
-  published: [{ key: "unpublish", label: "Despublicar", variant: "destructive" }],
+  published: [{ key: "unpublish", label: "Despublicar", variant: "destructive", comment: "optional" }],
   blocked: [
-    { key: "submit", label: "Reenviar", variant: "primary" },
+    { key: "submit", label: "Reenviar", variant: "primary", comment: "optional" },
     { key: "archive", label: "Arquivar", variant: "secondary" },
   ],
   archived: [],
 };
+
+/** Relative "entered this state" reading, from the article's last update. */
+function relativeTime(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "agora";
+  if (mins < 60) return `há ${mins} min`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `há ${hours} h`;
+  return `há ${Math.round(hours / 24)} d`;
+}
 
 const PAGE_SIZE = 50;
 
@@ -57,6 +84,12 @@ export default function WorkflowPage() {
   // one action at a time: a double click used to fire two POSTs and surface the second
   // as a raw INVALID_TRANSITION in a Portuguese UI
   const [pending, setPending] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [authors, setAuthors] = useState<Author[]>([]);
+  /** The transition waiting on its editorial comment. */
+  const [commentFor, setCommentFor] = useState<{ row: ArticleSummary; key: string; label: string; require: boolean } | null>(null);
+  /** Last review note per article, read from the audit trail. */
+  const [notes, setNotes] = useState<Record<string, { text: string; actor: string | null }>>({});
   // Every fetch carries the sequence number of the state it was issued for. Without it,
   // switching tabs while a "Carregar mais" was in flight appended in-review rows into the
   // drafts list and left the drafts cursor pointing at the in-review query.
@@ -103,7 +136,78 @@ export default function WorkflowPage() {
     else setItems([]);
   }, [activeSiteId, active, load]);
 
-  async function act(row: ArticleSummary, action: string) {
+  useEffect(() => {
+    if (!activeSiteId) return;
+    listAuthors(activeSiteId).then(setAuthors).catch(() => {});
+  }, [activeSiteId]);
+
+  /** Queue depth per state, so the tabs say where the work actually is. */
+  useEffect(() => {
+    if (!activeSiteId) return;
+    let cancelled = false;
+    Promise.all(
+      TABS.map((s) =>
+        listArticles(activeSiteId, { status: s, limit: 100 })
+          .then((r) => [s, r.items.length] as const)
+          .catch(() => [s, 0] as const),
+      ),
+    )
+      .then((pairs) => {
+        if (!cancelled) setCounts(Object.fromEntries(pairs));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSiteId, items]);
+
+  /**
+   * The note attached to the last workflow transition, per row.
+   *
+   * Stored on the audit trail, which is where the API has always written it. Reading it
+   * needs `audit.read`, so a role without it simply sees no note rather than an error -
+   * the queue still works, it just says less.
+   */
+  useEffect(() => {
+    if (!activeSiteId || items.length === 0) return;
+    let cancelled = false;
+    const wanted = items.filter((i) => i.status === "blocked" || i.status === "in_review").slice(0, 25);
+    if (wanted.length === 0) return;
+    Promise.all(
+      wanted.map((row) =>
+        listObjectAudit(activeSiteId, "article", row.id)
+          .then((entries) => {
+            const hit = entries.find((e) => {
+              const d = e.details as { note?: string | null } | null;
+              return e.action.startsWith("articles.") && d && typeof d.note === "string" && d.note.trim().length > 0;
+            });
+            const d = hit?.details as { note?: string } | undefined;
+            return hit && d?.note ? ([row.id, { text: d.note, actor: hit.actorLabel }] as const) : null;
+          })
+          .catch(() => null),
+      ),
+    )
+      .then((pairs) => {
+        if (cancelled) return;
+        const next: Record<string, { text: string; actor: string | null }> = {};
+        for (const pair of pairs) if (pair) next[pair[0]] = pair[1];
+        setNotes(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSiteId, items]);
+
+  function startAction(row: ArticleSummary, action: { key: string; label: string; comment?: "require" | "optional" }) {
+    if (action.comment) {
+      setCommentFor({ row, key: action.key, label: action.label, require: action.comment === "require" });
+      return;
+    }
+    void act(row, action.key);
+  }
+
+  async function act(row: ArticleSummary, action: string, note?: string) {
     if (!activeSiteId || pending) return;
     setError(null);
     setNotice(null);
@@ -145,7 +249,7 @@ export default function WorkflowPage() {
         return;
       }
       const key = `cms.${row.id}.${action}.v${fresh.version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
-      await articleAction(activeSiteId, row.id, action, key);
+      await articleAction(activeSiteId, row.id, action, key, note);
       await reload();
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) setError("Sem permissão para esta ação");
@@ -157,49 +261,17 @@ export default function WorkflowPage() {
     }
   }
 
-  const columns: Column<ArticleSummary>[] = [
-    {
-      key: "title",
-      header: "Título",
-      render: (a) => (
-        <button type="button" style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }} onClick={() => router.push(`/articles/${a.id}`)}>
-          {a.title}
-        </button>
-      ),
-    },
-    { key: "status", header: "Status", render: (a) => <Badge tone={STATUS_TONE[a.status]}>{a.status}</Badge> },
-    {
-      key: "actions",
-      header: "Ações",
-      render: (a) => (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {ACTIONS[a.status].map((action) => (
-            <Button
-              key={action.key}
-              size="xs"
-              variant={action.variant}
-              disabled={pending !== null}
-              onClick={() => void act(a, action.key)}
-            >
-              {pending === `${a.id}:${action.key}` ? "…" : action.label}
-            </Button>
-          ))}
-        </div>
-      ),
-    },
-  ];
+  const authorName = new Map(authors.map((a) => [a.id, a.name]));
 
   return (
     <>
-      <PageHead title="Workflow" description="Fila editorial por estado." />
+      <PageHead title="Workflow" description="A fila editorial, por estado. O que está em revisão vem primeiro." />
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {TABS.map((t) => (
-          <Button key={t.id} size="sm" variant={active === t.id ? "primary" : "secondary"} onClick={() => setActive(t.id)}>
-            {t.label}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        tabs={TABS.map((t) => ({ id: t, label: statusLabel(t), count: counts[t] }))}
+        active={active}
+        onChange={(id) => setActive(id as ArticleStatus)}
+      />
 
       {error && <Alert tone="danger">{error}</Alert>}
       {notice && <Alert tone="warning">{notice}</Alert>}
@@ -209,12 +281,71 @@ export default function WorkflowPage() {
       ) : !activeSiteId ? (
         <EmptyState title="Nenhum site" />
       ) : items.length === 0 ? (
-        <EmptyState title="Nada aqui" body={`Nenhum artigo em "${TABS.find((t) => t.id === active)?.label}".`} />
+        <EmptyState
+          title={active === "in_review" ? "Nada aguardando revisão" : "Nada aqui"}
+          body={active === "in_review" ? "A fila está limpa." : `Nenhum artigo em "${statusLabel(active)}".`}
+        />
       ) : (
         <>
-          <Table columns={columns} rows={items} selectable={false} />
+          <div className="peg-table-wrap">
+            <table className="peg-table">
+              <thead>
+                <tr>
+                  <th>Título</th>
+                  <th>Status</th>
+                  <th>Autor</th>
+                  <th>Atualizado</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((a) => {
+                  const note = notes[a.id];
+                  return (
+                    <tr key={a.id}>
+                      <td>
+                        <button type="button" className="kalel-articles__title" onClick={() => router.push(`/articles/${a.id}`)}>
+                          <span className="kalel-articles__name">{a.title || "Sem título"}</span>
+                          {/* the reason it came back, where the person acting on it will read it */}
+                          {note && (
+                            <span className="kalel-queue__note" title={note.text}>
+                              “{note.text}”{note.actor ? ` — ${note.actor}` : ""}
+                            </span>
+                          )}
+                        </button>
+                      </td>
+                      <td>
+                        <StatusLabel status={a.status} />
+                      </td>
+                      <td className="peg-table__muted">
+                        {a.authors.length === 0 ? "—" : (authorName.get(a.authors[0] as string) ?? "—")}
+                      </td>
+                      <td className="peg-table__muted" title={new Date(a.updatedAt).toLocaleString("pt-BR")}>
+                        {relativeTime(a.updatedAt)}
+                      </td>
+                      <td>
+                        <div className="kalel-queue__actions">
+                          {ACTIONS[a.status].map((action) => (
+                            <Button
+                              key={action.key}
+                              size="xs"
+                              variant={action.variant}
+                              disabled={pending !== null}
+                              onClick={() => startAction(a, action)}
+                            >
+                              {pending === `${a.id}:${action.key}` ? "…" : action.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {cursor && (
-            <div style={{ marginTop: 12 }}>
+            <div className="peg-row">
               <Button size="sm" variant="secondary" disabled={loadingMore} onClick={() => void loadMore()}>
                 {loadingMore ? "Carregando…" : "Carregar mais"}
               </Button>
@@ -222,6 +353,25 @@ export default function WorkflowPage() {
           )}
         </>
       )}
+
+      <WorkflowCommentDialog
+        open={commentFor !== null}
+        title={commentFor ? `${commentFor.label} — ${commentFor.row.title}` : ""}
+        confirmLabel={commentFor?.label ?? ""}
+        tone={commentFor?.require ? "destructive" : "primary"}
+        require={commentFor?.require ?? false}
+        hint={
+          commentFor?.require
+            ? "O comentário volta para quem escreveu, junto com o artigo. Diga o que precisa mudar."
+            : "Opcional. Fica registrado no histórico do artigo."
+        }
+        onConfirm={(comment) => {
+          const target = commentFor;
+          setCommentFor(null);
+          if (target) void act(target.row, target.key, comment || undefined);
+        }}
+        onClose={() => setCommentFor(null)}
+      />
     </>
   );
 }
