@@ -74,6 +74,17 @@ export async function restoreBackup(db: Db, backup: Backup): Promise<{ restoredT
 
   let rows = 0;
 
+  /**
+   * Objects and arrays are jsonb columns and have to be sent as JSON text with a cast.
+   * Interpolated raw, the driver renders a JS array as a Postgres *array* literal -
+   * `service_tokens.scopes` became `{"articles.read",...}` and the insert failed with
+   * `invalid input syntax for type json`, taking the whole single-transaction restore with
+   * it, while `[]` became `{}`: valid JSON, silently restored as an object where the
+   * contract declares an array.
+   */
+  const bind = (value: unknown) =>
+    value !== null && typeof value === "object" ? sql`${JSON.stringify(value)}::jsonb` : sql`${value}`;
+
   // One transaction for the whole restore: a failure partway used to leave the tail of
   // the table list truncated and empty, with no rollback and a reported success.
   await db.transaction(async (tx) => {
@@ -89,11 +100,19 @@ export async function restoreBackup(db: Db, backup: Backup): Promise<{ restoredT
 
       const columns = Object.keys(dataRows[0] as Record<string, unknown>);
       if (columns.length === 0) continue;
-      const values = sql.join(
-        dataRows.map((r) => sql`(${sql.join(columns.map((c) => sql`${(r as Record<string, unknown>)[c]}`), sql`, `)})`),
-        sql`, `,
-      );
-      await tx.execute(sql`INSERT INTO ${sql.raw(quote(name))} (${sql.raw(columns.map(quote).join(", "))}) VALUES ${values}`);
+
+      // Postgres caps a statement at 65535 bind parameters. One INSERT for the whole table
+      // meant `audit_log` (11 columns) broke at 5,958 rows - a real site crosses that in
+      // days - and because the restore is a single transaction, the whole thing rolled back.
+      const perStatement = Math.max(1, Math.floor(60_000 / columns.length));
+      for (let start = 0; start < dataRows.length; start += perStatement) {
+        const chunk = dataRows.slice(start, start + perStatement);
+        const values = sql.join(
+          chunk.map((r) => sql`(${sql.join(columns.map((c) => bind((r as Record<string, unknown>)[c])), sql`, `)})`),
+          sql`, `,
+        );
+        await tx.execute(sql`INSERT INTO ${sql.raw(quote(name))} (${sql.raw(columns.map(quote).join(", "))}) VALUES ${values}`);
+      }
       rows += dataRows.length;
     }
   });

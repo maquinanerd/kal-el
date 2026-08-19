@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { freshTestDb } from "@kal-el/testkit";
 import { exportBackup, restoreBackup, runMigrations, type Backup } from "@kal-el/db";
-import { articleRevisions, articles, sites, users } from "@kal-el/db/schema";
+import { articleRevisions, articles, entities, serviceTokens, sites, users } from "@kal-el/db/schema";
 
 describe("backup / restore rehearsal", () => {
   let pool: ReturnType<typeof import("pg").Pool>;
@@ -41,6 +41,19 @@ describe("backup / restore rehearsal", () => {
       note: "backup",
     });
 
+    // A jsonb ARRAY column: interpolated raw, the driver renders it as a Postgres array
+    // literal - `{"articles.read",...}` - and the insert fails with `invalid input syntax
+    // for type json`, rolling back the entire single-transaction restore. An empty array
+    // was worse: it became `{}`, valid JSON, silently restored as an object.
+    await db.insert(serviceTokens).values({
+      siteId: site?.id ?? "",
+      name: "backup-token",
+      tokenHash: "h".repeat(64),
+      prefix: "ke_st.bk",
+      scopes: ["articles.read", "articles.create"],
+    });
+    await db.insert(entities).values({ siteId: site?.id ?? "", type: "person", name: "Sem refs", externalRefs: [] });
+
     backup = await exportBackup(db);
   });
 
@@ -67,7 +80,7 @@ describe("backup / restore rehearsal", () => {
     await runMigrations(url);
 
     const restored = await restoreBackup(db, backup);
-    expect(restored.rows).toBe(4);
+    expect(restored.rows).toBe(6);
 
     const after = await exportBackup(db);
     expect(JSON.stringify(after.data)).toBe(JSON.stringify(backup.data));
@@ -92,7 +105,7 @@ describe("backup / restore rehearsal", () => {
     await runMigrations(url);
 
     const restored = await restoreBackup(db, parsed);
-    expect(restored.rows).toBe(4);
+    expect(restored.rows).toBe(6);
 
     const after = await exportBackup(db);
     expect(JSON.stringify(after.data)).toBe(JSON.stringify(parsed.data));
