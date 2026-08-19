@@ -89,27 +89,30 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
   const summary: DispatchSummary = { claimed: due.length, delivered: 0, failed: 0, noSubscribers: 0, alreadyDelivered: 0, deadLettered: 0, waiting: 0 };
 
   for (const event of due) {
-    const subscribers = await db
-      .select()
-      .from(webhooks)
-      .where(and(eq(webhooks.siteId, event.siteId), sql`${webhooks.events} ? ${event.eventType}`))
-      // heap order made which hook ran first - and so which one shaped the shared state -
-      // effectively random between passes
-      .orderBy(asc(webhooks.createdAt), asc(webhooks.id));
-
-    if (subscribers.length === 0) {
-      await db.update(outboxEvents).set({ status: "published", publishedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
-      summary.noSubscribers++;
-      continue;
-    }
-
-    const pendingRetries: Date[] = [];
-    let lastError: string | null = null;
-    let exhausted = 0;
-    let failures = 0;
-    let attempted = false;
-
+    // The whole per-event pass is guarded, not just the hook loop: a throw in the
+    // subscriber lookup or in any of the terminal updates rejected processDueEvents and
+    // left every row claimed in this batch locked for the full window.
     try {
+      const subscribers = await db
+        .select()
+        .from(webhooks)
+        .where(and(eq(webhooks.siteId, event.siteId), sql`${webhooks.events} ? ${event.eventType}`))
+        // heap order made which hook ran first - and so which one shaped the shared state -
+        // effectively random between passes
+        .orderBy(asc(webhooks.createdAt), asc(webhooks.id));
+
+      if (subscribers.length === 0) {
+        await db.update(outboxEvents).set({ status: "published", publishedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+        summary.noSubscribers++;
+        continue;
+      }
+
+      const pendingRetries: Date[] = [];
+      let lastError: string | null = null;
+      let exhausted = 0;
+      let failures = 0;
+      let attempted = false;
+
       for (const hook of subscribers) {
         const outcome = await dispatchOne(db, event, hook, { fetchImpl, maxAttempts, baseDelayMs, timeoutMs, onLog, allowPrivateTargets });
         if (outcome.kind === "skipped") {
@@ -142,32 +145,36 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
         if (outcome.retryAt) pendingRetries.push(outcome.retryAt);
         else exhausted++;
       }
-    } catch (err) {
-      // one event must not strand the rest of the claimed batch behind a held lock
-      onLog(`event ${event.id}: pass aborted: ${err instanceof Error ? err.message : String(err)}`);
-      await db.update(outboxEvents).set({ lockedUntil: null }).where(eq(outboxEvents.id, event.id));
-      continue;
-    }
 
-    if (failures === 0) {
-      await db.update(outboxEvents).set({ status: "published", publishedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
-    } else if (pendingRetries.length === 0) {
-      // every failing subscriber is out of attempts - only now is the event itself dead
-      await db
-        .update(outboxEvents)
-        .set({ status: "failed", attempts: attempted ? event.attempts + 1 : event.attempts, lastError, lockedUntil: null })
-        .where(eq(outboxEvents.id, event.id));
-    } else {
-      const soonest = pendingRetries.reduce((a, b) => (a < b ? a : b));
-      await db
-        .update(outboxEvents)
-        // a pass in which every failing hook was inside its own backoff made no request,
-        // so it is not an attempt
-        .set({ availableAt: soonest, attempts: attempted ? event.attempts + 1 : event.attempts, lastError, lockedUntil: null })
-        .where(eq(outboxEvents.id, event.id));
-      if (exhausted > 0) {
-        onLog(`event ${event.id}: ${exhausted} subscriber(s) dead-lettered, ${pendingRetries.length} still retrying`);
+      if (failures === 0) {
+        await db.update(outboxEvents).set({ status: "published", publishedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+      } else if (pendingRetries.length === 0) {
+        // every failing subscriber is out of attempts - only now is the event itself dead
+        await db
+          .update(outboxEvents)
+          .set({ status: "failed", attempts: attempted ? event.attempts + 1 : event.attempts, lastError: lastError ?? event.lastError, lockedUntil: null })
+          .where(eq(outboxEvents.id, event.id));
+      } else {
+        const soonest = pendingRetries.reduce((a, b) => (a < b ? a : b));
+        await db
+          .update(outboxEvents)
+          // a pass in which every failing hook was inside its own backoff made no request,
+          // so it is neither an attempt nor a reason to forget the error already recorded
+          .set({ availableAt: soonest, attempts: attempted ? event.attempts + 1 : event.attempts, lastError: lastError ?? event.lastError, lockedUntil: null })
+          .where(eq(outboxEvents.id, event.id));
+        if (exhausted > 0) {
+          onLog(`event ${event.id}: ${exhausted} subscriber(s) dead-lettered, ${pendingRetries.length} still retrying`);
+        }
       }
+    } catch (err) {
+      const message = err instanceof Error ? err.message.slice(0, 500) : String(err);
+      onLog(`event ${event.id}: pass aborted: ${message}`);
+      // release the claim, but hold the event back: clearing the lock alone re-claimed it
+      // on the very next tick and span on whatever was throwing
+      await db
+        .update(outboxEvents)
+        .set({ lockedUntil: null, availableAt: new Date(Date.now() + baseDelayMs * 10), lastError: message })
+        .where(eq(outboxEvents.id, event.id));
     }
   }
 

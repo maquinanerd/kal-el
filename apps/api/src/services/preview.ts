@@ -35,6 +35,15 @@ export function verifyPreviewToken(secret: string, token: string): PreviewPayloa
   }
 }
 
+function safePreviewDocument(value: unknown) {
+  if (!value) return { version: 2, nodes: [] };
+  try {
+    return migrateDocumentToV2(value as Parameters<typeof migrateDocumentToV2>[0]);
+  } catch {
+    return { version: 2, nodes: [] };
+  }
+}
+
 export async function resolvePreview(db: Db, payload: PreviewPayload) {
   const row = await db.query.articles.findFirst({
     where: and(eq(articles.id, payload.a), eq(articles.siteId, payload.s)),
@@ -48,7 +57,9 @@ export async function resolvePreview(db: Db, payload: PreviewPayload) {
       dek: row.dek ?? null,
       slug: row.slug,
       status: row.status,
-      document: row.document ? migrateDocumentToV2(row.document) : { version: 2, nodes: [] },
+      // same reason as `storedDocument` in the article service: a malformed column must
+      // not take the preview down with it
+      document: safePreviewDocument(row.document),
       seo: row.seo,
       featuredMediaId: row.featuredMediaId ?? null,
       publishedAt: row.publishedAt?.toISOString() ?? null,

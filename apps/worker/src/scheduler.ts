@@ -1,4 +1,4 @@
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, lte, sql } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
 import { articleRevisions, articles, auditLog, outboxEvents } from "@kal-el/db/schema";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
@@ -10,15 +10,19 @@ const DEFAULT_DOCUMENT = { version: 2, nodes: [] };
 /**
  * `migrateDocumentToV2` maps `document.nodes` for anything that is not literally version
  * 2, so a truthy but shapeless column - `{}` - throws where reading the raw value never
- * did. A revision is history, not the article: degrade it rather than block the publish.
+ * did.
+ *
+ * This deliberately does NOT degrade to an empty document. Filing `{version:2,nodes:[]}`
+ * as the revision for a publish looks like a real revision in the history, and the CMS
+ * restore button writes a revision straight back over the live article - so degrading
+ * here turned an article that could not be published into one that was published,
+ * announced to every webhook subscriber, and one click away from having its body erased.
+ * Refusing is the smaller failure: the caller isolates it, the article stays scheduled,
+ * and the operator gets a named error.
  */
-function safeDocument(document: unknown) {
+function publishableDocument(document: unknown) {
   if (!document) return DEFAULT_DOCUMENT;
-  try {
-    return migrateDocumentToV2(document as Parameters<typeof migrateDocumentToV2>[0]);
-  } catch {
-    return DEFAULT_DOCUMENT;
-  }
+  return migrateDocumentToV2(document as Parameters<typeof migrateDocumentToV2>[0]);
 }
 
 /**
@@ -34,6 +38,9 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
     .select({ id: articles.id })
     .from(articles)
     .where(and(eq(articles.status, "scheduled"), lte(articles.scheduledAt, now)))
+    // oldest first: without an order an article that can never be promoted kept its slot
+    // in every tick, and a hundred of them would starve scheduled publishing entirely
+    .orderBy(asc(articles.scheduledAt))
     .limit(100);
 
   let promoted = 0;
@@ -86,7 +93,7 @@ async function promoteOne(db: Db, id: string, now: Date) {
       // every other publish path migrates first; this one filed the raw column, so a
       // scheduled publish of a still-v1 article wrote a v1 body into a table whose
       // schema says v2 - the `as never` cast is what kept the compiler quiet about it
-      document: safeDocument(row.document) as never,
+      document: publishableDocument(row.document) as never,
         createdBy: null,
         note: "scheduled publish",
       });

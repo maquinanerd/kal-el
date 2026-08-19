@@ -65,6 +65,44 @@ describe("scheduled publish promotion", () => {
     expect(revisions[0]?.note).toBe("scheduled publish");
   });
 
+  it("refuses an article whose stored document cannot be read, and publishes the rest of the tick", async () => {
+    // Degrading the document to an empty one instead was worse than refusing: it published
+    // the article, announced it to every subscriber, and filed an empty revision that the
+    // CMS restore button writes straight back over the live body.
+    const due = new Date(Date.now() - 60_000);
+    const healthy = await seedScheduled("saudavel", due);
+    const [broken] = await db
+      .insert(articles)
+      .values({
+        siteId,
+        title: "Documento ilegível",
+        slug: "ilegivel",
+        status: "scheduled",
+        scheduledAt: due,
+        // truthy, but nothing the migration can read - a NOT NULL jsonb accepts it
+        document: {} as never,
+        version: 0,
+      })
+      .returning();
+    if (!broken) throw new Error("insert failed");
+
+    const summary = await promoteScheduledArticles(db);
+
+    // the healthy one is not held back by its neighbour
+    expect(summary.promoted).toBe(1);
+    const ok = await db.query.articles.findFirst({ where: eq(articles.id, healthy.id) });
+    expect(ok?.status).toBe("published");
+
+    // and the unreadable one is left exactly as it was: not published, no revision, no event
+    const bad = await db.query.articles.findFirst({ where: eq(articles.id, broken.id) });
+    expect(bad?.status).toBe("scheduled");
+    expect(bad?.scheduledAt).not.toBeNull();
+    const revisions = await db.select().from(articleRevisions).where(eq(articleRevisions.articleId, broken.id));
+    expect(revisions).toHaveLength(0);
+    const events = await db.select().from(outboxEvents).where(eq(outboxEvents.aggregateId, broken.id));
+    expect(events).toHaveLength(0);
+  });
+
   it("does not promote articles scheduled in the future", async () => {
     const future = new Date(Date.now() + 60 * 60 * 1000);
     const row = await seedScheduled("futuro", future);

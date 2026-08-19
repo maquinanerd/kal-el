@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { articleRevisions, outboxEvents } from "@kal-el/db/schema";
+import { articleRevisions, articles, outboxEvents } from "@kal-el/db/schema";
 import { bootstrap, createTestApp, login, type Session, type TestContext } from "./helpers.js";
 
 describe("articles", () => {
@@ -120,9 +120,12 @@ describe("articles", () => {
     expect(created.statusCode).toBe(201);
     const article = created.json().data;
 
+    // both shapes: `null` is falsy and never reached the migration, `{}` is truthy and is
+    // the one that actually threw - guarding only the first still 500ed the whole history
     await ctx.db.execute(
       sql`insert into ${articleRevisions} (article_id, revision_number, document, note)
-          values (${article.id}::uuid, 99, 'null'::jsonb, 'corrupted')`,
+          values (${article.id}::uuid, 98, 'null'::jsonb, 'corrupted-null'),
+                 (${article.id}::uuid, 99, '{}'::jsonb, 'corrupted-empty')`,
     );
 
     const revisions = await ctx.app.inject({
@@ -131,10 +134,40 @@ describe("articles", () => {
       headers: { Cookie: session.cookieHeader },
     });
     expect(revisions.statusCode).toBe(200);
-    const bad = (revisions.json().data as { revisionNumber: number; document: { version: number } }[]).find(
-      (r) => r.revisionNumber === 99,
-    );
-    expect(bad?.document).toEqual({ version: 2, nodes: [] });
+    const rows = revisions.json().data as { revisionNumber: number; document: { version: number } }[];
+    expect(rows.find((r) => r.revisionNumber === 98)?.document).toEqual({ version: 2, nodes: [] });
+    expect(rows.find((r) => r.revisionNumber === 99)?.document).toEqual({ version: 2, nodes: [] });
+  });
+
+  it("keeps an article with an unreadable document readable, and repairable", async () => {
+    const created = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles`,
+      headers: articleHeaders(),
+      payload: { title: "Corpo ilegível", slug: "corpo-ilegivel" },
+    });
+    const article = created.json().data;
+
+    await ctx.db.execute(sql`update ${articles} set document = '{}'::jsonb where id = ${article.id}::uuid`);
+
+    // every read used to 500, which also made the article unrepairable: the PATCH that
+    // would fix it reads the old value on the way through
+    const read = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteId}/articles/${article.id}`,
+      headers: { Cookie: session.cookieHeader },
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().data.document).toEqual({ version: 2, nodes: [] });
+
+    const repaired = await ctx.app.inject({
+      method: "PATCH",
+      url: `/v1/sites/${siteId}/articles/${article.id}`,
+      headers: articleHeaders(),
+      payload: { document: { version: 2, nodes: [{ type: "paragraph", attrs: {}, content: [{ type: "text", text: "recuperado", marks: [] }] }] } },
+    });
+    expect(repaired.statusCode).toBe(200);
+    expect(repaired.json().data.document.nodes).toHaveLength(1);
   });
 
   it("publishes an article exactly once and emits an outbox event", async () => {

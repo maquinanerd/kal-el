@@ -54,6 +54,28 @@ async function assertPrimaryCategoryInSite(db: Db, siteId: string, categoryId?: 
   if (!row) throw badRequest("primary category does not belong to this site", { categoryId });
 }
 
+/**
+ * Read a document out of the database.
+ *
+ * `migrateDocumentToV2` has no `version === 1` branch - anything not literally 2 takes the
+ * v1 path and maps `document.nodes` - so a truthy but shapeless column throws. A `NOT NULL
+ * jsonb` accepts `'null'` and `'{}'` alike, and a restore, a hand-run statement or a
+ * migration can leave either behind. Guarding only the falsy case still 500ed every read
+ * of that article, which also made it unrepairable: the PATCH that would fix it reads the
+ * old value on the way through.
+ *
+ * Reads degrade to an empty document so the row stays reachable and fixable. Nothing that
+ * *writes* history uses this - see `publishableDocument` in the worker.
+ */
+function storedDocument(value: unknown): ArticleDocumentV2 {
+  if (!value) return DEFAULT_DOCUMENT;
+  try {
+    return migrateDocumentToV2(value as Parameters<typeof migrateDocumentToV2>[0]);
+  } catch {
+    return DEFAULT_DOCUMENT;
+  }
+}
+
 export function slugify(input: string): string {
   return (
     input
@@ -120,7 +142,7 @@ async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
     version: row.version,
     externalKey: row.externalKey ?? null,
     featuredMediaId: row.featuredMediaId ?? null,
-    document: row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT,
+    document: storedDocument(row.document),
     seo: row.seo,
     provenance: row.provenance ?? null,
     ...rel,
@@ -386,7 +408,7 @@ export async function updateArticle(
     });
   }
 
-  const document = body.document ? migrateDocumentToV2(body.document) : row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT;
+  const document = body.document ? migrateDocumentToV2(body.document) : storedDocument(row.document);
   const seo = body.seo ? { ...row.seo, ...body.seo } : row.seo;
   const updatedBy = actorUserId(actor);
   const featuredMediaId = body.featuredMediaId !== undefined ? body.featuredMediaId : row.featuredMediaId;
@@ -425,7 +447,7 @@ export async function updateArticle(
       .returning();
     if (!result) throw await concurrentChange(tx, siteId, articleId, row.version);
 
-    if (body.document && JSON.stringify(document) !== JSON.stringify(row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT)) {
+    if (body.document && JSON.stringify(document) !== JSON.stringify(storedDocument(row.document))) {
       const maxRev = await tx
         .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
         .from(articleRevisions)
@@ -547,9 +569,7 @@ export async function listRevisions(db: Db, siteId: string, articleId: string) {
     id: r.id,
     articleId: r.articleId,
     revisionNumber: r.revisionNumber,
-    // the only unguarded migrate call site: a NOT NULL jsonb column still accepts
-    // 'null'::jsonb, and one such row made the whole revision history 500
-    document: r.document ? migrateDocumentToV2(r.document) : DEFAULT_DOCUMENT,
+    document: storedDocument(r.document),
     createdBy: r.createdBy,
     note: r.note,
     createdAt: r.createdAt.toISOString(),
@@ -614,7 +634,7 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
     await tx.insert(articleRevisions).values({
       articleId,
       revisionNumber: Number(maxRev[0]?.n ?? 0) + 1,
-    document: row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT,
+    document: storedDocument(row.document),
       createdBy: updatedBy,
       note: note ?? "published",
     });
