@@ -174,14 +174,14 @@ Detalhe completo de visual/responsivo/a11y em
 | `pnpm -r typecheck` | PASS (13 projetos) |
 | `pnpm -r lint` | PASS (13 projetos) |
 | `pnpm -r build` | PASS |
-| `pnpm -r test` | **222 passed, 0 failed, 0 skipped** (era 139) |
+| `pnpm -r test` | **248 passed, 0 failed, 0 skipped** (era 139) |
 | Playwright | **24 passed, 0 failed, 0 skipped** (era 2) |
 | axe (WCAG 2.1 A+AA, 76 varreduras) | **0 violações** |
 | Navegação alcançável (190 medições) | **190/190** |
 | Overflow horizontal | 0 |
 | Erros de console na varredura | 0 |
 
-Distribuicao dos 222: api 146 · importer 18 · contracts 15 · db 8 · worker 8 · editor 7 ·
+Distribuicao dos 248: api 161 · importer 18 · contracts 15 · db 8 · worker 8 · editor 7 ·
 auth 5 · sdk 5 · design-system 5 · fixture 4.
 
 *Media Detail* entrou nas varreduras nesta rodada (180 → 190 medicoes, 72 → 76 varreduras
@@ -486,27 +486,82 @@ e Payload contra fixtures; revisão adversarial de segurança de `apps/api`, `pa
 
 ---
 
+## 7b. Oito revisoes independentes: o que a serie mede
+
+Depois que os nove P1 foram fechados, oito revisoes adversariais independentes rodaram em
+sequencia, cada uma apontada para o codigo que a anterior tinha acabado de mexer.
+
+| rodada | achados | criados pela correcao anterior | P0 |
+|---|---|---|---|
+| 1 | 6 | 4 | 0 |
+| 2 | 8 | 3 | 0 |
+| 3 | 11 | 3 (+2 correcoes que nunca existiram) | 0 |
+| 4 | 6 | 3 | 0 |
+| 5 | 10 | 4 | 0 |
+| 6 | 19 | 4 | 1 |
+| 7 | 14 | 4 | 3 |
+| 8 | ~49 | 4 | 4 |
+
+Duas leituras importam, e a segunda so ficou visivel na oitava.
+
+**A taxa nao convergiu.** Nenhuma rodada encontrou menos que a anterior de forma
+sustentada, e a fracao criada pela rodada imediatamente anterior ficou estavel perto de um
+terco. As rodadas 4 a 7 sao um exemplo unico e completo: a 4 apontou que
+`migrateDocumentToV2` estoura num documento malformado e derruba a publicacao agendada
+inteira; a correcao da 5 degradou o documento para vazio e seguiu publicando; a 6
+classificou isso como P0, porque o artigo passava a ser publicado, anunciado a todos os
+assinantes, com uma revisao vazia que o botao Restaurar do CMS grava por cima do artigo ao
+vivo; a correcao da 6 recusou no worker mas deixou tres caminhos na API escrevendo o valor
+degradado de volta, o que a 7 achou como tres P0 novos. Quatro rodadas, um unico defeito
+de origem, e cada correcao mais estreita que a superficie do problema.
+
+**As sete primeiras rodadas mediam a propria cobertura, nao o codigo.** Todas circularam os
+mesmos oito arquivos. A oitava foi deliberadamente redirecionada: metade dela leu codigo
+que nenhuma revisao anterior tinha aberto — a derivacao de chave do SDK, o array de
+dependencias do `Modal`, `backup.ts`, o fall-through do handler de erros, o round-trip do
+ProseMirror, o `LIKE` de `deleteMedia`. A densidade de defeitos ali era pelo menos tao alta
+quanto a da primeira rodada, com quatro P0 entre eles. O numero de defeitos por rodada
+nunca foi uma propriedade do Kal El; era uma propriedade de onde as revisoes estavam
+olhando.
+
+**Os gates verdes faziam parte do problema.** Em cada caso o teste existia e parava um
+passo antes da afirmacao que teria falhado: o e2e de insercao de imagem afirmava que o
+dialogo fechou, nao que a gravacao foi aceita; os dois testes de midia em uso referenciavam
+o asset por `featuredMediaId`, o unico ramo que funcionava; o teste de backup semeava
+apenas objetos jsonb, nunca um array; o teste do round-trip do editor usava a unica forma
+de imagem que sobrevive. Verde porque nao perguntou.
+
 ## 8. Veredito
 
 | | |
 |---|---|
-| P0 remanescentes | **0** |
-| P1 remanescentes | **0 conhecidos**, apos tres revisoes independentes (ver 5c) |
-| P2 remanescentes | documentados na secao 6 e na secao 10 do PIPELINE_API |
-| **READY FOR STAGING** | **SIM** |
-| **READY FOR PRODUCTION** | **NAO** — PROD-1...4 |
+| P0 conhecidos | **0** |
+| P1 conhecidos | **abertos** — ver lista abaixo |
+| **READY FOR STAGING** | **NAO** |
+| **READY FOR PRODUCTION** | **NAO** |
 
-A Definition of Done exigia `P0 = 0` e `P1 = 0`. Os nove P1 originais (P1-A ... P1-I) foram
-fechados, cada um com regressao propria, sem reclassificar nada para P2 para fechar o gate.
-As tres revisoes independentes que se seguiram encontraram 25 defeitos adicionais, todos
-corrigidos.
+A Definition of Done exigia `P0 = 0` **e** `P1 = 0`. Os nove P1 originais foram fechados, e
+os quatro P0 e os P1 mais graves das oito rodadas de revisao tambem. Mas a oitava rodada
+deixou P1 em aberto, e nao ha base para afirmar que uma nona nao encontraria mais:
 
-**A qualificacao importa.** Como a secao 5c documenta, a taxa de descoberta nao convergiu:
-cada revisao encontrou defeitos em quantidade comparavel a anterior. `P1 = 0` aqui significa
-"zero conhecidos apos tres passagens adversariais", nao "livre de defeitos". Uma quarta
-revisao provavelmente encontraria mais.
+- **A6** — a revisao com os bytes originais preservados nao e legivel por nenhuma rota: o
+  unico leitor a degrada. Os bytes existem na tabela, recuperaveis so por SQL direto.
+- **F7** — nenhum indice atende a query do agendador (`status` + `scheduled_at`, sem
+  `site_id`); com `POLL_INTERVAL_MS=1000` sao 86.400 seq scans cross-tenant por dia.
+- **F9** — toda acao de service token e auditada com `actor_id = NULL`. Um site com tres
+  integracoes nao consegue dizer qual credencial fez o que.
+- **F10 parcial** — `createUser` e `createSite` seguem sem auditoria.
+- Cerca de trinta P2 catalogados na oitava revisao, entre eles: o SSRF de entrega e
+  resolve-then-connect (rebind com TTL 0 ainda passa), `dryRun` compartilha um namespace de
+  externalId entre tipos, o importador do WordPress mapeia `future` com data passada para
+  `scheduled` e o `createArticle` aceita — auto-publicando todo post de agendamento perdido,
+  e nove itens de acessibilidade no design system.
 
-Producao segue bloqueada por quatro lacunas operacionais (PROD-1...4 na secao 6), que por
-instrucao explicita nao foram tratadas nesta rodada. A mais grave continua sendo
-`logger: false`: toda implantacao real sobe sem log de servidor, o que torna invisivel em
-operacao exatamente a classe de defeito que estas auditorias encontraram lendo codigo.
+**Recomendacao.** O caminho para staging nao e uma nona rodada da mesma forma. E inverter o
+que esta sendo medido: colocar um teste na frente de cada afirmacao que um gate hoje faz por
+procuracao. Os quatro P0 da oitava rodada estavam todos em codigo com teste verde.
+
+Producao segue bloqueada tambem por PROD-1...4 (secao 6), nao tratados por instrucao
+explicita. A mais grave continua sendo `logger: false`: toda implantacao real sobe sem log
+de servidor, o que torna invisivel em operacao exatamente a classe de defeito que estas
+auditorias encontraram lendo codigo.

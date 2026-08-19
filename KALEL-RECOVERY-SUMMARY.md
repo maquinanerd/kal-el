@@ -269,8 +269,8 @@ larguras × 2 temas) tornou o gate mecânico e reprodutível.
 pnpm -r typecheck                    PASS (13 projetos)
 pnpm -r lint                         PASS (13 projetos)
 pnpm -r build                        PASS
-pnpm -r test                         139 → 211 (0 fail, 0 skip)
-Playwright                           2 → 24 (0 fail, 0 skip)
+pnpm -r test                         139 → 248 (0 fail, 0 skip)
+Playwright                           2 → 25 (0 fail, 0 skip)
 axe (WCAG 2.1 A+AA, 76 varreduras)   0 violações
 Navegação alcançável                 107/180 falhas → 190/190 ok
 ```
@@ -280,7 +280,7 @@ Navegação alcançável                 107/180 falhas → 190/190 ok
 - **P0 remanescentes: 0**
 - **P1 remanescentes: 0** — os nove (P1-A … P1-I) foram fechados numa segunda rodada, cada
   um com regressão própria, sem reclassificar nada para P2
-- **Pronto para staging: SIM**
+- **Pronto para staging: NÃO** — ver §8 da auditoria; P1 em aberto após oito revisões
 - **Pronto para produção: NÃO** — quatro bloqueadores operacionais (logging desabilitado,
   rate limit sem `trustProxy`, oráculo no bootstrap, ciclo de vida de sessão), deixados
   para uma rodada separada por instrução explícita

@@ -1,6 +1,8 @@
 # Kal El — Release-Readiness Report
 
-Status: **staging-ready (P0 = 0, P1 = 0); not production-ready.**
+Status: **not staging-ready.** P0 = 0; P1 open. See the verdict in
+`docs/audits/KALEL_STAGING_READINESS_AUDIT.md` section 8, and the eight-round
+review record in section 7b.
 
 > Sections 1-N below are the record as of 2026-08-14 (branch
 > `feat/foundation-phase-1-3`). The status line above supersedes the original
@@ -195,8 +197,8 @@ separate round: logging disabled in every real deployment, rate limiting without
 | gate | before | after |
 |---|---|---|
 | typecheck / lint / build | PASS | PASS |
-| unit + integration | 139 | 211 |
-| Playwright | 2 | 24 |
+| unit + integration | 139 | 248 |
+| Playwright | 2 | 25 |
 | axe (WCAG 2.1 A+AA) | not run | 0 violations over 76 scans |
 | navigation reachable | 73/180 | 190/190 |
 
