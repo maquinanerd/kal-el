@@ -67,6 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         { id: "users", label: "Usuários", icon: <IconUsers />, active: is("/users"), onClick: () => router.push("/users") },
         { id: "roles", label: "Papéis", icon: <IconUsers />, active: is("/roles"), onClick: () => router.push("/roles") },
         { id: "tokens", label: "Service tokens", icon: <IconBolt />, active: is("/tokens"), onClick: () => router.push("/tokens") },
+        { id: "webhooks", label: "Webhooks", icon: <IconWorkflow />, active: is("/webhooks"), onClick: () => router.push("/webhooks") },
         { id: "audit", label: "Audit log", icon: <IconMore />, active: is("/audit"), onClick: () => router.push("/audit") },
         { id: "settings", label: "Configurações", icon: <IconSettings />, active: is("/settings"), onClick: () => router.push("/settings") },
       ],

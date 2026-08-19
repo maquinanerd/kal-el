@@ -114,6 +114,12 @@ export type ArticleDetail = {
   };
   updatedAt: string;
   publishedAt: string | null;
+  /**
+   * States an editor has to act on. `document_unreadable` means the stored body did not
+   * parse and the `document` above is a placeholder, not the content - saving over it
+   * would destroy whatever is really in the column.
+   */
+  qualityFlags?: string[];
 };
 
 export type ArticleRevision = { id: string; revisionNumber: number; document: { version: number; nodes: unknown[] }; note: string | null; createdAt: string };
@@ -286,8 +292,94 @@ export const listSites = () => request<SiteInfo[]>("GET", "/v1/admin/sites");
 export const createSite = (body: { slug: string; name: string }) => request<SiteInfo>("POST", "/v1/admin/sites", body);
 export const updateSite = (siteId: string, body: { name?: string; status?: string }) => request<SiteInfo>("PATCH", `/v1/admin/sites/${siteId}`, body);
 
+// ---- webhooks ----
+export type WebhookDeliveryInfo = {
+  status: string;
+  attempt: number;
+  responseStatus: number | null;
+  error: string | null;
+  at: string | null;
+  eventType: string | null;
+};
+/** The signing secret is never in this shape; it exists only on the create response. */
+export type Webhook = {
+  id: string;
+  siteId: string;
+  url: string;
+  events: string[];
+  description: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastDelivery: WebhookDeliveryInfo | null;
+};
+export const WEBHOOK_EVENTS = ["article.published", "article.scheduled", "article.updated"] as const;
+
+export const listWebhooks = (siteId: string) => request<Webhook[]>("GET", `/v1/admin/sites/${siteId}/webhooks`);
+export const createWebhook = (siteId: string, body: { url: string; events: string[]; description?: string }) =>
+  request<Webhook & { secret: string }>("POST", `/v1/admin/sites/${siteId}/webhooks`, body);
+export const updateWebhook = (siteId: string, id: string, body: { url?: string; events?: string[]; description?: string | null; enabled?: boolean }) =>
+  request<Webhook>("PATCH", `/v1/admin/sites/${siteId}/webhooks/${id}`, body);
+export const deleteWebhook = (siteId: string, id: string) =>
+  request<{ id: string; deleted: boolean }>("DELETE", `/v1/admin/sites/${siteId}/webhooks/${id}`);
+
+// ---- operational status ----
+export type OpsStatus = {
+  checkedAt: string;
+  worker: { status: "up" | "stale" | "unknown"; lastSeenAt: string | null; details: Record<string, unknown> | null };
+  outbox: { pending: number; due: number; failed: number; oldestPendingAt: string | null };
+  scheduled: { total: number; overdue: number; nextAt: string | null };
+  webhooks: { total: number; enabled: number; failing: number };
+  articles: { blocked: number };
+};
+export const opsStatus = (siteId: string) => request<OpsStatus>("GET", `/v1/sites/${siteId}/ops-status`);
+
+// ---- document recovery ----
+export type RawDocument = {
+  articleId: string;
+  siteId: string;
+  title: string;
+  status: string;
+  version: number;
+  readable: boolean;
+  reason: string | null;
+  raw: unknown;
+  updatedAt: string;
+  revisions: { id: string; revisionNumber: number; note: string | null; readable: boolean; createdAt: string }[];
+};
+export const readRawDocument = (siteId: string, articleId: string) =>
+  request<RawDocument>("GET", `/v1/sites/${siteId}/articles/${articleId}/document/raw`);
+export const readRawRevision = (siteId: string, articleId: string, revisionId: string) =>
+  request<{ id: string; revisionNumber: number; readable: boolean; reason: string | null; raw: unknown; note: string | null; createdAt: string }>(
+    "GET",
+    `/v1/sites/${siteId}/articles/${articleId}/revisions/${revisionId}/raw`,
+  );
+export const replaceDocument = (
+  siteId: string,
+  articleId: string,
+  body: { document: unknown; note?: string },
+  ifMatch: number,
+) =>
+  request<{ articleId: string; version: number; preservedAs: number }>(
+    "POST",
+    `/v1/sites/${siteId}/articles/${articleId}/document/replace`,
+    body,
+    { "if-match": String(ifMatch) },
+  );
+
 // ---- audit ----
-export type AuditEntry = { id: string; action: string; objectType: string; objectId: string; actorType: string; actorId: string | null; details: unknown; createdAt: string };
+export type AuditEntry = {
+  id: string;
+  action: string;
+  objectType: string;
+  objectId: string;
+  actorType: string;
+  actorId: string | null;
+  /** Name of the actor as recorded; how a service-token action gets a readable name. */
+  actorLabel: string | null;
+  details: unknown;
+  createdAt: string;
+};
 export const listAudit = (siteId: string) => request<AuditEntry[]>("GET", `/v1/sites/${siteId}/audit-log`);
 
 // ---- redirects ----

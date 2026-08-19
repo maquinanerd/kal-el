@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge, Button, EmptyState, IconPlus, KpiCard, PageHead, type BadgeTone } from "@kal-el/design-system";
 import { useAuth } from "../../lib/auth";
 import { ApiError, createArticle, listArticles, stats, type ArticleSummary, type SiteStats } from "../../lib/api";
+import { OperationalStatus } from "../../components/OperationalStatus";
 
 const STATUS_TONE: Record<string, BadgeTone> = { draft: "neutral", in_review: "info", scheduled: "warning", published: "success", blocked: "danger", archived: "neutral" };
 
@@ -81,6 +82,10 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+
+          {/* Renders nothing for a role without audit.read: an editorial user should see
+              the editorial dashboard, not a broken platform panel. */}
+          <OperationalStatus siteId={activeSiteId} />
         </>
       )}
     </>

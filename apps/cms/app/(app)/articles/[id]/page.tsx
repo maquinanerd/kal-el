@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Alert, Badge, Button, Input, Modal, PageHead, Search, Select, Textarea } from "@kal-el/design-system";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import { useAuth } from "../../../../lib/auth";
+import { DocumentRepair } from "../../../../components/DocumentRepair";
 import {
   ApiError,
   articleAction,
@@ -356,6 +357,18 @@ export default function ArticlePage() {
 
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
+
+      {/* The API flags an article whose stored body could not be parsed. Without this the
+          editor shows an empty document that is indistinguishable from an unwritten one,
+          and the first save destroys whatever is really in the column. */}
+      {activeSiteId && article?.qualityFlags?.includes("document_unreadable") && (
+        <DocumentRepair
+          siteId={activeSiteId}
+          articleId={params.id}
+          version={version}
+          onRepaired={() => window.location.reload()}
+        />
+      )}
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <Badge tone="neutral">{status}</Badge>
