@@ -24,6 +24,10 @@ export type DispatchSummary = {
   noSubscribers: number;
   /** hooks skipped because they already succeeded for that event in an earlier pass */
   alreadyDelivered: number;
+  /** hooks that are out of attempts for that event and are no longer contacted */
+  deadLettered: number;
+  /** hooks skipped because their own backoff has not elapsed yet */
+  waiting: number;
 };
 
 const LOCK_FLOOR_MS = 60_000;
@@ -52,9 +56,10 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     allowPrivateTargets = process.env.ALLOW_PRIVATE_WEBHOOKS === "true",
   } = opts;
   const now = new Date();
-  // The loop below is sequential over every claimed event and every one of its hooks, so
-  // the worst case is well past a flat minute. A lock that expires mid-pass lets a second
-  // replica claim rows that are still in flight.
+  // The loop below is sequential over every claimed event, so a flat minute was well
+  // short of the worst case and let a second replica claim rows still in flight. This is
+  // a heuristic, not a bound - it cannot know the subscriber count up front - so the
+  // per-event loop releases its own claim on the way out, including on error.
   const lockMs = Math.max(LOCK_FLOOR_MS, limit * timeoutMs * 2);
 
   const due = await db.transaction(async (tx) => {
@@ -81,7 +86,7 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     return rows;
   });
 
-  const summary: DispatchSummary = { claimed: due.length, delivered: 0, failed: 0, noSubscribers: 0, alreadyDelivered: 0 };
+  const summary: DispatchSummary = { claimed: due.length, delivered: 0, failed: 0, noSubscribers: 0, alreadyDelivered: 0, deadLettered: 0, waiting: 0 };
 
   for (const event of due) {
     const subscribers = await db
@@ -102,22 +107,46 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     let lastError: string | null = null;
     let exhausted = 0;
     let failures = 0;
+    let attempted = false;
 
-    for (const hook of subscribers) {
-      const outcome = await dispatchOne(db, event, hook, { fetchImpl, maxAttempts, baseDelayMs, timeoutMs, onLog, allowPrivateTargets });
-      if (outcome.kind === "skipped") {
-        summary.alreadyDelivered++;
-        continue;
+    try {
+      for (const hook of subscribers) {
+        const outcome = await dispatchOne(db, event, hook, { fetchImpl, maxAttempts, baseDelayMs, timeoutMs, onLog, allowPrivateTargets });
+        if (outcome.kind === "skipped") {
+          summary.alreadyDelivered++;
+          continue;
+        }
+        if (outcome.kind === "success") {
+          summary.delivered++;
+          attempted = true;
+          continue;
+        }
+        if (outcome.kind === "waiting") {
+          // still failing, but this hook is inside its own backoff window
+          summary.waiting++;
+          failures++;
+          pendingRetries.push(outcome.retryAt);
+          continue;
+        }
+        if (outcome.kind === "dead") {
+          summary.deadLettered++;
+          failures++;
+          exhausted++;
+          lastError = outcome.error;
+          continue;
+        }
+        summary.failed++;
+        failures++;
+        attempted = true;
+        lastError = outcome.error;
+        if (outcome.retryAt) pendingRetries.push(outcome.retryAt);
+        else exhausted++;
       }
-      if (outcome.kind === "success") {
-        summary.delivered++;
-        continue;
-      }
-      summary.failed++;
-      failures++;
-      lastError = outcome.error;
-      if (outcome.retryAt) pendingRetries.push(outcome.retryAt);
-      else exhausted++;
+    } catch (err) {
+      // one event must not strand the rest of the claimed batch behind a held lock
+      onLog(`event ${event.id}: pass aborted: ${err instanceof Error ? err.message : String(err)}`);
+      await db.update(outboxEvents).set({ lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+      continue;
     }
 
     if (failures === 0) {
@@ -126,13 +155,15 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
       // every failing subscriber is out of attempts - only now is the event itself dead
       await db
         .update(outboxEvents)
-        .set({ status: "failed", attempts: event.attempts + 1, lastError, lockedUntil: null })
+        .set({ status: "failed", attempts: attempted ? event.attempts + 1 : event.attempts, lastError, lockedUntil: null })
         .where(eq(outboxEvents.id, event.id));
     } else {
       const soonest = pendingRetries.reduce((a, b) => (a < b ? a : b));
       await db
         .update(outboxEvents)
-        .set({ availableAt: soonest, attempts: event.attempts + 1, lastError, lockedUntil: null })
+        // a pass in which every failing hook was inside its own backoff made no request,
+        // so it is not an attempt
+        .set({ availableAt: soonest, attempts: attempted ? event.attempts + 1 : event.attempts, lastError, lockedUntil: null })
         .where(eq(outboxEvents.id, event.id));
       if (exhausted > 0) {
         onLog(`event ${event.id}: ${exhausted} subscriber(s) dead-lettered, ${pendingRetries.length} still retrying`);
@@ -149,6 +180,8 @@ type WebhookRow = typeof webhooks.$inferSelect;
 type HookOutcome =
   | { kind: "success" }
   | { kind: "skipped" }
+  | { kind: "dead"; error: string }
+  | { kind: "waiting"; retryAt: Date }
   | { kind: "failure"; retryAt: Date | null; error: string };
 
 async function dispatchOne(
@@ -171,6 +204,19 @@ async function dispatchOne(
   // while any sibling is still failing, so without this a healthy subscriber received the
   // same `article.published` once per retry cycle.
   if (existing?.status === "success") return { kind: "skipped" };
+
+  // Nor must a hook that is out of attempts. Re-delivery to a dead-lettered endpoint used
+  // to be stopped by killing the whole event on its first exhaustion; moving that decision
+  // to the aggregate removed the stop without replacing it, so a formally dead-lettered
+  // partner kept receiving the payload on every pass while a sibling was still retrying.
+  if (existing?.status === "failed") return { kind: "dead", error: existing.error ?? "dead-lettered" };
+
+  // Each hook carries its own exponential backoff, but the event wakes at the soonest of
+  // them. Without this the hook with the longest backoff was retried on the shortest
+  // one's schedule and burned its remaining attempts in seconds.
+  if (existing?.nextAttemptAt && existing.nextAttemptAt > new Date()) {
+    return { kind: "waiting", retryAt: existing.nextAttemptAt };
+  }
 
   const body = JSON.stringify(event.payload);
   const signature = signWebhook(hook.secret, body);

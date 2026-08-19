@@ -8,6 +8,20 @@ export type PromoteSummary = { promoted: number };
 const DEFAULT_DOCUMENT = { version: 2, nodes: [] };
 
 /**
+ * `migrateDocumentToV2` maps `document.nodes` for anything that is not literally version
+ * 2, so a truthy but shapeless column - `{}` - throws where reading the raw value never
+ * did. A revision is history, not the article: degrade it rather than block the publish.
+ */
+function safeDocument(document: unknown) {
+  if (!document) return DEFAULT_DOCUMENT;
+  try {
+    return migrateDocumentToV2(document as Parameters<typeof migrateDocumentToV2>[0]);
+  } catch {
+    return DEFAULT_DOCUMENT;
+  }
+}
+
+/**
  * Promote articles whose scheduled_at has arrived. Safe under concurrent
  * workers: the transition is a guarded UPDATE (status='scheduled' AND
  * scheduled_at <= now), so at most one worker wins per article; the outbox
@@ -24,7 +38,22 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
 
   let promoted = 0;
   for (const { id } of due) {
-    const updated = await db.transaction(async (tx) => {
+    // One unpromotable article used to reject the whole function, and the worker abandons
+    // the scheduled-publish job for that tick - so a single malformed document stopped
+    // every other due article from publishing, on every tick, permanently.
+    const updated = await promoteOne(db, id, now).catch((err) => {
+      console.error(`[scheduler] article ${id} could not be promoted`, err);
+      return null;
+    });
+
+    if (updated) promoted++;
+  }
+
+  return { promoted };
+}
+
+async function promoteOne(db: Db, id: string, now: Date) {
+  return db.transaction(async (tx) => {
       // Read the intended time before nulling it. Stamping `new Date()` recorded the
       // promotion moment instead of the time the editor scheduled, and since
       // `scheduledAt` is cleared on the same statement the intent was unrecoverable.
@@ -54,10 +83,10 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
       await tx.insert(articleRevisions).values({
         articleId: id,
         revisionNumber: Number(maxRev[0]?.n ?? 0) + 1,
-        // every other publish path migrates first; this one filed the raw column, so a
-        // scheduled publish of a still-v1 article wrote a v1 body into a table whose
-        // schema says v2 - the `as never` cast is what kept the compiler quiet about it
-        document: (row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT) as never,
+      // every other publish path migrates first; this one filed the raw column, so a
+      // scheduled publish of a still-v1 article wrote a v1 body into a table whose
+      // schema says v2 - the `as never` cast is what kept the compiler quiet about it
+      document: safeDocument(row.document) as never,
         createdBy: null,
         note: "scheduled publish",
       });
@@ -87,11 +116,6 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
         })
         .onConflictDoNothing();
 
-      return row;
-    });
-
-    if (updated) promoted++;
-  }
-
-  return { promoted };
+    return row;
+  });
 }

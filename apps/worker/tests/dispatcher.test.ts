@@ -196,8 +196,19 @@ describe("outbox dispatcher", () => {
     const retrySoon = await processDueEvents(db, { allowPrivateTargets: true });
     expect(retrySoon.claimed).toBe(0);
 
-    // simulate the retry window opening and the endpoint recovering
+    // opening only the event window is not enough: each hook carries its own backoff, so
+    // a sibling with a shorter one cannot drag this hook into an early retry
     await db.update(outboxEvents).set({ availableAt: new Date(Date.now() - 1000), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+    const tooEarly = await processDueEvents(db, { allowPrivateTargets: true });
+    expect(tooEarly.waiting).toBe(1);
+    expect(calls).toBe(1);
+
+    // simulate the hook's retry window opening and the endpoint recovering
+    await db.update(outboxEvents).set({ availableAt: new Date(Date.now() - 1000), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+    await db
+      .update(webhookDeliveries)
+      .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+      .where(eq(webhookDeliveries.outboxEventId, event.id));
 
     const second = await processDueEvents(db, { allowPrivateTargets: true });
     expect(second.delivered).toBe(1);
@@ -223,6 +234,10 @@ describe("outbox dispatcher", () => {
     expect(first.failed).toBe(1);
 
     await db.update(outboxEvents).set({ availableAt: new Date(Date.now() - 1000), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+    await db
+      .update(webhookDeliveries)
+      .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+      .where(eq(webhookDeliveries.outboxEventId, event.id));
     const second = await processDueEvents(db, { allowPrivateTargets: true, maxAttempts: 2 });
     expect(second.failed).toBe(1);
 
@@ -233,6 +248,13 @@ describe("outbox dispatcher", () => {
     });
     expect(delivery?.status).toBe("failed");
     expect(delivery?.attempt).toBe(2);
+
+    // and a dead-lettered hook is never contacted again, however long the event lives
+    const callsAtDeath = calls;
+    await db.update(outboxEvents).set({ status: "pending", availableAt: new Date(Date.now() - 1000), lockedUntil: null }).where(eq(outboxEvents.id, event.id));
+    const third = await processDueEvents(db, { allowPrivateTargets: true, maxAttempts: 2 });
+    expect(third.deadLettered).toBe(1);
+    expect(calls).toBe(callsAtDeath);
   });
 
   it("marks events as published when there are no subscribers", async () => {
