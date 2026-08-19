@@ -121,10 +121,17 @@ POST /media
 
 Para `PATCH /articles/:id` o mecanismo de segurança é o `If-Match`, não a chave.
 
-### Transições de workflow são idempotentes
+### Retry de transições de workflow
 
-Reaplicar uma transição que o artigo já sofreu é um **no-op que devolve 200** com o artigo
-atual — não um 409. Um retry após resposta perdida é seguro mesmo sem `Idempotency-Key`.
+Quatro transições têm **estado-alvo inequívoco** e são no-op ao serem reaplicadas:
+`submit`, `reject`, `publish` e `archive`. Reenviar devolve **200** com o artigo atual,
+então um retry após resposta perdida é seguro mesmo sem `Idempotency-Key`.
+
+`approve` e `unpublish` **não** são: ambas visam `draft`, então o servidor não consegue
+distinguir um retry de uma chamada que nunca foi legal. Tratar igualdade de estado como
+retry transformava um `approve` num artigo nunca submetido em 200 silencioso, sem
+entrada de auditoria — o portão editorial virando no-op enquanto o chamador recebia
+sucesso. Para essas duas, **envie `Idempotency-Key`**: é o que torna o retry seguro.
 
 Transição genuinamente ilegal → **409 `INVALID_TRANSITION`** com `details.from` e
 `details.to`.
@@ -155,6 +162,12 @@ Dois pontos que surpreendem:
 - **`approve` leva o artigo para `draft`**, não para um estado "aprovado", e limpa
   `publishedAt`/`scheduledAt`. Não existe status `approved`. O sinal durável da aprovação
   é a entrada `articles.approve` no audit log.
+- **`approve` só é legal a partir de `in_review` ou `blocked`.** Fora disso devolve **409
+  `INVALID_TRANSITION`** com `details.expected`. A restrição existe porque `approve` e
+  `unpublish` visam o mesmo `draft` e `published → draft` é transição legal — sem ela,
+  `/approve` (escopo `articles.approve`) funcionava como despublicação para quem
+  deliberadamente não tem `articles.publish`, e o clear de datas destruía o
+  `publishedAt` original de forma irrecuperável.
 
 ---
 

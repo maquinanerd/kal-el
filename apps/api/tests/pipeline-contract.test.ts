@@ -203,6 +203,27 @@ describe("pipeline contract", () => {
     expect(DOC).toMatch(/`approve` leva o artigo para `draft`/);
   });
 
+  it("approve is refused outside a review state, as documented", async () => {
+    const created = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles`,
+      headers: h(),
+      payload: { title: "Aprovar fora de revisão" },
+    });
+    const id = created.json().data.id;
+
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles/${id}/approve`,
+      headers: h(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("INVALID_TRANSITION");
+    expect(res.json().error.details.expected).toEqual(["in_review", "blocked"]);
+    expect(DOC).toMatch(/só é legal a partir de `in_review` ou `blocked`/);
+  });
+
   it("If-Match takes a bare integer, not a quoted ETag", async () => {
     const created = await ctx.app.inject({
       method: "POST",
