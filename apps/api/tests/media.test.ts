@@ -97,6 +97,37 @@ describe("media subsystem", () => {
     });
   }
 
+  function uploadRaw(session: Session, siteId: string, filename: string, mime: string, data: Buffer) {
+    return ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/media`,
+      headers: { ...headers(session), "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartBody(boundary, filename, mime, data),
+    });
+  }
+
+  it("rejects a payload whose bytes are not the declared image type", async () => {
+    // the classic "rename the executable to .png" - the declared type is allow-listed,
+    // the content is not an image at all
+    const exe = Buffer.concat([Buffer.from("MZ", "latin1"), Buffer.alloc(512, 0)]);
+    const res = await uploadRaw(ownerSession, siteA, "inocente.png", "image/png", exe);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toMatch(/not a supported image/i);
+  });
+
+  it("rejects a real image uploaded under the wrong declared type", async () => {
+    const res = await uploadRaw(ownerSession, siteA, "cartaz.jpg", "image/jpeg", png);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toMatch(/does not match the declared media type/i);
+    expect(res.json().error.details.detected).toBe("image/png");
+  });
+
+  it("rejects SVG by content as well as by declared type", async () => {
+    const svg = Buffer.from('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script/></svg>', "latin1");
+    expect((await uploadRaw(ownerSession, siteA, "x.svg", "image/svg+xml", svg)).statusCode).toBe(400);
+    expect((await uploadRaw(ownerSession, siteA, "x.png", "image/png", svg)).statusCode).toBe(400);
+  });
+
   it("uploads an image and records width/height/mime/size", async () => {
     const res = await upload(ownerSession, siteA);
     expect(res.statusCode).toBe(201);

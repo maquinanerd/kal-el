@@ -11,6 +11,7 @@ import { writeAudit } from "../plugins/audit.js";
 import type { StorageProvider } from "../storage/provider.js";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import type { ActorRef } from "./articles.js";
+import { detectImageType, typesMatch } from "./image-signature.js";
 
 // Raster formats only. SVG is deliberately excluded (XSS surface).
 export const MEDIA_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
@@ -84,11 +85,25 @@ export async function uploadMedia(
   if (input.data.length === 0) throw badRequest("empty file");
   if (input.data.length > opts.maxBytes) throw badRequest(`file exceeds the ${opts.maxBytes} byte limit`);
 
-  const ext = EXT_BY_MIME[input.mimeType] ?? "bin";
+  // The declared MIME type is a client-supplied header. Trust the bytes instead: an
+  // arbitrary payload labelled image/png was previously stored and served from the
+  // trusted API origin.
+  const detected = detectImageType(input.data);
+  if (!detected) {
+    throw badRequest("file content is not a supported image", { declared: input.mimeType });
+  }
+  if (!typesMatch(input.mimeType, detected)) {
+    throw badRequest("file content does not match the declared media type", {
+      declared: input.mimeType,
+      detected,
+    });
+  }
+
+  const ext = EXT_BY_MIME[detected] ?? "bin";
   const key = `sites/${siteId}/${randomUUID()}.${ext}`;
   const { width, height } = readDimensions(input.data);
 
-  await storage.put({ key, data: input.data, mimeType: input.mimeType });
+  await storage.put({ key, data: input.data, mimeType: detected });
 
   const row = await db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -96,7 +111,7 @@ export async function uploadMedia(
       .values({
         siteId,
         filename: sanitizeFilename(input.filename),
-        mimeType: input.mimeType,
+        mimeType: detected,
         sizeBytes: input.data.length,
         width,
         height,
