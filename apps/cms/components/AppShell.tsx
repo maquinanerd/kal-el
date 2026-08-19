@@ -90,7 +90,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         }
       />
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+      {/* minHeight:0 is load-bearing — see the shell scroll note in the design system.
+          Without it this column refuses to shrink below its content and the workspace
+          scroll container below never receives a bounded height. */}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
         <Topbar
           left={
             <>

@@ -804,9 +804,14 @@
 /* Inspector */
 .peg-inspector {
   width: var(--peg-inspector-width);
+  flex-shrink: 0;
   border-left: 1px solid var(--peg-border);
-  background: var(--peg-canvas);
+  background: var(--peg-surface-inspector);
+  /* the inspector is the second scroll container: it scrolls independently of the
+     workspace, so a long publication/SEO/QA stack never drags the article with it */
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
 }
@@ -827,11 +832,31 @@
   justify-content: space-between;
 }
 
-/* Shell */
+/* ── Shell scroll architecture ──────────────────────────────────────────────
+   The app is a fixed-height frame with one scrolling region per column: the
+   workspace content, the inspector, and the sidebar nav. Every flex ancestor
+   between the frame and a scroll container MUST carry `min-height: 0`.
+
+   Why: a flex item's default `min-height: auto` refuses to shrink below its
+   content. `.peg-content` had `flex: 1; overflow-y: auto` but no `min-height: 0`,
+   so it grew to its full content height instead of being clamped to the frame —
+   `overflow-y` never had an overflow to resolve, and `.peg-app`'s
+   `overflow: hidden` simply clipped the excess. Measured by the product review:
+   2067px of editor in an 847px viewport, leaving categories, tags, entities,
+   authors, featured image, SERP preview, social preview and revisions
+   permanently unreachable.
+   ────────────────────────────────────────────────────────────────────────── */
 .peg-app {
   display: flex;
   height: 100vh;
+  /* dvh tracks the retracting mobile browser chrome; the vh line above is the fallback */
+  height: 100dvh;
   overflow: hidden;
+}
+/* Any column wrapper between the frame and the workspace (the CMS shell puts one there
+   to host the topbar) has to be shrinkable too, or it reintroduces the same bug. */
+.peg-app > * {
+  min-height: 0;
 }
 .peg-sidebar {
   width: var(--peg-sidebar-width);
@@ -863,7 +888,9 @@
   font-size: 10px;
   font-weight: 700;
 }
-.peg-sidebar__nav { flex: 1; overflow-y: auto; padding: var(--peg-space-3); display: flex; flex-direction: column; gap: 1px; }
+/* third scroll container: the nav itself, so a long nav scrolls without moving the
+   brand header or the account row pinned at the bottom */
+.peg-sidebar__nav { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--peg-space-3); display: flex; flex-direction: column; gap: 1px; }
 .peg-sidebar__group-label {
   font: var(--peg-font-micro);
   text-transform: uppercase;
@@ -954,6 +981,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0; /* see the shell scroll note above */
 }
 .peg-topbar {
   height: var(--peg-topbar-height);
@@ -973,13 +1001,37 @@
   font: var(--peg-font-caption);
   color: var(--peg-text-tertiary);
 }
+/* THE workspace scroll container. `min-height: 0` is what makes `overflow-y` real. */
 .peg-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--peg-space-6) var(--peg-space-8);
+  overscroll-behavior: contain;
+  /* bottom padding is deliberately 0 — see the spacer below */
+  padding: var(--peg-space-6) var(--peg-space-8) 0;
   display: flex;
   flex-direction: column;
   gap: var(--peg-space-5);
+}
+/* A flex column scroll container does not include its own `padding-bottom` in
+   `scrollHeight`, so the final 24px of the last block stayed unreachable even once the
+   container scrolled. A zero-content flex item IS counted, so the trailing space becomes
+   real scrollable content instead of clipped padding. */
+.peg-content::after {
+  content: "";
+  display: block;
+  min-height: var(--peg-space-6);
+  flex-shrink: 0;
+}
+/* The skip-link target wraps every page. It is CONTENT, not a frame: it must keep its
+   full intrinsic height so the scroll container can measure it. `flex-shrink: 0` is the
+   load-bearing half — with the default `1` the flex container squeezes this item to fit
+   the viewport and its children spill out visibly instead of extending the scroll range. */
+.peg-content > #conteudo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peg-space-5);
+  flex-shrink: 0;
 }
 .peg-page-head {
   display: flex;
