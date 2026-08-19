@@ -30,9 +30,10 @@ const ALL_TABLES = [
   "redirects",
   "webhooks",
   "webhook_deliveries",
+  "worker_heartbeats",
 ];
 
-// Reverse of 0000_*.sql: reversibility is a stated engineering rule.
+// Reverse of every applied migration: reversibility is a stated engineering rule.
 const DOWN_0000 = `
 DROP TABLE IF EXISTS "article_entities" CASCADE;
 DROP TABLE IF EXISTS "article_tags" CASCADE;
@@ -56,6 +57,7 @@ DROP TABLE IF EXISTS "user_roles" CASCADE;
 DROP TABLE IF EXISTS "role_permissions" CASCADE;
 DROP TABLE IF EXISTS "permissions" CASCADE;
 DROP TABLE IF EXISTS "roles" CASCADE;
+DROP TABLE IF EXISTS "worker_heartbeats" CASCADE;
 DROP TABLE IF EXISTS "webhook_deliveries" CASCADE;
 DROP TABLE IF EXISTS "webhooks" CASCADE;
 DROP TABLE IF EXISTS "users" CASCADE;
