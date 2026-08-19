@@ -312,9 +312,20 @@ export default function ArticlePage() {
   }
 
   function restore(revision: ArticleRevision) {
-    setDoc((revision.document as ArticleDocumentV2) ?? EMPTY_DOC);
+    const target = (revision.document as ArticleDocumentV2) ?? EMPTY_DOC;
+    // A revision whose stored document could not be read comes back empty, and this
+    // writes it straight over the live article. Ask first: an unreadable revision is
+    // indistinguishable from a genuinely empty one in the list, and the difference is a
+    // destroyed body.
+    if (target.nodes.length === 0 && doc.nodes.length > 0) {
+      const ok = window.confirm(
+        `A revisão ${revision.revisionNumber} está vazia. Restaurá-la apaga o conteúdo atual. Continuar?`,
+      );
+      if (!ok) return;
+    }
+    setDoc(target);
     setEditorKey((k) => k + 1);
-    void save({ document: revision.document });
+    void save({ document: target });
   }
 
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {

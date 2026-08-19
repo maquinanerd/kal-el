@@ -11,9 +11,16 @@ export default function CalendarPage() {
   const { activeSiteId } = useAuth();
   const [items, setItems] = useState<ArticleSummary[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  // "Nada agendado" from first paint until up to twenty sequential requests resolve is the
+  // same wrong answer the pagination was added to remove, just earlier in the sequence
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!activeSiteId) return;
+    if (!activeSiteId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     let cancelled = false;
     // an editorial calendar that stops at the API default of 25 is worse than no
     // calendar: the missing rows look like nothing is scheduled
@@ -39,6 +46,7 @@ export default function CalendarPage() {
       if (!cancelled) {
         setItems(all);
         setNotice(note);
+        setLoading(false);
       }
     })();
     return () => {
@@ -65,7 +73,13 @@ export default function CalendarPage() {
     <>
       <PageHead title="Calendário editorial" description="Artigos agendados para publicação." />
       {notice && <Alert tone="warning">{notice}</Alert>}
-      {items.length === 0 ? <EmptyState title="Nada agendado" body="Agende artigos para aparecerem aqui." /> : <Table columns={columns} rows={items} selectable={false} />}
+      {loading ? (
+        <p className="peg-table__muted">Carregando…</p>
+      ) : items.length === 0 ? (
+        <EmptyState title="Nada agendado" body="Agende artigos para aparecerem aqui." />
+      ) : (
+        <Table columns={columns} rows={items} selectable={false} />
+      )}
     </>
   );
 }

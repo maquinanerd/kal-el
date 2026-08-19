@@ -57,15 +57,17 @@ export default function WorkflowPage() {
   // one action at a time: a double click used to fire two POSTs and surface the second
   // as a raw INVALID_TRANSITION in a Portuguese UI
   const [pending, setPending] = useState<string | null>(null);
-  // Every fetch is stamped with the (site, tab) it was issued for. Without it, switching
-  // tabs while a "Carregar mais" was in flight appended in-review rows into the drafts
-  // list and left the drafts cursor pointing at the in-review query.
+  // Every fetch carries the sequence number of the state it was issued for. Without it,
+  // switching tabs while a "Carregar mais" was in flight appended in-review rows into the
+  // drafts list and left the drafts cursor pointing at the in-review query.
   const generation = useRef(0);
 
   const load = useCallback(async (siteId: string, status: ArticleStatus) => {
     const mine = ++generation.current;
     setLoading(true);
     setError(null);
+    // a staleness warning about a row in another tab is noise over this list
+    setNotice(null);
     try {
       const page = await listArticles(siteId, { status, limit: PAGE_SIZE });
       if (mine !== generation.current) return;
@@ -106,6 +108,14 @@ export default function WorkflowPage() {
     setError(null);
     setNotice(null);
     setPending(`${row.id}:${action}`);
+    // `activeSiteId` and `active` are captured here. If either changes while the action is
+    // in flight the effect issues its own load, and reloading with the captured pair would
+    // win the generation race and paint the old site's rows under the new selection.
+    const issuedAt = generation.current;
+    const reload = async () => {
+      if (generation.current !== issuedAt) return;
+      await load(activeSiteId, active);
+    };
     try {
       // The idempotency key is scoped to the version the action was issued against, and
       // this list can be arbitrarily stale - another tab, another editor, a queue left
@@ -118,7 +128,7 @@ export default function WorkflowPage() {
         throw err;
       });
       if (!fresh) {
-        await load(activeSiteId, active);
+        await reload();
         setNotice(`"${row.title}" não existe mais. A fila foi atualizada.`);
         return;
       }
@@ -126,18 +136,18 @@ export default function WorkflowPage() {
       // so a version that moved is already unspent - and reporting "in_review → in_review"
       // because a writer edited the text would be a message about nothing.
       if (fresh.status !== row.status) {
-        await load(activeSiteId, active);
+        await reload();
         setNotice(`"${row.title}" mudou desde que a fila foi carregada (${row.status} → ${fresh.status}). Nada foi alterado; a fila está atualizada.`);
         return;
       }
       const key = `cms.${row.id}.${action}.v${fresh.version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
       await articleAction(activeSiteId, row.id, action, key);
-      await load(activeSiteId, active);
+      await reload();
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) setError("Sem permissão para esta ação");
       else if (err instanceof ApiError && err.status === 409) {
         setError("O artigo mudou durante a ação. A fila foi atualizada.");
-        if (activeSiteId) await load(activeSiteId, active);
+        await reload();
       } else setError(err instanceof ApiError ? err.message : "Falha na ação");
     } finally {
       setPending(null);

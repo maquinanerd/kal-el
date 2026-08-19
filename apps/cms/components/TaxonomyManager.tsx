@@ -22,8 +22,10 @@ function slugify(input: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      // the taxonomy contracts cap slugs at 100, not the 120 articles use, and the
-      // server stores what the client sends - so an over-long name got a raw English 400
+      // the tightest taxonomy slug contract is `tagSchema` at 100 (categories, authors
+      // and sources allow 140), and the server stores what the client sends - so an
+      // over-long tag name used to come back as a raw English 400. Names themselves are
+      // still sent unmodified and can still be refused on length.
       .slice(0, 100) || "untitled"
   );
 }
