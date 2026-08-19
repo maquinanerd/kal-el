@@ -14,6 +14,7 @@ import {
   createTagBodySchema,
   idempotencyKeySchema,
   publishArticleBodySchema,
+  replaceDocumentBodySchema,
   scheduleArticleBodySchema,
   updateArticleBodySchema,
   updateAuthorBodySchema,
@@ -69,6 +70,8 @@ import {
 import { createRedirect, deleteRedirect, listRedirects } from "../services/redirects.js";
 import { deleteMedia, getMedia, listMedia, updateMedia, uploadMedia } from "../services/media.js";
 import { siteStats } from "../services/stats.js";
+import { operationalStatus } from "../services/ops.js";
+import { readRawDocument, readRawRevision, replaceDocument } from "../services/recovery.js";
 import { createPreviewToken } from "../services/preview.js";
 
 function guard(permission: string) {
@@ -243,6 +246,49 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
           status: 200,
           body: { data: await archiveArticle(tx as unknown as Db, siteId, articleId, actor, parsed.data.note) },
+        }));
+      });
+
+      /**
+       * ---- Document recovery (A6) ----
+       *
+       * An article whose stored document cannot be parsed stays visible and editable, but
+       * every reader degrades it to an empty document, so the original bytes were
+       * reachable only by direct SQL against production. These three routes make the
+       * repair an operator action inside the product.
+       *
+       * All three are scoped to the site in the query, and gated on `articles.recover` -
+       * a permission held by owner/admin/editor-chefe and deliberately not by `autor`.
+       */
+      siteApp.get("/articles/:articleId/document/raw", { preHandler: guard("articles.recover") }, async (req) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        return { data: await readRawDocument(app.db, siteId, articleId) };
+      });
+
+      siteApp.get("/articles/:articleId/revisions/:revisionId/raw", { preHandler: guard("articles.recover") }, async (req) => {
+        const { siteId, articleId, revisionId } = req.params as { siteId: string; articleId: string; revisionId: string };
+        if (!uuidSchema.safeParse(revisionId).success) throw notFound("revision not found");
+        return { data: await readRawRevision(app.db, siteId, articleId, revisionId) };
+      });
+
+      siteApp.post("/articles/:articleId/document/replace", { preHandler: guard("articles.recover") }, async (req, reply) => {
+        const { siteId, articleId } = req.params as { siteId: string; articleId: string };
+        const parsed = replaceDocumentBodySchema.safeParse(req.body);
+        if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        const actor = req.actor as ActorRef;
+
+        const ifMatch = req.headers["if-match"];
+        let expectedVersion: number | undefined;
+        if (typeof ifMatch === "string" && ifMatch.length > 0) {
+          expectedVersion = Number(ifMatch);
+          if (!Number.isInteger(expectedVersion)) throw badRequest("invalid If-Match header");
+        }
+
+        return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
+          status: 200,
+          body: {
+            data: await replaceDocument(tx as unknown as Db, siteId, articleId, actor, parsed.data, expectedVersion),
+          },
         }));
       });
 
@@ -525,6 +571,16 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         return { data: await siteStats(app.db, siteId) };
       });
 
+      /**
+       * Operational status: outbox backlog, scheduled backlog, webhook health and worker
+       * liveness. Behind `audit.read` because it exposes platform state rather than
+       * editorial content, and because that is the permission an operator already holds.
+       */
+      siteApp.get("/ops-status", { preHandler: guard("audit.read") }, async (req) => {
+        const siteId = (req.params as { siteId: string }).siteId;
+        return { data: await operationalStatus(app.db, siteId) };
+      });
+
       // ---- Audit log (site-scoped) ----
       siteApp.get("/audit-log", { preHandler: guard("audit.read") }, async (req) => {
         const siteId = (req.params as { siteId: string }).siteId;
@@ -535,6 +591,7 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
             siteId: r.siteId,
             actorType: r.actorType,
             actorId: r.actorId,
+            actorLabel: r.actorLabel,
             action: r.action,
             objectType: r.objectType,
             objectId: r.objectId,
@@ -553,7 +610,7 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
           .where(and(eq(auditLog.siteId, siteId), eq(auditLog.objectType, objectType), eq(auditLog.objectId, objectId)))
           .orderBy(desc(auditLog.createdAt))
           .limit(100);
-        return { data: rows.map((r) => ({ id: r.id, action: r.action, actorType: r.actorType, actorId: r.actorId, details: r.details, createdAt: r.createdAt.toISOString() })) };
+        return { data: rows.map((r) => ({ id: r.id, action: r.action, actorType: r.actorType, actorId: r.actorId, actorLabel: r.actorLabel, details: r.details, createdAt: r.createdAt.toISOString() })) };
       });
     },
     { prefix: "/v1/sites/:siteId" },
