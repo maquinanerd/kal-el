@@ -1,4 +1,5 @@
-import { eq, inArray } from "drizzle-orm";
+import { timingSafeEqual } from "node:crypto";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Db } from "@kal-el/db";
 import { users, sites, userRoles, sessions, roles, permissions, rolePermissions, serviceTokens } from "@kal-el/db/schema";
@@ -9,6 +10,16 @@ import { badRequest, forbidden, unauthorized } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import { OWNER_ROLE_KEY } from "../services/roles.js";
 import { toUserDto } from "../services/users.js";
+
+/**
+ * The bootstrap token was the one secret compared with `!==` in a codebase that is
+ * otherwise timing-safe (see `preview.ts`).
+ */
+function constantTimeEquals(a: string, b: string): boolean {
+  const ab = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
 
 const SESSION_COOKIE = "ke_session";
 const CSRF_COOKIE = "ke_csrf";
@@ -151,17 +162,24 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/bootstrap/init", async (req, reply) => {
     const header = req.headers["x-bootstrap-token"];
-    if (!app.config.BOOTSTRAP_TOKEN || header !== app.config.BOOTSTRAP_TOKEN) {
+    if (!app.config.BOOTSTRAP_TOKEN || typeof header !== "string" || !constantTimeEquals(header, app.config.BOOTSTRAP_TOKEN)) {
       throw forbidden("bootstrap token required");
     }
-    const existing = await app.db.select({ id: users.id }).from(users).limit(1);
-    if (existing.length > 0) throw forbidden("system is already initialized");
 
     const parsed = initBootstrapBodySchema.safeParse(req.body);
     if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
     const { site, user } = parsed.data;
 
     return app.db.transaction(async (tx) => {
+      // The "is the system already initialized" check ran on the pool, outside this
+      // transaction, with nothing serializing it. Two concurrent calls - a retried
+      // request, or a deploy script that runs twice - both read zero users and both
+      // committed, leaving two sites and two full-permission owner accounts with nothing
+      // surfacing the duplicate. The unique constraints only stop identical payloads.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('kal-el:bootstrap', 0))`);
+      const existing = await tx.select({ id: users.id }).from(users).limit(1);
+      if (existing.length > 0) throw forbidden("system is already initialized");
+
       const [siteRow] = await tx.insert(sites).values(site).returning();
       if (!siteRow) throw new Error("bootstrap site failed");
       const passwordHash = await hashPassword(user.password);
