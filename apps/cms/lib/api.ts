@@ -60,6 +60,10 @@ export type ArticleSummary = {
   // the API has always returned this; the local type omitted it, which is why the
   // calendar column had no choice but to read publishedAt and render an em dash
   scheduledAt: string | null;
+  /** Author ids, in display order. Populated per page by the list endpoint. */
+  authors: string[];
+  /** Category ids. */
+  categories: string[];
 };
 export type ArticlePage = { items: ArticleSummary[]; nextCursor: string | null };
 
@@ -83,11 +87,13 @@ export function listArticles(
   siteId: string,
   // `nextCursor` was in the response type from the start and read by nobody: every list
   // surface silently stopped at the API default of 25 rows
-  opts: { q?: string; status?: ArticleStatus; limit?: number; cursor?: string } = {},
+  opts: { q?: string; status?: ArticleStatus; authorId?: string; categoryId?: string; limit?: number; cursor?: string } = {},
 ): Promise<ArticlePage> {
   const params = new URLSearchParams();
   if (opts.q) params.set("q", opts.q);
   if (opts.status) params.set("status", opts.status);
+  if (opts.authorId) params.set("authorId", opts.authorId);
+  if (opts.categoryId) params.set("categoryId", opts.categoryId);
   if (opts.limit) params.set("limit", String(opts.limit));
   if (opts.cursor) params.set("cursor", opts.cursor);
   const suffix = params.toString() ? `?${params.toString()}` : "";

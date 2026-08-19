@@ -603,8 +603,48 @@ export async function listArticles(
   const items = hasMore ? rows.slice(0, q.limit) : rows;
   const nextCursor = hasMore && items.length > 0 ? encodeCursor(items[items.length - 1] as ArticleRow) : null;
 
+  /**
+   * Author and category ids for the whole page, in two queries rather than 2N.
+   *
+   * `summaryDto` returned empty arrays for every relation, so a list could not show who
+   * wrote a piece or which desk it belongs to - the article index was reduced to title,
+   * status and a timestamp, which is not enough to run an editorial day. Batched by
+   * article id; `relationIds` stays the per-article path used by the detail view.
+   */
+  const ids = items.map((r) => r.id);
+  const [authorRows, categoryRows] = ids.length
+    ? await Promise.all([
+        db
+          .select({ articleId: articleAuthors.articleId, authorId: articleAuthors.authorId })
+          .from(articleAuthors)
+          .where(inArray(articleAuthors.articleId, ids))
+          .orderBy(asc(articleAuthors.position)),
+        db
+          .select({ articleId: articleCategories.articleId, categoryId: articleCategories.categoryId })
+          .from(articleCategories)
+          .where(inArray(articleCategories.articleId, ids)),
+      ])
+    : [[], []];
+
+  const authorsBy = new Map<string, string[]>();
+  for (const r of authorRows) {
+    const list = authorsBy.get(r.articleId);
+    if (list) list.push(r.authorId);
+    else authorsBy.set(r.articleId, [r.authorId]);
+  }
+  const categoriesBy = new Map<string, string[]>();
+  for (const r of categoryRows) {
+    const list = categoriesBy.get(r.articleId);
+    if (list) list.push(r.categoryId);
+    else categoriesBy.set(r.articleId, [r.categoryId]);
+  }
+
   return {
-    items: items.map(summaryDto),
+    items: items.map((row) => ({
+      ...summaryDto(row),
+      authors: authorsBy.get(row.id) ?? [],
+      categories: categoriesBy.get(row.id) ?? [],
+    })),
     nextCursor,
     total: undefined,
   };
