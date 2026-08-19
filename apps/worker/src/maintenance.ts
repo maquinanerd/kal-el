@@ -1,6 +1,6 @@
 import { lt } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
-import { idempotencyKeys } from "@kal-el/db/schema";
+import { idempotencyKeys, workerHeartbeats } from "@kal-el/db/schema";
 
 /**
  * Delete idempotency records past their TTL.
@@ -16,4 +16,18 @@ export async function purgeExpiredIdempotencyKeys(db: Db): Promise<number> {
     .where(lt(idempotencyKeys.expiresAt, new Date()))
     .returning({ key: idempotencyKeys.key });
   return deleted.length;
+}
+
+/**
+ * Record that this background process is alive.
+ *
+ * One row per role, overwritten every tick. The operational panel reads it to distinguish
+ * "the outbox is empty" from "nothing is draining the outbox" - which, before this,
+ * looked identical from the API side.
+ */
+export async function recordHeartbeat(db: Db, id: string, details: Record<string, unknown> = {}): Promise<void> {
+  await db
+    .insert(workerHeartbeats)
+    .values({ id, lastSeenAt: new Date(), details })
+    .onConflictDoUpdate({ target: workerHeartbeats.id, set: { lastSeenAt: new Date(), details } });
 }
