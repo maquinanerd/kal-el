@@ -301,13 +301,35 @@ export default function ArticlePage() {
             ref={editorRef}
             document={doc}
             onChange={(next) => { setDoc(next); scheduleSave(); }}
+            statusSlot={
+              <>
+                <span className="peg-save-state" role="status" aria-live="polite">
+                  {saveState ? SAVE_LABEL[saveState] : "Editor"}
+                </span>
+                {saveError && saveState === "error" && (
+                  <span className="peg-field__error" role="alert">
+                    Falha ao salvar: {saveError}
+                  </span>
+                )}
+              </>
+            }
             onRequestImage={() => setMediaPicker("image")}
             onRequestGallery={() => setMediaPicker("gallery")}
             onUploadFile={async (file) => {
               if (!activeSiteId) return null;
               try {
                 const created = await uploadMedia(activeSiteId, file);
-                return created.id;
+                // route it through the same alt-text dialog the picker uses, so a pasted
+                // or dropped image cannot land in the document with alt=""
+                setPendingImage({
+                  id: created.id,
+                  filename: created.filename,
+                  url: created.url,
+                  altText: created.altText ?? null,
+                  caption: created.caption ?? null,
+                  credit: created.credit ?? null,
+                });
+                return null;
               } catch (err) {
                 setActionError(err instanceof Error ? err.message : "falha ao enviar a imagem");
                 return null;

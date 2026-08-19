@@ -177,19 +177,34 @@ export async function importBatch(
     const existing = await client.listArticles(siteId, { externalKey });
     const first = existing.items[0];
 
-    const resolveRelation = (externalIds: string[], res: Resolver, kind: string): string[] => {
+    /**
+     * Resolves source references to Kal El ids.
+     *
+     * `complete` matters on update: an unresolved reference means the batch does not
+     * actually know this article's full relation set, and writing the partial list would
+     * DELETE the rest (replaceRelations is delete-then-insert). A partial list is fine on
+     * create - there is nothing to lose - but on update the field is left out entirely.
+     */
+    const resolveRelation = (externalIds: string[], res: Resolver, kind: string) => {
       const ids: string[] = [];
+      let complete = true;
       for (const e of externalIds) {
         const id = res.byExternalId.get(e);
         if (id) ids.push(id);
-        else report.warnings.push(`${kind} reference dropped on "${article.slug}": ${e} not in batch`);
+        else {
+          complete = false;
+          report.warnings.push(`${kind} reference dropped on "${article.slug}": ${e} not in batch`);
+        }
       }
-      return ids;
+      return { ids, complete };
     };
 
-    const categoryIds = resolveRelation(article.categoryExternalIds, categories, "category");
-    const tagIds = resolveRelation(article.tagExternalIds, tags, "tag");
-    const authorIds = resolveRelation(article.authorExternalIds, authors, "author");
+    const categoryRel = resolveRelation(article.categoryExternalIds, categories, "category");
+    const tagRel = resolveRelation(article.tagExternalIds, tags, "tag");
+    const authorRel = resolveRelation(article.authorExternalIds, authors, "author");
+    const categoryIds = categoryRel.ids;
+    const tagIds = tagRel.ids;
+    const authorIds = authorRel.ids;
 
     const featuredMediaId = article.featuredMediaExternalId ? urlToMediaId.get(batch.media.find((m) => m.externalId === article.featuredMediaExternalId)?.url ?? "") : undefined;
 
@@ -234,6 +249,22 @@ export async function importBatch(
       for (const key of Object.keys(desired)) {
         if (contentHash(desired[key]) !== contentHash(current[key])) patch[key] = desired[key];
       }
+
+      // An incompletely resolved relation would clear the ones the batch could not see.
+      const incomplete: [string, boolean][] = [
+        ["categories", categoryRel.complete],
+        ["tags", tagRel.complete],
+        ["authors", authorRel.complete],
+      ];
+      for (const [field, complete] of incomplete) {
+        if (!complete && field in patch) {
+          delete patch[field];
+          report.warnings.push(
+            `${field} left untouched on "${article.slug}": the batch resolved only part of them`,
+          );
+        }
+      }
+
       // relations are sent unsorted; the sort exists only to make the comparison stable
       if ("categories" in patch) patch.categories = categoryIds;
       if ("tags" in patch) patch.tags = tagIds;

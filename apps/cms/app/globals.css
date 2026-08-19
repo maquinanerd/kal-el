@@ -185,3 +185,9 @@ a {
   font: var(--peg-font-caption);
   color: var(--peg-text-secondary);
 }
+.peg-editor__focus-status {
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-3);
+  margin-right: auto;
+}

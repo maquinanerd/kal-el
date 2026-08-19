@@ -42,6 +42,8 @@ describe("author ownership", () => {
     owner = await login(ctx, seeded.email, seeded.password);
 
     // writers: no publish/approve/schedule, so updates go through the ownership check
+    // deliberately includes taxonomy.authors.manage but NOT roles.manage: this is the
+    // configuration the byline-hijack escalation used
     const writerRole = await createRole(ctx, owner, "writer-own", [
       "articles.create",
       "articles.read",
@@ -230,6 +232,56 @@ describe("author ownership", () => {
       headers: { Cookie: carla.cookieHeader },
     });
     expect((await patch(carla, again.json().data, { title: "revogado" })).statusCode).toBe(403);
+  });
+
+  it("taxonomy.authors.manage cannot repoint a byline at another account", async () => {
+    // Linking a byline grants edit rights on every article carrying it. Bruno holds
+    // taxonomy.authors.manage; without a separate permission he could free his own byline,
+    // claim Alice's, and edit her published articles under her name.
+    const unlink = await ctx.app.inject({
+      method: "PATCH",
+      url: `/v1/sites/${siteId}/authors/${brunoAuthorId}`,
+      headers: h(bruno),
+      payload: { userId: null },
+    });
+    expect(unlink.statusCode, "unlinking is also a permission change").toBe(403);
+
+    const hijack = await ctx.app.inject({
+      method: "PATCH",
+      url: `/v1/sites/${siteId}/authors/${aliceAuthorId}`,
+      headers: h(bruno),
+      payload: { userId: brunoUserId },
+    });
+    expect(hijack.statusCode).toBe(403);
+
+    // and the same writer can still rename a byline, which is ordinary taxonomy work
+    const rename = await ctx.app.inject({
+      method: "PATCH",
+      url: `/v1/sites/${siteId}/authors/${brunoAuthorId}`,
+      headers: h(bruno),
+      payload: { name: "Bruno Byline Renomeado" },
+    });
+    expect(rename.statusCode, "renaming a byline is not a permission change").toBe(200);
+
+    // the link survived the refused writes
+    const authors = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteId}/authors`,
+      headers: { Cookie: owner.cookieHeader },
+    });
+    const rows = authors.json().data as { id: string; userId: string | null }[];
+    expect(rows.find((a) => a.id === aliceAuthorId)?.userId).toBe(aliceUserId);
+    expect(rows.find((a) => a.id === brunoAuthorId)?.userId).toBe(brunoUserId);
+  });
+
+  it("creating a byline already linked to an account also needs the permission", async () => {
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/authors`,
+      headers: h(bruno),
+      payload: { name: "Atalho", slug: "atalho", userId: brunoUserId },
+    });
+    expect(res.statusCode).toBe(403);
   });
 
   it("one account holds at most one byline per site, and the conflict says why", async () => {

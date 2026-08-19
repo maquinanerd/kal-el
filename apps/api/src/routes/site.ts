@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Db } from "@kal-el/db";
@@ -324,6 +325,10 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const siteId = (req.params as { siteId: string }).siteId;
         const parsed = createAuthorBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        // Linking a byline to an account grants that account edit rights on every article
+        // carrying the byline, so it is a permission change, not taxonomy editing.
+        // `taxonomy.authors.manage` alone must not be able to hand out article access.
+        if (parsed.data.userId !== undefined) permissionDenied(req, "roles.manage");
         const actor = req.actor as ActorRef;
         const data = await respondIdempotentValue(app.db, req, actor.actorKey, async (tx) => {
           const row = await createAuthor(tx as unknown as Db, siteId, actor, parsed.data);
@@ -403,6 +408,10 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         if (!uuidSchema.safeParse(id).success) throw notFound("author not found");
         const parsed = updateAuthorBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
+        // Repointing a byline at another account grants that account edit rights on every
+        // article carrying it. Without this, `taxonomy.authors.manage` + `articles.update`
+        // was a route to editing other writers' published articles.
+        if (parsed.data.userId !== undefined) permissionDenied(req, "roles.manage");
         return { data: await updateAuthor(app.db, siteId, id, req.actor as ActorRef, parsed.data) };
       });
       siteApp.delete("/authors/:id", { preHandler: guard("taxonomy.authors.manage") }, async (req) => {
@@ -463,6 +472,9 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         // stays a plain file upload.
         const externalKeyRaw = (req.query as { externalKey?: string } | undefined)?.externalKey;
         const externalKey = typeof externalKeyRaw === "string" && externalKeyRaw.length > 0 ? externalKeyRaw : null;
+        // the multipart body is not in `req.body`, so the file's digest has to reach the
+        // request hash explicitly - otherwise two different files under one key collide
+        const contentDigest = createHash("sha256").update(data).digest("hex");
         return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
           status: 201,
           body: {
@@ -475,7 +487,7 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
               { maxBytes: app.config.MEDIA_MAX_BYTES, baseUrl: app.config.API_BASE_URL },
             ),
           },
-        }));
+        }), contentDigest);
       });
 
       siteApp.get("/media/:mediaId", { preHandler: guard("media.read") }, async (req) => {

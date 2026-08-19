@@ -19,9 +19,15 @@ function canonical(value: unknown): string {
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
 }
 
-export function idempotencyRequestHash(req: FastifyRequest): string {
+/**
+ * @param extra content the request carries outside `req.body`. Multipart uploads have an
+ * undefined body, so without the file's own digest every upload to the same URL hashed
+ * identically - two different files under one key would replay the first file's response
+ * and silently discard the second.
+ */
+export function idempotencyRequestHash(req: FastifyRequest, extra?: string): string {
   return createHash("sha256")
-    .update(`${req.method}\n${req.url}\n${canonical(req.body ?? {})}`)
+    .update(`${req.method}\n${req.url}\n${canonical(req.body ?? {})}\n${extra ?? ""}`)
     .digest("hex");
 }
 
@@ -120,6 +126,7 @@ export async function respondIdempotent(
   reply: { status: (code: number) => { send: (body: unknown) => unknown } },
   actorKey: string,
   run: (tx: any) => Promise<{ status: number; body: unknown }>,
+  extraHash?: string,
 ): Promise<unknown> {
   const raw = req.headers["idempotency-key"];
   if (typeof raw !== "string" || raw.length === 0) {
@@ -131,7 +138,7 @@ export async function respondIdempotent(
   const result = await withIdempotency(db, {
     key: parsed.data,
     actorKey: idempotencyScope(actorKey, siteOf(req)),
-    requestHash: idempotencyRequestHash(req),
+    requestHash: idempotencyRequestHash(req, extraHash),
     run,
   });
   return reply.status(result.status).send(result.body);

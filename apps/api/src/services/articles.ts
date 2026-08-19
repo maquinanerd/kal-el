@@ -66,14 +66,21 @@ export function slugify(input: string): string {
   );
 }
 
-async function uniqueSlug(db: Db, siteId: string, base: string): Promise<string> {
+/**
+ * @param excludeArticleId the article being updated, which must not count as a collision
+ * with itself. Without it a repeated sync of the same source slug oscillated: the article
+ * at `foo-2` asked for `foo`, found `foo` taken and `foo-2` taken (by itself), moved to
+ * `foo-3`; the next run found `foo-2` free and moved back - leaving redirects in both
+ * directions, i.e. a permanent 301 loop on the public site.
+ */
+async function uniqueSlug(db: Db, siteId: string, base: string, excludeArticleId?: string): Promise<string> {
   let slug = base;
   let i = 2;
   for (;;) {
     const exists = await db.query.articles.findFirst({
       where: and(eq(articles.siteId, siteId), eq(articles.slug, slug)),
     });
-    if (!exists) return slug;
+    if (!exists || exists.id === excludeArticleId) return slug;
     slug = `${base}-${i++}`;
   }
 }
@@ -379,15 +386,6 @@ export async function updateArticle(
     });
   }
 
-  let slug = row.slug;
-  if (body.slug && body.slug !== row.slug) {
-    const previousSlug = row.slug;
-    slug = await uniqueSlug(db, siteId, body.slug);
-    if (previousSlug) {
-      await upsertSlugRedirect(db, siteId, previousSlug, slug);
-    }
-  }
-
   const document = body.document ? migrateDocumentToV2(body.document) : row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT;
   const seo = body.seo ? { ...row.seo, ...body.seo } : row.seo;
   const updatedBy = actorUserId(actor);
@@ -397,6 +395,16 @@ export async function updateArticle(
   await assertPrimaryCategoryInSite(db, siteId, seo.primaryCategoryId);
 
   const updated = await db.transaction(async (tx) => {
+    const inner = tx as unknown as Db;
+
+    let slug = row.slug;
+    if (body.slug && body.slug !== row.slug) {
+      slug = await uniqueSlug(inner, siteId, body.slug, articleId);
+      if (row.slug && slug !== row.slug) {
+        await upsertSlugRedirect(inner, siteId, row.slug, slug);
+      }
+    }
+
     const [result] = await tx
       .update(articles)
       .set({
@@ -674,12 +682,21 @@ async function applyStatusTransition(
   });
   if (!row) throw notFound("article not found");
 
-  // Retry safety: an external pipeline whose response was lost re-sends the same
-  // transition. Re-applying it must be a no-op that returns the current article, not a
-  // 409 "cannot transition from in_review to in_review" - the write already succeeded,
-  // and reporting a hard failure for it makes the caller undo work that is correct.
-  // `publishArticle` already had this early return; every other transition 409'd.
-  if (row.status === to) {
+  /*
+   * Retry safety, but only where the target state is unambiguous.
+   *
+   * A pipeline whose response was lost re-sends the same transition, and answering 409
+   * "cannot transition from in_review to in_review" reports a hard failure for a write
+   * that succeeded. So re-applying a transition the article already reached is a no-op.
+   *
+   * That reasoning does NOT hold for `draft`, which is the target of both `approve` and
+   * `unpublish`. Treating status equality as a retry there turned `approve` on an article
+   * that was never submitted into a silent 200 with no audit entry: the editorial gate
+   * became a no-op while the caller was told it had approved. Those two rely on
+   * `Idempotency-Key` for retry safety instead, which is what it is for.
+   */
+  const AMBIGUOUS_TARGET: ArticleStatus[] = ["draft"];
+  if (row.status === to && !AMBIGUOUS_TARGET.includes(to)) {
     return articleDto(db, row);
   }
 

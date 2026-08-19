@@ -62,15 +62,16 @@ describe("retry and error contract", () => {
 
   // ---- P1-D: workflow retries ----
 
-  for (const name of ["submit", "approve", "reject", "publish", "unpublish", "archive"] as const) {
+  // `approve` and `unpublish` both target `draft`, so status equality cannot tell a retry
+  // from a call that was never legal. They get retry safety from Idempotency-Key instead.
+  for (const name of ["submit", "reject", "publish", "archive"] as const) {
     it(`an exact retry of ${name} succeeds instead of 409-ing`, async () => {
       const article = await mkArticle(siteA, `Retry ${name} ${Date.now()}`);
 
       // reach a state from which the action is legal
-      if (name === "approve" || name === "reject" || name === "unpublish" || name === "archive") {
+      if (name === "reject" || name === "archive") {
         await action(siteA, article.id, "submit");
       }
-      if (name === "unpublish") await action(siteA, article.id, "publish");
 
       const first = await action(siteA, article.id, name);
       expect(first.statusCode, `${name} first call`).toBe(200);
@@ -82,6 +83,45 @@ describe("retry and error contract", () => {
       expect(retry.json().data.status, `${name} retry must land in the same state`).toBe(statusAfter);
     });
   }
+
+  for (const name of ["approve", "unpublish"] as const) {
+    it(`${name} is not treated as a retry just because the article is already draft`, async () => {
+      // Both target `draft`. Answering 200 on status equality turned an approval that
+      // never happened into a reported success with no audit entry - the editorial gate
+      // silently doing nothing is worse than a 409.
+      const article = await mkArticle(siteA, `Nunca submetido ${name} ${Date.now()}`);
+      const res = await action(siteA, article.id, name);
+      expect(res.statusCode, `${name} from draft was never a legal transition`).toBe(409);
+      expect(res.json().error.code).toBe("INVALID_TRANSITION");
+    });
+
+    it(`${name} retries safely with an Idempotency-Key`, async () => {
+      const article = await mkArticle(siteA, `Retry via chave ${name} ${Date.now()}`);
+      await action(siteA, article.id, "submit");
+      if (name === "unpublish") await action(siteA, article.id, "publish");
+
+      const key = `wf-${name}-idem-${Date.now()}`;
+      const first = await action(siteA, article.id, name, key);
+      expect(first.statusCode, `${name} first call`).toBe(200);
+      const retry = await action(siteA, article.id, name, key);
+      expect(retry.statusCode, `${name} retry must replay, not 409`).toBe(200);
+      expect(retry.json().data.version).toBe(first.json().data.version);
+    });
+  }
+
+  it("a repeated no-op transition writes no second audit entry", async () => {
+    const article = await mkArticle(siteA, `Auditoria ${Date.now()}`);
+    await action(siteA, article.id, "submit");
+    await action(siteA, article.id, "submit");
+
+    const log = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteA}/audit-log/article/${article.id}`,
+      headers: { Cookie: owner.cookieHeader },
+    });
+    const submits = (log.json().data as { action: string }[]).filter((e) => e.action === "articles.submit");
+    expect(submits.length, "the no-op must not fabricate a second submission in the trail").toBe(1);
+  });
 
   it("a retry carrying the same Idempotency-Key replays the stored response", async () => {
     const article = await mkArticle(siteA, `Idempotent submit ${Date.now()}`);
@@ -170,6 +210,48 @@ describe("retry and error contract", () => {
       expect(b.statusCode, `${path} replay`).toBe(201);
       expect(b.json().data.id).toBe(a.json().data.id);
     }
+  });
+
+  it("two different files under one key do not collide", async () => {
+    // The multipart body is not in `req.body`, so without the file's own digest every
+    // upload to the same URL hashed identically: the second file was silently discarded
+    // and the first file's media id returned as if it had been stored.
+    const boundary = "----kalelretryboundary";
+    const CRLF = String.fromCharCode(13, 10);
+    const multipart = (name: string, bytes: number[]) =>
+      Buffer.concat([
+        Buffer.from(`--${boundary}${CRLF}`),
+        Buffer.from(`Content-Disposition: form-data; name="file"; filename="${name}"${CRLF}`),
+        Buffer.from(`Content-Type: image/gif${CRLF}${CRLF}`),
+        Buffer.from(bytes),
+        Buffer.from(`${CRLF}--${boundary}--${CRLF}`),
+      ]);
+
+    const gifA = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0];
+    const gifB = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 2, 0, 2, 0, 0, 0, 0, 9, 9];
+
+    const post = (name: string, bytes: number[]) =>
+      ctx.app.inject({
+        method: "POST",
+        url: `/v1/sites/${siteA}/media`,
+        headers: {
+          ...h("upload-collision-key"),
+          "content-type": `multipart/form-data; boundary=${boundary}`,
+        },
+        payload: multipart(name, bytes),
+      });
+
+    const first = await post("a.gif", gifA);
+    expect(first.statusCode).toBe(201);
+
+    const second = await post("b.gif", gifB);
+    expect(second.statusCode, "a different file under the same key is a different request").toBe(409);
+    expect(second.json().error.code).toBe("IDEMPOTENCY_REPLAY");
+
+    // and the identical file still replays
+    const replay = await post("a.gif", gifA);
+    expect(replay.statusCode).toBe(201);
+    expect(replay.json().data.id).toBe(first.json().data.id);
   });
 
   it("a slug clash stays a plain CONFLICT, so the three are distinguishable", async () => {

@@ -27,11 +27,17 @@ export type RichTextEditorHandle = {
 };
 
 type Props = {
+  /** Rendered inside the focus-mode bar so autosave state stays visible there. */
+  statusSlot?: ReactNode;
   document: ArticleDocumentV2;
   onChange: (doc: ArticleDocumentV2) => void;
   onRequestImage?: () => void;
   onRequestGallery?: () => void;
-  /** Upload a pasted/dropped file and return the created media id. */
+  /**
+   * Upload a pasted/dropped file. Returning the media id inserts it directly; the article
+   * page instead routes it through the alt-text dialog, so a pasted image cannot reach the
+   * document with `alt=""` while a picked one has to be described.
+   */
   onUploadFile?: (file: File) => Promise<string | null>;
 };
 
@@ -88,7 +94,7 @@ function insertTableNode(view: EditorView) {
   view.focus();
 }
 
-export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile }, ref) {
+export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile, statusSlot }, ref) {
   const [focusMode, setFocusMode] = useState(false);
   const [inline, setInline] = useState<{ top: number; left: number } | null>(null);
   const [slash, setSlash] = useState<SlashQuery | null>(null);
@@ -184,6 +190,17 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   const focusModeRef = useRef(focusMode);
   focusModeRef.current = focusMode;
 
+  // The ProseMirror keymap only fires while the writing surface has DOM focus, so after
+  // clicking a toolbar button Escape was inert. This covers the whole mode.
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFocusMode(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusMode]);
+
   /** Returns true when the slash menu consumed the key. */
   function slashKey(action: "up" | "down" | "enter" | "escape"): boolean {
     const q = slashRef.current.q;
@@ -237,8 +254,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
       ],
     });
 
+    const dismissInline = () => setInline(null);
+
     const view = new EditorView(hostRef.current, {
       state,
+      handleDOMEvents: {
+        blur: () => {
+          dismissInline();
+          return false;
+        },
+      },
       dispatchTransaction(transaction) {
         const next = viewRef.current?.state.apply(transaction) ?? state.apply(transaction);
         viewRef.current?.updateState(next);
@@ -278,9 +303,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         const file = Array.from(clipboard.files).find((f) => f.type.startsWith("image/"));
         if (file && uploadRef.current) {
           event.preventDefault();
-          void uploadRef.current(file).then((mediaId) => {
-            if (mediaId) insertAtom(view, "image", { mediaId, altText: null, caption: null, credit: null });
-          });
+          // the handler owns insertion: it asks for alt text before the node exists
+          void uploadRef.current(file);
           return true;
         }
 
@@ -301,12 +325,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         const file = dt ? Array.from(dt.files).find((f) => f.type.startsWith("image/")) : undefined;
         if (!file || !uploadRef.current) return false;
         event.preventDefault();
+        // put the caret where the file landed, then let the handler ask for alt text
         const at = view.posAtCoords({ left: (event as DragEvent).clientX, top: (event as DragEvent).clientY });
-        void uploadRef.current(file).then((mediaId) => {
-          if (!mediaId) return;
-          if (at) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at.pos)));
-          insertAtom(view, "image", { mediaId, altText: null, caption: null, credit: null });
-        });
+        if (at) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at.pos)));
+        void uploadRef.current(file);
         return true;
       },
     });
@@ -361,7 +383,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     <div className={`peg-editor ${focusMode ? "peg-editor--focus" : ""}`}>
       {focusMode && (
         <div className="peg-editor__focus-bar">
-          <span className="peg-editor__focus-hint">Modo sem distrações · Esc para sair</span>
+          {/* the save state travels into focus mode: hiding it behind an opaque overlay
+              meant a writer could keep typing for an hour into a failing autosave */}
+          <div className="peg-editor__focus-status">{statusSlot}</div>
+          <span className="peg-editor__focus-hint">Esc para sair</span>
           <button type="button" className="peg-btn peg-btn--sm peg-btn--secondary" onClick={() => setFocusMode(false)}>
             Sair do modo foco
           </button>
