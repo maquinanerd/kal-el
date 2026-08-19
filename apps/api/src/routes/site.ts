@@ -461,6 +461,11 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         if (!part) throw badRequest("file is required");
         const data = await part.toBuffer();
         const actor = req.actor as ActorRef;
+        // `externalKey` identifies the asset in the source system so a re-import reuses
+        // it instead of storing the same bytes again. Query param, so the multipart body
+        // stays a plain file upload.
+        const externalKeyRaw = (req.query as { externalKey?: string } | undefined)?.externalKey;
+        const externalKey = typeof externalKeyRaw === "string" && externalKeyRaw.length > 0 ? externalKeyRaw : null;
         return respondIdempotent(app.db, req, reply, actor.actorKey, async (tx) => ({
           status: 201,
           body: {
@@ -469,7 +474,7 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
               app.storage,
               siteId,
               actor,
-              { filename: part.filename || "file", mimeType: part.mimetype || "application/octet-stream", data },
+              { filename: part.filename || "file", mimeType: part.mimetype || "application/octet-stream", data, externalKey },
               { maxBytes: app.config.MEDIA_MAX_BYTES, baseUrl: app.config.API_BASE_URL },
             ),
           },

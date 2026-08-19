@@ -91,7 +91,8 @@ describe("WordPress import through the REST API", () => {
       headers: { Cookie: session.cookieHeader, "x-kal-el-csrf": session.csrf },
       payload: {
         name: "importer",
-        scopes: ["articles.create", "articles.read", "articles.publish", "articles.schedule", "media.manage", "media.read", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage", "seo.manage"],
+        // articles.update is what makes a re-import synchronize rather than skip
+        scopes: ["articles.create", "articles.read", "articles.update", "articles.publish", "articles.schedule", "media.manage", "media.read", "taxonomy.categories.manage", "taxonomy.tags.manage", "taxonomy.authors.manage", "seo.manage"],
       },
     });
     const token = tokenRes.json().data.token as string;
@@ -142,7 +143,8 @@ describe("WordPress import through the REST API", () => {
 
   it("re-import is idempotent (no duplicates) and reconciles", async () => {
     const batch = normalizeWordPress(readWordPressSnapshot(SNAPSHOT));
-    const report = await importBatch(client, siteId, batch, { externalKeyPrefix: "imp" });
+    const fetchMedia = async () => ({ data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), mimeType: "image/jpeg" });
+    const report = await importBatch(client, siteId, batch, { externalKeyPrefix: "imp", fetchMedia });
     expect(report.imported.articles).toBe(0);
     expect(report.existing.articles).toBe(2);
 
@@ -154,5 +156,65 @@ describe("WordPress import through the REST API", () => {
 
     const all = await client.listArticles(siteId, { limit: 100 });
     expect(all.items.filter((a) => a.externalKey?.startsWith("imp:")).length).toBe(2);
+
+    // an unchanged source performs no write at all
+    expect(report.updated.articles, "nothing changed, so nothing should be written").toBe(0);
+    expect(report.unchanged.articles).toBe(2);
+  });
+
+  it("re-import propagates a changed title, body, status and relations", async () => {
+    const snapshot = readWordPressSnapshot(SNAPSHOT);
+    const post = snapshot.posts.find((p) => p.id === 42);
+    if (!post) throw new Error("fixture post 42 missing");
+
+    post.title = "Título revisado na origem";
+    post.content = `${post.content}<p>Parágrafo acrescentado depois.</p>`;
+
+    const batch = normalizeWordPress(snapshot);
+    const fetchMedia = async () => ({ data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), mimeType: "image/jpeg" });
+    const report = await importBatch(client, siteId, batch, { externalKeyPrefix: "imp", fetchMedia });
+
+    expect(report.warnings.filter((w) => /update failed/.test(w))).toEqual([]);
+    expect(report.imported.articles, "no new article - the same source item").toBe(0);
+    expect(report.updated.articles, "the changed item must be synchronized, not skipped").toBe(1);
+    expect(report.unchanged.articles).toBe(1);
+
+    const found = await client.listArticles(siteId, { externalKey: "imp:wp:post:42" });
+    expect(found.items.length, "still exactly one article for this source id").toBe(1);
+    const item = found.items[0];
+    if (!item) throw new Error("article missing");
+
+    const full = await client.getArticle(siteId, item.id);
+    expect(full.id, "the SAME article id, not a second one").toBe(item.id);
+    expect(full.title).toBe("Título revisado na origem");
+    const text = JSON.stringify(full.document);
+    expect(text).toContain("Parágrafo acrescentado depois.");
+
+    const all = await client.listArticles(siteId, { limit: 100 });
+    expect(all.items.filter((a) => a.externalKey?.startsWith("imp:")).length).toBe(2);
+  });
+
+  it("re-import with media reuses the existing binary instead of uploading it again", async () => {
+    const batch = normalizeWordPress(readWordPressSnapshot(SNAPSHOT));
+    const fetchMedia = async () => ({ data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), mimeType: "image/jpeg" });
+
+    const before = await client.listMedia(siteId, { limit: 100 });
+    const report = await importBatch(client, siteId, batch, { externalKeyPrefix: "imp", fetchMedia });
+    const after = await client.listMedia(siteId, { limit: 100 });
+
+    expect(
+      after.items.length,
+      "a second run with fetchMedia used to create N more media rows and N more blobs",
+    ).toBe(before.items.length);
+    expect(report.warnings.filter((w) => /media failed/.test(w))).toEqual([]);
+  });
+
+  it("reconcile does not claim keys from a different prefix that shares a leading string", async () => {
+    const batch = normalizeWordPress(readWordPressSnapshot(SNAPSHOT));
+    // "imp" must not swallow "impx:..." - the separator is part of the comparison
+    await client.createArticle(siteId, { title: "Outro importador", externalKey: "impx:999" });
+
+    const rc = await reconcile(client, siteId, batch, { externalKeyPrefix: "imp" });
+    expect(rc.extraArticles).toEqual([]);
   });
 });

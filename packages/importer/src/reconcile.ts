@@ -42,7 +42,10 @@ export async function reconcile(client: KalElClient, siteId: string, batch: Impo
   }
 
   const missing = [...sourceKeys].filter((k) => !importedKeys.has(k));
-  const extra = [...importedKeys.keys()].filter((k) => k.startsWith(prefix) && !sourceKeys.has(k));
+  // `startsWith(prefix)` also claimed keys from a different prefix that happens to share
+  // the same leading characters ("wp" matching "wpx:123"); the separator has to be part
+  // of the comparison.
+  const extra = [...importedKeys.keys()].filter((k) => k.startsWith(`${prefix}:`) && !sourceKeys.has(k));
 
   const sourceArticles = batch.articles.map((a) => ({ title: a.title, slug: a.slug }));
   const importedArticles = [...sourceKeys].map((k) => importedTitles.get(k) ?? { title: "", slug: "" });

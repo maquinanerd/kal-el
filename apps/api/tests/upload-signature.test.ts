@@ -32,6 +32,13 @@ const HTML = Buffer.from("<!doctype html><script>alert(1)</script>          ", "
 const SVG = Buffer.from('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>', "latin1");
 
 describe("image signature detection", () => {
+  it("identifies a format from the minimum bytes it needs", () => {
+    // a JPEG is identifiable from 3 bytes; requiring a blanket 12 rejected small files
+    expect(detectImageType(Buffer.from([0xff, 0xd8, 0xff]))).toBe("image/jpeg");
+    expect(detectImageType(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]))).toBe("image/jpeg");
+    expect(detectImageType(Buffer.from("GIF89a", "latin1"))).toBe("image/gif");
+  });
+
   it("recognises every accepted raster format", () => {
     expect(detectImageType(PNG)).toBe("image/png");
     expect(detectImageType(JPEG)).toBe("image/jpeg");
@@ -47,7 +54,9 @@ describe("image signature detection", () => {
     // SVG stays out: it is a scriptable document, not a raster image
     expect(detectImageType(SVG)).toBeNull();
     expect(detectImageType(Buffer.alloc(64, 0))).toBeNull();
-    expect(detectImageType(Buffer.alloc(4, 0xff)), "a truncated file is not an image").toBeNull();
+    expect(detectImageType(Buffer.alloc(2, 0xff)), "too short to identify anything").toBeNull();
+    // a RIFF header truncated before the WEBP marker must not be guessed at
+    expect(detectImageType(Buffer.from("RIFF1234", "latin1"))).toBeNull();
   });
 
   it("does not confuse a RIFF container that is not WEBP", () => {

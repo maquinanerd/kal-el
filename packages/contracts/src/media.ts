@@ -17,6 +17,7 @@ export const mediaSchema = z.object({
   storageKey: z.string().min(1),
   provider: z.string().min(1),
   createdBy: uuidSchema.nullable(),
+  externalKey: z.string().min(1).max(200).nullable(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });

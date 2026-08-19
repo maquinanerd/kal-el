@@ -64,6 +64,7 @@ function mediaDto(row: MediaRow, baseUrl: string) {
     focalY: row.focalY,
     storageKey: row.storageKey,
     provider: row.provider,
+    externalKey: row.externalKey ?? null,
     url: mediaUrl(baseUrl, row.siteId, row.id),
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
@@ -76,9 +77,18 @@ export async function uploadMedia(
   storage: StorageProvider,
   siteId: string,
   actor: ActorRef,
-  input: { filename: string; mimeType: string; data: Buffer },
+  input: { filename: string; mimeType: string; data: Buffer; externalKey?: string | null },
   opts: { maxBytes: number; baseUrl: string },
 ) {
+  // Re-import reuse: an asset already imported under this source identity is returned
+  // as-is instead of downloading and storing a second copy of the same bytes.
+  if (input.externalKey) {
+    const known = await db.query.media.findFirst({
+      where: and(eq(media.siteId, siteId), eq(media.externalKey, input.externalKey)),
+    });
+    if (known) return mediaDto(known, opts.baseUrl);
+  }
+
   if (!MEDIA_MIME_TYPES.has(input.mimeType)) {
     throw badRequest(`unsupported media type: ${input.mimeType}`);
   }
@@ -112,6 +122,7 @@ export async function uploadMedia(
         siteId,
         filename: sanitizeFilename(input.filename),
         mimeType: detected,
+        externalKey: input.externalKey ?? null,
         sizeBytes: input.data.length,
         width,
         height,

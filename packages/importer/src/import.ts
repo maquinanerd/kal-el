@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { KalElClient } from "@kal-el/sdk";
 import { finalizeDocument } from "./html.js";
 import type { ImportBatch, NormalizedAuthor, NormalizedMedia, NormalizedTaxonomy } from "./types.js";
@@ -6,10 +7,34 @@ export type ImportReport = {
   source: { categories: number; tags: number; authors: number; media: number; articles: number; redirects: number };
   imported: { categories: number; tags: number; authors: number; articles: number; redirects: number; media: number };
   existing: { categories: number; tags: number; authors: number; articles: number };
+  /** Existing articles whose source content changed and were synchronized. */
+  updated: { articles: number };
+  /** Existing articles whose source content was identical - no write performed. */
+  unchanged: { articles: number };
+  /** Media rows reused because they were already imported under the same source id. */
+  reusedMedia: number;
   warnings: string[];
   articleIds: string[];
   mediaPending: number;
 };
+
+/**
+ * Content fingerprint used to decide whether an already-imported article actually needs
+ * a write. Key order is normalised so an equal payload always hashes equal.
+ */
+function contentHash(value: unknown): string {
+  const canonical = (v: unknown): string => {
+    if (v === null || v === undefined) return "null";
+    if (typeof v !== "object") return JSON.stringify(v) ?? "null";
+    if (Array.isArray(v)) return `[${[...v].map(canonical).join(",")}]`;
+    return `{${Object.entries(v as Record<string, unknown>)
+      .filter(([, x]) => x !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([k, x]) => `${JSON.stringify(k)}:${canonical(x)}`)
+      .join(",")}}`;
+  };
+  return createHash("sha256").update(canonical(value)).digest("hex");
+}
 
 function slugToId<T extends { id: string; slug: string }>(rows: T[]): Map<string, string> {
   return new Map(rows.map((r) => [r.slug, r.id]));
@@ -102,6 +127,9 @@ export async function importBatch(
     },
     imported: { categories: 0, tags: 0, authors: 0, articles: 0, redirects: 0, media: 0 },
     existing: { categories: 0, tags: 0, authors: 0, articles: 0 },
+    updated: { articles: 0 },
+    unchanged: { articles: 0 },
+    reusedMedia: 0,
     // adapter-level losses (unsupported richtext nodes, etc.) surface in the same report
     warnings: [...(batch.warnings ?? [])],
     articleIds: [],
@@ -124,13 +152,18 @@ export async function importBatch(
 
   // media: when a fetchMedia provider is given, download + upload binaries so
   // image/gallery nodes and featured images survive the import.
+  const seenMediaIds = new Set<string>();
   const urlToMediaId = new Map<string, string>();
   if (opts.fetchMedia) {
     for (const m of batch.media) {
       try {
         const { data, mimeType } = await opts.fetchMedia(m);
-        const uploaded = await client.uploadMedia(siteId, m.filename, data, mimeType);
+        // the source identity makes the upload reuse an already-imported asset instead
+        // of writing a second copy of the same bytes on every run
+        const uploaded = await client.uploadMedia(siteId, m.filename, data, mimeType, `${prefix}:${m.externalId}`);
         urlToMediaId.set(m.url, uploaded.id);
+        if (seenMediaIds.has(uploaded.id)) report.reusedMedia++;
+        seenMediaIds.add(uploaded.id);
         report.imported.media++;
       } catch (err) {
         report.warnings.push(`media failed: ${m.url} (${err instanceof Error ? err.message : String(err)})`);
@@ -143,11 +176,6 @@ export async function importBatch(
     const externalKey = `${prefix}:${article.externalId}`;
     const existing = await client.listArticles(siteId, { externalKey });
     const first = existing.items[0];
-    if (first) {
-      report.existing.articles++;
-      report.articleIds.push(first.id);
-      continue;
-    }
 
     const resolveRelation = (externalIds: string[], res: Resolver, kind: string): string[] => {
       const ids: string[] = [];
@@ -166,6 +194,74 @@ export async function importBatch(
     const featuredMediaId = article.featuredMediaExternalId ? urlToMediaId.get(batch.media.find((m) => m.externalId === article.featuredMediaExternalId)?.url ?? "") : undefined;
 
     const document = finalizeDocument(article.intermediateNodes, urlToMediaId, report.warnings);
+
+    if (first) {
+      // Import used to be insert-only: a changed title, slug, body, status or SEO field
+      // in the source was never propagated, so the second run of a weekly sync silently
+      // did nothing.
+      //
+      // The diff is field-by-field over exactly what an update can carry. Comparing whole
+      // objects would report "changed" every run, because the stored article carries the
+      // normalised full SEO shape while the source supplies only a few keys.
+      report.existing.articles++;
+      report.articleIds.push(first.id);
+
+      const full = await client.getArticle(siteId, first.id);
+      const sorted = (ids: readonly string[]) => [...ids].sort();
+
+      const desired: Record<string, unknown> = {
+        title: article.title,
+        slug: article.slug,
+        excerpt: article.excerpt ?? null,
+        document,
+        categories: sorted(categoryIds),
+        tags: sorted(tagIds),
+        authors: sorted(authorIds),
+        featuredMediaId: featuredMediaId ?? null,
+      };
+      const current: Record<string, unknown> = {
+        title: full.title,
+        slug: full.slug ?? null,
+        excerpt: full.excerpt ?? null,
+        document: full.document,
+        categories: sorted(full.categories ?? []),
+        tags: sorted(full.tags ?? []),
+        authors: sorted(full.authors ?? []),
+        featuredMediaId: full.featuredMediaId ?? null,
+      };
+
+      const patch: Record<string, unknown> = {};
+      for (const key of Object.keys(desired)) {
+        if (contentHash(desired[key]) !== contentHash(current[key])) patch[key] = desired[key];
+      }
+      // relations are sent unsorted; the sort exists only to make the comparison stable
+      if ("categories" in patch) patch.categories = categoryIds;
+      if ("tags" in patch) patch.tags = tagIds;
+      if ("authors" in patch) patch.authors = authorIds;
+
+      if (article.seo) {
+        const storedSeo = (full.seo ?? {}) as Record<string, unknown>;
+        const seoPatch: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(article.seo as Record<string, unknown>)) {
+          if (value === undefined) continue;
+          if (contentHash(value) !== contentHash(storedSeo[key] ?? null)) seoPatch[key] = value;
+        }
+        if (Object.keys(seoPatch).length > 0) patch.seo = { ...storedSeo, ...seoPatch };
+      }
+
+      if (Object.keys(patch).length === 0) {
+        report.unchanged.articles++;
+        continue;
+      }
+
+      try {
+        await client.updateArticle(siteId, first.id, patch, String(full.version));
+        report.updated.articles++;
+      } catch (err) {
+        report.warnings.push(`update failed for "${article.slug}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+      continue;
+    }
 
     const created = await client.createArticle(siteId, {
       type: article.type,

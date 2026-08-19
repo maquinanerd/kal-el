@@ -211,10 +211,22 @@ export class KalElClient {
     return this.request("GET", `/v1/sites/${siteId}/media${suffix}`);
   }
 
-  async uploadMedia(siteId: string, filename: string, data: Buffer, mimeType: string): Promise<Media> {
+  /**
+   * @param externalKey stable id of this asset in the source system. When given, a
+   * repeated upload of the same asset returns the existing media row instead of storing
+   * a second copy - which is what makes a re-import non-duplicating.
+   */
+  async uploadMedia(
+    siteId: string,
+    filename: string,
+    data: Buffer,
+    mimeType: string,
+    externalKey?: string,
+  ): Promise<Media> {
     const form = new FormData();
     form.append("file", new Blob([new Uint8Array(data)], { type: mimeType }), filename);
-    const res = await this.fetchImpl(`${this.baseUrl}/v1/sites/${siteId}/media`, {
+    const query = externalKey ? `?externalKey=${encodeURIComponent(externalKey)}` : "";
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/sites/${siteId}/media${query}`, {
       method: "POST",
       headers: { authorization: `Bearer ${this.token}` },
       body: form,
