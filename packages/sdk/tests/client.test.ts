@@ -47,6 +47,36 @@ describe("KalEl SDK", () => {
     expect(keysSeen[0]).toBe(keysSeen[1]);
   });
 
+  it("gives two identical calls two different keys", async () => {
+    // The key used to be a hash of (method, path, body), so any repetition of the same
+    // call inside the server's 24h window replayed the first response: submit, get
+    // rejected, fix, submit again - and the second submit did nothing while reporting
+    // success. A key identifies an attempt, not a payload.
+    const keys: (string | undefined)[] = [];
+    const fetchMock = mockFetch(async (req) => {
+      keys.push(req.headers["idempotency-key"]);
+      return json(200, { data: { id: "a1", status: "in_review" } });
+    });
+    const client = new KalElClient({ baseUrl: "http://api", token: "t", retries: 0, fetchImpl: fetchMock });
+
+    await client.submitArticle(siteId, "a1");
+    await client.submitArticle(siteId, "a1");
+
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  it("does not retry methods the server cannot replay", async () => {
+    // PATCH carries no idempotency key server-side, so retrying one that had in fact been
+    // applied comes back 409 and the caller records a failure for a write that landed
+    const fetchMock = mockFetch(() => json(503, { error: { code: "INTERNAL_ERROR", message: "boom" } }));
+    const client = new KalElClient({ baseUrl: "http://api", token: "t", retries: 2, fetchImpl: fetchMock });
+
+    await expect(client.updateArticle(siteId, "a1", { title: "x" }, "1")).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("surfaces 4xx as KalElError without retrying", async () => {
     const fetchMock = mockFetch(() => json(409, { error: { code: "CONFLICT", message: "dup" } }));
     const client = new KalElClient({ baseUrl: "http://api", token: "t", retries: 2, fetchImpl: fetchMock });

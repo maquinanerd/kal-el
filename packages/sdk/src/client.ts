@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type {
   Article,
   ArticleSummary,
@@ -41,11 +41,21 @@ export class KalElError extends Error {
   }
 }
 
-function stableKey(method: string, path: string, body: unknown): string {
-  const tag = `${method}\n${path}\n${JSON.stringify(body ?? {})}`;
-  // deterministic and safe for the Idempotency-Key contract
-  const digest = createHash("sha256").update(tag).digest("hex").slice(0, 24);
-  return `sdk.${digest}`;
+/**
+ * A key identifies one attempt at one operation, not its content.
+ *
+ * This used to be a hash of (method, path, body), which made every repetition of the same
+ * call collide for the length of the server's 24h window. Submit an article, have it
+ * rejected, fix it and submit again: identical key, identical request hash, so the server
+ * replayed the first response - no transition, no audit row, and the SDK handed the caller
+ * a stale snapshot saying it had worked. It also made un-keyed creates dedupe, which is
+ * the opposite of the documented contract.
+ *
+ * Generated once per `request()` call and reused by that call's retries, which is exactly
+ * the window the header exists to cover.
+ */
+function attemptKey(): string {
+  return `sdk.${randomUUID().replace(/-/g, "")}`;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -70,7 +80,10 @@ export class KalElClient {
     path: string,
     opts: { body?: unknown; idempotencyKey?: string; ifMatch?: string } = {},
   ): Promise<T> {
-    const key = opts.idempotencyKey ?? (method === "GET" || method === "HEAD" ? undefined : stableKey(method, path, opts.body));
+    const safe = method === "GET" || method === "HEAD";
+    // PATCH and DELETE do not honour the header server-side, so a key would be theatre
+    const keyed = method === "POST" || method === "PUT";
+    const key = opts.idempotencyKey ?? (keyed ? attemptKey() : undefined);
     const headers: Record<string, string> = {
       authorization: `Bearer ${this.token}`,
       "content-type": "application/json",
@@ -78,6 +91,7 @@ export class KalElClient {
       ...(opts.ifMatch ? { "if-match": opts.ifMatch } : {}),
     };
 
+    const replayableRequest = safe || key !== undefined;
     let attempt = 0;
     for (;;) {
       const url = `${this.baseUrl}${path}`;
@@ -89,14 +103,25 @@ export class KalElClient {
           signal: AbortSignal.timeout(15_000),
         });
         const text = await res.text();
-        const json = text ? (JSON.parse(text) as { data?: T; error?: { code?: string; message?: string } }) : undefined;
+        // A proxy answering 502 or 413 with HTML used to throw SyntaxError here, before
+        // `res.status` was ever read - so the one thing an integrator switches on never
+        // materialised, and the parse error was retried as if it were transient.
+        let json: { data?: T; error?: { code?: string; message?: string } } | undefined;
+        try {
+          json = text ? (JSON.parse(text) as { data?: T; error?: { code?: string; message?: string } }) : undefined;
+        } catch {
+          json = undefined;
+        }
 
         if (res.ok && json?.data !== undefined) {
           return json.data;
         }
         if (res.status === 204) return undefined as T;
 
-        const retryable = res.status === 408 || res.status === 429 || res.status >= 500;
+        // PATCH and DELETE are not replayable server-side, so a retry of one that had
+        // in fact been applied comes back as a 409 the caller records as a failure
+        const replayable = safe || key !== undefined;
+        const retryable = replayable && (res.status === 408 || res.status === 429 || res.status >= 500);
         if (retryable && attempt < this.retries) {
           attempt++;
           const delay = 200 * 2 ** (attempt - 1);
@@ -107,7 +132,7 @@ export class KalElClient {
         throw new KalElError(res.status, json?.error?.code ?? "UNKNOWN", json?.error?.message ?? `HTTP ${res.status}`);
       } catch (err) {
         if (err instanceof KalElError) throw err;
-        if (attempt < this.retries) {
+        if (replayableRequest && attempt < this.retries) {
           attempt++;
           const delay = 200 * 2 ** (attempt - 1);
           this.logger(`[sdk] retry ${attempt}/${this.retries} ${method} ${path} after error`);
