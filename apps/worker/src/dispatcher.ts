@@ -4,6 +4,7 @@ import type { Db } from "@kal-el/db";
 import { outboxEvents, webhookDeliveries, webhooks } from "@kal-el/db/schema";
 
 import { signWebhook } from "./signature.js";
+import { guardedFetch } from "./safe-fetch.js";
 import { assertDeliverableUrl } from "./ssrf.js";
 
 export type DispatchOptions = {
@@ -47,7 +48,6 @@ const LOCK_FLOOR_MS = 60_000;
  */
 export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Promise<DispatchSummary> {
   const {
-    fetchImpl = fetch,
     limit = 20,
     maxAttempts = 5,
     baseDelayMs = 1_000,
@@ -55,6 +55,14 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     onLog = () => {},
     allowPrivateTargets = process.env.ALLOW_PRIVATE_WEBHOOKS === "true",
   } = opts;
+  // Not the global `fetch` by default: it re-resolves the hostname to open the socket, so
+  // the address `assertDeliverableUrl` approved is not necessarily the one connected to.
+  // `guardedFetch` validates inside the socket's own DNS lookup, which is what actually
+  // closes rebinding. When private targets are deliberately permitted - local development
+  // and the fixture e2e, which delivers to a loopback server - the guard would refuse
+  // every delivery, so that path keeps the platform fetch. Tests that inject their own
+  // implementation are unaffected either way.
+  const fetchImpl = opts.fetchImpl ?? (allowPrivateTargets ? fetch : guardedFetch);
   const now = new Date();
   // The loop below is sequential over every claimed event, so a flat minute was well
   // short of the worst case and let a second replica claim rows still in flight. This is
@@ -243,10 +251,19 @@ async function dispatchOne(
   const attempt = existing ? existing.attempt + 1 : 1;
 
   try {
-    // The URL was validated when the webhook was registered, but delivery happens later
-    // and repeatedly: a hostname can be re-pointed at an internal address in between
-    // (DNS rebinding). Re-check immediately before the request, and refuse to follow
-    // redirects - a 302 into the metadata service would otherwise bypass every check.
+    // Three layers, each closing a window the previous one cannot:
+    //
+    //  1. registration validates the URL when it is first supplied;
+    //  2. this re-check catches a name that has been re-pointed since then, and rejects
+    //     the request before any socket is opened - so the common case fails fast and
+    //     cheaply, with a readable reason;
+    //  3. `guardedFetch` validates inside the socket's own DNS lookup, which is the only
+    //     layer that survives a TTL-0 record answering public here and private a
+    //     millisecond later. Checking before connecting cannot close that on its own,
+    //     because the checked resolution is not the one the socket uses.
+    //
+    // Redirects are not followed either: a 302 from a validated public URL into the
+    // metadata service would otherwise bypass all three.
     if (!opts.allowPrivateTargets) await assertDeliverableUrl(hook.url);
 
     const res = await opts.fetchImpl(hook.url, {
