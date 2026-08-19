@@ -58,8 +58,27 @@ const STATUS_MAP: Record<string, ArticleStatus> = {
   future: "scheduled",
   draft: "draft",
   pending: "in_review",
+  // WordPress `private` is published-but-restricted. Kal El has no equivalent visibility
+  // rule, so it imports as a draft: making it live would publish content the source
+  // deliberately kept off the public site.
   private: "draft",
 };
+
+/**
+ * Where an expired `future` post lands.
+ *
+ * A WordPress export routinely contains `future` posts whose date has already passed -
+ * a missed cron, a site that was offline, an export taken from an old backup. Mapping
+ * those to `scheduled` handed them to the publish worker with a due date in the past, so
+ * the very next tick published them: content the source never published going live on
+ * import, announced to every webhook subscriber, with nobody having decided to publish it.
+ *
+ * `blocked` is the editorial state that means "needs a decision before it can move", it is
+ * visible in the workflow queue, and both `approve` and `reject` are legal from it - so
+ * the article is recoverable in one click either way. A draft would be quieter but would
+ * also let the post disappear into a list nobody reviews.
+ */
+const EXPIRED_FUTURE_STATUS: ArticleStatus = "blocked";
 
 const POST_TYPE_MAP: Record<string, ArticleType> = {
   review: "review",
@@ -67,8 +86,9 @@ const POST_TYPE_MAP: Record<string, ArticleType> = {
   "post": "article",
 };
 
-export function normalizeWordPress(snapshot: WpSnapshot): ImportBatch {
+export function normalizeWordPress(snapshot: WpSnapshot, opts: { now?: Date } = {}): ImportBatch {
   const batch = emptyBatch(snapshot.site.name);
+  const now = opts.now ?? new Date();
 
   const categories = new Map<number, NormalizedTaxonomy>();
   for (const c of snapshot.categories) {
@@ -110,7 +130,22 @@ export function normalizeWordPress(snapshot: WpSnapshot): ImportBatch {
     if (!["post", "review", "listicle", "page"].includes(post.post_type)) continue;
 
     const parsed = htmlToIntermediate(post.content);
-    const status = STATUS_MAP[post.status] ?? "draft";
+    let status = STATUS_MAP[post.status] ?? "draft";
+
+    // A `future` post whose date has already passed is not a schedule any more; see
+    // EXPIRED_FUTURE_STATUS. An unparseable date is treated the same way rather than
+    // trusted: `new Date("")` is Invalid Date, and every comparison against it is false,
+    // so a lenient check would have silently kept it `scheduled`.
+    if (status === "scheduled") {
+      const at = new Date(post.date);
+      if (!Number.isFinite(at.getTime()) || at <= now) {
+        status = EXPIRED_FUTURE_STATUS;
+        batch.warnings.push(
+          `article wp:post:${post.id}: WordPress status "future" with a past or invalid date (${post.date}); imported as "${EXPIRED_FUTURE_STATUS}" instead of publishing it`,
+        );
+      }
+    }
+
     const scheduledAt = status === "scheduled" ? post.date : undefined;
     const publishedAt = status === "published" ? post.date : undefined;
 

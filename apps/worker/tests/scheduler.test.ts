@@ -110,7 +110,10 @@ describe("scheduled publish promotion", () => {
     const audit = await db.select().from(auditLog).where(eq(auditLog.objectId, broken.id));
     expect(audit).toHaveLength(1);
     expect(audit[0]?.action).toBe("articles.block");
-    expect(audit[0]?.actorType).toBe("system");
+    // `worker`, not `system`: the log has to distinguish an unattended background action
+    // from platform provisioning, and name the process that took it
+    expect(audit[0]?.actorType).toBe("worker");
+    expect(audit[0]?.actorLabel).toBe("Scheduler (worker)");
 
     const second = await promoteScheduledArticles(db);
     expect(second.promoted).toBe(0);

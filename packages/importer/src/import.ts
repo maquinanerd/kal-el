@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import type { ArticleStatus } from "@kal-el/contracts";
 import type { KalElClient } from "@kal-el/sdk";
 import { finalizeDocument } from "./html.js";
+import { externalKeyFor } from "./types.js";
 import type { ImportBatch, NormalizedAuthor, NormalizedMedia, NormalizedTaxonomy } from "./types.js";
 
 export type ImportReport = {
@@ -106,17 +108,60 @@ async function ensureAuthors(client: KalElClient, siteId: string, items: Normali
 }
 
 /**
+ * Where an article whose schedule has already elapsed lands.
+ *
+ * Not `draft`: an article the source intended to publish should be visible to an editor
+ * as needing a decision, and `blocked` is the state the workflow queue surfaces, with both
+ * `approve` and `reject` legal from it. A draft would be quieter and easier to lose.
+ */
+const EXPIRED_SCHEDULE_STATUS: ArticleStatus = "blocked";
+
+/**
+ * Refuse to hand the publish worker a schedule that is already due.
+ *
+ * `status: "scheduled"` with a `scheduledAt` in the past matches the worker's due query
+ * on the very next tick, so the article publishes immediately - a WordPress export full of
+ * `future` posts from a site whose cron stopped would auto-publish every one of them on
+ * import, each announced to every webhook subscriber, with nobody having decided to
+ * publish anything. An absent or unparseable date is treated the same way: `new Date("")`
+ * is Invalid Date and every comparison against it is false, so a lenient check would have
+ * let it through as scheduled.
+ */
+function safeSchedule(
+  article: { status: ArticleStatus; scheduledAt?: string; slug: string },
+  now: Date,
+): { status: ArticleStatus; scheduledAt?: string; warning?: string } {
+  if (article.status !== "scheduled") return { status: article.status, scheduledAt: article.scheduledAt };
+  const at = article.scheduledAt ? new Date(article.scheduledAt) : null;
+  if (at && Number.isFinite(at.getTime()) && at > now) {
+    return { status: article.status, scheduledAt: article.scheduledAt };
+  }
+  return {
+    status: EXPIRED_SCHEDULE_STATUS,
+    scheduledAt: undefined,
+    warning: `"${article.slug}" was scheduled for ${article.scheduledAt ?? "no date"}, which is not in the future; imported as "${EXPIRED_SCHEDULE_STATUS}" rather than published on the next worker tick`,
+  };
+}
+
+/**
  * Import a normalized batch through the public REST API (never PostgreSQL
- * directly). Article `externalKey = {prefix}:{externalId}` makes re-import
- * idempotent; already-imported articles are skipped and counted as existing.
+ * directly). Article `externalKey = {prefix}:article:{externalId}` (see
+ * `externalKeyFor`) makes re-import idempotent; already-imported articles are
+ * skipped and counted as existing.
  */
 export async function importBatch(
   client: KalElClient,
   siteId: string,
   batch: ImportBatch,
-  opts: { externalKeyPrefix?: string; fetchMedia?: (media: NormalizedMedia) => Promise<{ data: Buffer; mimeType: string }> } = {},
+  opts: {
+    externalKeyPrefix?: string;
+    fetchMedia?: (media: NormalizedMedia) => Promise<{ data: Buffer; mimeType: string }>;
+    /** Overridable so the expired-schedule guard is testable without waiting. */
+    now?: Date;
+  } = {},
 ): Promise<ImportReport> {
   const prefix = opts.externalKeyPrefix ?? "imp";
+  const importedAt = opts.now ?? new Date();
   const report: ImportReport = {
     source: {
       categories: batch.categories.length,
@@ -162,7 +207,7 @@ export async function importBatch(
         const { data, mimeType } = await opts.fetchMedia(m);
         // the source identity makes the upload reuse an already-imported asset instead
         // of writing a second copy of the same bytes on every run
-        const uploaded = await client.uploadMedia(siteId, m.filename, data, mimeType, `${prefix}:${m.externalId}`);
+        const uploaded = await client.uploadMedia(siteId, m.filename, data, mimeType, externalKeyFor(prefix, "media", m.externalId));
         urlToMediaId.set(m.url, uploaded.id);
         if (seenMediaIds.has(uploaded.id)) report.reusedMedia++;
         seenMediaIds.add(uploaded.id);
@@ -176,7 +221,7 @@ export async function importBatch(
 
   for (const article of batch.articles) {
     try {
-    const externalKey = `${prefix}:${article.externalId}`;
+    const externalKey = externalKeyFor(prefix, "article", article.externalId);
     const existing = await client.listArticles(siteId, { externalKey });
     const first = existing.items[0];
 
@@ -320,6 +365,15 @@ export async function importBatch(
     // a token without `articles.schedule` meeting a single source article that carries a
     // scheduled date, say - threw out of the loop, so every remaining article was skipped
     // and the report, with all its warnings, was never returned to the caller.
+    // Every adapter funnels through here, so the expired-schedule guard belongs at this
+    // choke point rather than in each one. A `scheduled` article whose date has already
+    // passed is handed straight to the publish worker with a due date in the past, and the
+    // next tick publishes it - content nobody decided to publish going live on import and
+    // being announced to every webhook subscriber. See EXPIRED_FUTURE_STATUS in the
+    // WordPress adapter for why `blocked` is the landing state.
+    const schedule = safeSchedule(article, importedAt);
+    if (schedule.warning) report.warnings.push(schedule.warning);
+
     try {
       const created = await client.createArticle(siteId, {
         type: article.type,
@@ -327,9 +381,9 @@ export async function importBatch(
         slug: article.slug,
         excerpt: article.excerpt,
         document,
-        status: article.status,
+        status: schedule.status,
         publishedAt: article.publishedAt,
-        scheduledAt: article.scheduledAt,
+        scheduledAt: schedule.scheduledAt,
         categories: categoryIds,
         tags: tagIds,
         authors: authorIds,

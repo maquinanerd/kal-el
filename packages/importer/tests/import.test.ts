@@ -11,6 +11,7 @@ import { KalElClient } from "@kal-el/sdk";
 import { importBatch } from "../src/import.js";
 import { normalizeWordPress, readWordPressSnapshot } from "../src/wordpress.js";
 import { reconcile } from "../src/reconcile.js";
+import { externalKeyFor } from "../src/types.js";
 
 const SNAPSHOT = {
   site: { name: "Portal Legado", url: "https://legado.example.com" },
@@ -120,7 +121,7 @@ describe("WordPress import through the REST API", () => {
     expect(report.imported.media).toBe(1);
     expect(report.mediaPending).toBe(0);
 
-    const published = await client.listArticles(siteId, { externalKey: "imp:wp:post:42" });
+    const published = await client.listArticles(siteId, { externalKey: externalKeyFor("imp", "article", "wp:post:42") });
     expect(published.items.length).toBe(1);
     const publishedItem = published.items[0];
     if (!publishedItem) throw new Error("published article missing");
@@ -183,7 +184,7 @@ describe("WordPress import through the REST API", () => {
     expect(report.updated.articles, "the changed item must be synchronized, not skipped").toBe(1);
     expect(report.unchanged.articles).toBe(1);
 
-    const found = await client.listArticles(siteId, { externalKey: "imp:wp:post:42" });
+    const found = await client.listArticles(siteId, { externalKey: externalKeyFor("imp", "article", "wp:post:42") });
     expect(found.items.length, "still exactly one article for this source id").toBe(1);
     const item = found.items[0];
     if (!item) throw new Error("article missing");

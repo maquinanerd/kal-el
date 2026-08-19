@@ -73,6 +73,32 @@ export type ImportBatch = {
   warnings: string[];
 };
 
+/** Entity kinds that get a durable external identity in Kal El. */
+export type ExternalEntityKind = "article" | "media";
+
+/**
+ * The stored identity of an imported record.
+ *
+ * `{prefix}:{externalId}` alone shared one namespace across every entity type. Articles
+ * and media happen to sit in different tables with their own unique indexes, so nothing
+ * collided in practice - but an adapter whose source ids are not type-prefixed (which the
+ * neutral model never required) produced the same string for article 123 and media 123,
+ * and `reconcile` decides what belongs to an import by matching that string. The kind is
+ * now part of the key, so the identity is unambiguous by construction rather than by the
+ * accident of which table it lives in.
+ *
+ * There is no migration path and none is needed: the key is only ever compared against
+ * keys this function produced, and no deployed database exists.
+ */
+export function externalKeyFor(prefix: string, kind: ExternalEntityKind, externalId: string): string {
+  return `${prefix}:${kind}:${externalId}`;
+}
+
+/** Prefix that matches every key of one kind, for reconciliation. */
+export function externalKeyPrefixFor(prefix: string, kind: ExternalEntityKind): string {
+  return `${prefix}:${kind}:`;
+}
+
 export function emptyBatch(sourceName: string): ImportBatch {
   return { sourceName, users: [], categories: [], tags: [], authors: [], media: [], articles: [], redirects: [], warnings: [] };
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { serviceTokens, userRoles } from "@kal-el/db/schema";
 import { hashToken, getEffectivePermissions } from "@kal-el/auth";

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { KalElClient } from "@kal-el/sdk";
+import { externalKeyFor, externalKeyPrefixFor } from "./types.js";
 import type { ImportBatch } from "./types.js";
 
 export type ReconcileReport = {
@@ -23,7 +24,7 @@ function hashOf(items: { title: string; slug: string }[]): string {
 /** Compare the source batch against the imported state via the REST API. */
 export async function reconcile(client: KalElClient, siteId: string, batch: ImportBatch, opts: { externalKeyPrefix?: string } = {}): Promise<ReconcileReport> {
   const prefix = opts.externalKeyPrefix ?? "imp";
-  const sourceKeys = new Set(batch.articles.map((a) => `${prefix}:${a.externalId}`));
+  const sourceKeys = new Set(batch.articles.map((a) => externalKeyFor(prefix, "article", a.externalId)));
 
   // fetch all articles for the site (paginated)
   const importedKeys = new Map<string, string>();
@@ -44,8 +45,10 @@ export async function reconcile(client: KalElClient, siteId: string, batch: Impo
   const missing = [...sourceKeys].filter((k) => !importedKeys.has(k));
   // `startsWith(prefix)` also claimed keys from a different prefix that happens to share
   // the same leading characters ("wp" matching "wpx:123"); the separator has to be part
-  // of the comparison.
-  const extra = [...importedKeys.keys()].filter((k) => k.startsWith(`${prefix}:`) && !sourceKeys.has(k));
+  // of the comparison. The entity kind is part of it too, so a key belonging to another
+  // entity type cannot be reported as an orphaned article.
+  const articlePrefix = externalKeyPrefixFor(prefix, "article");
+  const extra = [...importedKeys.keys()].filter((k) => k.startsWith(articlePrefix) && !sourceKeys.has(k));
 
   const sourceArticles = batch.articles.map((a) => ({ title: a.title, slug: a.slug }));
   const importedArticles = [...sourceKeys].map((k) => importedTitles.get(k) ?? { title: "", slug: "" });
