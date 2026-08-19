@@ -14,16 +14,22 @@ import {
   tags,
 } from "@kal-el/db/schema";
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
-import { migrateDocumentToV2 } from "@kal-el/contracts";
+import { migrateDocumentToV2, QUALITY_FLAGS } from "@kal-el/contracts";
 
 import { badRequest, conflict, forbidden, invalidTransition, notFound, versionConflict } from "../plugins/errors.js";
-import { writeAudit } from "../plugins/audit.js";
+import { auditActorFields, writeAudit } from "../plugins/audit.js";
 import { upsertSlugRedirect } from "./redirects.js";
 import { assertMediaInSite, collectDocumentMediaIds } from "./media.js";
 
 export type ActorRef = {
   kind: "user" | "service";
   userId?: string;
+  /**
+   * `service_tokens.id` when the caller is an integration. Present on the resolved
+   * `ActorContext` all along; it was simply not in this type, so every service-token
+   * action was audited with a null actor.
+   */
+  tokenId?: string;
   actorKey: string;
   name: string;
   ip?: string;
@@ -130,6 +136,20 @@ async function relationIds(db: Db, articleId: string) {
   };
 }
 
+/**
+ * States an editor has to act on, surfaced on the article itself.
+ *
+ * `document_unreadable` is how the CMS learns to show "this document needs repair"
+ * instead of an empty editor. Without it the only signal was that the body looked blank -
+ * indistinguishable from an article nobody has written yet, and one save away from
+ * overwriting whatever is actually in the column.
+ */
+function qualityFlagsFor(row: ArticleRow): string[] {
+  const flags: string[] = [];
+  if (!storedDocument(row.document).readable) flags.push(QUALITY_FLAGS.documentUnreadable);
+  return flags;
+}
+
 async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
   const rel = await relationIds(db, row.id);
   return {
@@ -152,7 +172,7 @@ async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
-    qualityFlags: [],
+    qualityFlags: qualityFlagsFor(row),
   };
 }
 
@@ -177,7 +197,7 @@ function summaryDto(row: ArticleRow): ArticleSummary {
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
-    qualityFlags: [],
+    qualityFlags: qualityFlagsFor(row),
   };
 }
 
@@ -285,6 +305,15 @@ export async function createArticle(
   const status = body.status ?? "draft";
   const publishedAt = body.publishedAt ? new Date(body.publishedAt) : status === "published" ? new Date() : null;
   const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+  // The scheduler's due query is `status = 'scheduled' AND scheduled_at <= now()`, and
+  // `<=` against NULL is NULL - so an article created as `scheduled` with no time was
+  // invisible to the worker forever. It sat in the queue state, never published, and
+  // nothing reported it. A schedule without a time is not a schedule.
+  if (status === "scheduled" && !scheduledAt) {
+    throw badRequest("scheduledAt is required when creating an article in the scheduled state", {
+      field: "scheduledAt",
+    });
+  }
   const featuredMediaId = body.featuredMediaId ?? null;
 
   await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : []), ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : [])]);
@@ -343,8 +372,7 @@ export async function createArticle(
 
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: actorUserId(actor),
+      ...auditActorFields(actor),
       action: "articles.create",
       objectType: "article",
       objectId: inserted.id,
@@ -491,8 +519,7 @@ export async function updateArticle(
 
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: updatedBy,
+      ...auditActorFields(actor),
       action: "articles.update",
       objectType: "article",
       objectId: articleId,
@@ -689,8 +716,7 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
 
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: updatedBy,
+      ...auditActorFields(actor),
       action: "articles.publish",
       objectType: "article",
       objectId: articleId,
@@ -731,8 +757,7 @@ export async function scheduleArticle(db: Db, siteId: string, articleId: string,
 
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: updatedBy,
+      ...auditActorFields(actor),
       action: "articles.schedule",
       objectType: "article",
       objectId: articleId,
@@ -801,8 +826,7 @@ async function applyStatusTransition(
 
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: updatedBy,
+      ...auditActorFields(actor),
       action,
       objectType: "article",
       objectId: articleId,

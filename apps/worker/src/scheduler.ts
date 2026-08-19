@@ -3,9 +3,20 @@ import type { Db } from "@kal-el/db";
 import { articleRevisions, articles, auditLog, outboxEvents } from "@kal-el/db/schema";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
 
+import { nullLogger, type Logger } from "./logger.js";
+
 export type PromoteSummary = { promoted: number; blocked: number };
 
+export type PromoteOptions = {
+  /** How many due articles one pass may handle. */
+  limit?: number;
+  log?: Logger;
+};
+
 const DEFAULT_DOCUMENT = { version: 2, nodes: [] };
+
+/** Shown in the CMS audit log so an unattended publish is attributable to a process. */
+const SCHEDULER_ACTOR = "Scheduler (worker)";
 
 /**
  * `migrateDocumentToV2` maps `document.nodes` for anything that is not literally version
@@ -45,9 +56,14 @@ class UnpublishableArticle extends Error {}
  * scheduled_at <= now), so at most one worker wins per article; the outbox
  * event is keyed deterministically (exactly-once delivery per ADR-0005).
  */
-export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> {
+export async function promoteScheduledArticles(db: Db, opts: PromoteOptions = {}): Promise<PromoteSummary> {
+  const { limit = 100, log = nullLogger } = opts;
   const now = new Date();
 
+  // `status = 'scheduled' AND scheduled_at <= now()` ordered by `scheduled_at`, which is
+  // exactly what `articles_scheduled_due_idx` (partial, on scheduled_at) serves - index
+  // scan, no sort, no site_id. Before that index this was a sequential scan of the whole
+  // articles table, once per POLL_INTERVAL_MS.
   const due = await db
     .select({ id: articles.id })
     .from(articles)
@@ -55,7 +71,7 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
     // oldest first is what an editorial queue means; a refusal is taken out of the queue
     // by `blockArticle`, so nothing can pin the head of this ordering
     .orderBy(asc(articles.scheduledAt))
-    .limit(100);
+    .limit(limit);
 
   let promoted = 0;
   let blocked = 0;
@@ -74,7 +90,7 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
       continue;
     }
     if (failure) {
-      console.error(`[scheduler] article ${id} could not be promoted`, failure);
+      log.error({ articleId: id, err: failure }, "scheduled article could not be promoted");
       // a transient failure keeps its place in the queue and is retried next tick
       if (!(failure instanceof UnpublishableArticle)) continue;
       // Isolating the failure is not enough. A refused article keeps `status='scheduled'`
@@ -82,7 +98,7 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
       // schedule must be in the future, it sorts ahead of every healthy article. A hundred
       // of them would fill the window on every tick and nothing would ever publish again.
       // Move it out of the queue and into a state an editor can see and act on.
-      if (await blockArticle(db, id, failure)) blocked++;
+      if (await blockArticle(db, id, failure, log)) blocked++;
     }
   }
 
@@ -90,7 +106,7 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
 }
 
 /** Take a permanently unpromotable article out of the due window. */
-async function blockArticle(db: Db, id: string, failure: unknown): Promise<boolean> {
+async function blockArticle(db: Db, id: string, failure: unknown, log: Logger): Promise<boolean> {
   const message = failure instanceof Error ? failure.message.slice(0, 500) : String(failure);
   try {
     return await db.transaction(async (tx) => {
@@ -106,8 +122,11 @@ async function blockArticle(db: Db, id: string, failure: unknown): Promise<boole
       if (!row) return false;
       await tx.insert(auditLog).values({
         siteId: row.siteId,
-        actorType: "system",
+        // `worker`, not `system`: an operator reading the log has to be able to tell an
+        // unattended background action from platform provisioning.
+        actorType: "worker",
         actorId: null,
+        actorLabel: SCHEDULER_ACTOR,
         action: "articles.block",
         objectType: "article",
         objectId: id,
@@ -116,7 +135,7 @@ async function blockArticle(db: Db, id: string, failure: unknown): Promise<boole
       return true;
     });
   } catch (err) {
-    console.error(`[scheduler] article ${id} could not be blocked either`, err);
+    log.error({ articleId: id, err }, "scheduled article could not be blocked either");
     return false;
   }
 }
@@ -165,8 +184,9 @@ async function promoteOne(db: Db, id: string, now: Date) {
       // record at all. `actorType: "system"` exists for exactly this.
       await tx.insert(auditLog).values({
         siteId: row.siteId,
-        actorType: "system",
+        actorType: "worker",
         actorId: null,
+        actorLabel: SCHEDULER_ACTOR,
         action: "articles.publish",
         objectType: "article",
         objectId: id,
