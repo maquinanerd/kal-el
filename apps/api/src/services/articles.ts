@@ -7,8 +7,11 @@ import {
   articleRevisions,
   articles,
   articleTags,
+  authors,
   categories,
+  entities,
   outboxEvents,
+  tags,
 } from "@kal-el/db/schema";
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
@@ -147,6 +150,44 @@ function summaryDto(row: ArticleRow): ArticleSummary {
   };
 }
 
+/**
+ * Every id an article points at must live in the same site. Without this a caller could
+ * attach another tenant's taxonomy - which both plants a cross-tenant FK (site B deleting
+ * its own tag would cascade into site A's article) and turns the endpoint into an
+ * existence oracle for other tenants' ids: a real id returns 201, an invented one 400.
+ *
+ * Mirrors `assertMediaInSite`; kept next to the write so no route can forget it.
+ */
+async function assertRelationsInSite(
+  db: Db,
+  siteId: string,
+  body: CreateArticleBody | UpdateArticleBody,
+): Promise<void> {
+  const checks: { ids: string[] | undefined; label: string; table: typeof authors | typeof categories | typeof tags | typeof entities }[] = [
+    { ids: body.authors, label: "author", table: authors },
+    { ids: body.categories, label: "category", table: categories },
+    { ids: body.tags, label: "tag", table: tags },
+    { ids: body.entities, label: "entity", table: entities },
+  ];
+
+  for (const { ids, label, table } of checks) {
+    const unique = [...new Set((ids ?? []).filter(Boolean))];
+    if (unique.length === 0) continue;
+    const rows = await db
+      .select({ id: table.id })
+      .from(table)
+      .where(and(inArray(table.id, unique), eq(table.siteId, siteId)));
+    const found = new Set(rows.map((r) => r.id));
+    for (const id of unique) {
+      if (!found.has(id)) {
+        // Same message whether the row is missing or belongs to another site: telling
+        // them apart is exactly the oracle we are closing.
+        throw badRequest(`referenced ${label} does not belong to this site`, { [`${label}Id`]: id });
+      }
+    }
+  }
+}
+
 async function replaceRelations(db: Db, articleId: string, body: CreateArticleBody | UpdateArticleBody) {
   if (body.authors) {
     await db.delete(articleAuthors).where(eq(articleAuthors.articleId, articleId));
@@ -266,6 +307,7 @@ export async function createArticle(
         .onConflictDoNothing();
     }
 
+    await assertRelationsInSite(tx as unknown as Db, siteId, body);
     await replaceRelations(tx as unknown as Db, inserted.id, body);
 
     await writeAudit(tx, {
@@ -379,6 +421,7 @@ export async function updateArticle(
       });
     }
 
+    await assertRelationsInSite(tx as unknown as Db, siteId, body);
     await replaceRelations(tx as unknown as Db, articleId, body);
 
     await writeAudit(tx, {
