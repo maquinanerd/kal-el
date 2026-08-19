@@ -64,7 +64,9 @@ function toggleListType(view: EditorView, listType: NodeType) {
 
 function insertAtom(view: EditorView, typeName: string, attrs: Record<string, unknown>) {
   const nodeType = view.state.schema.nodes[typeName] as NodeType;
-  const node = nodeType.create(attrs);
+  // drop empty attrs: the document schema types these as optional strings, not nullable
+  const clean = Object.fromEntries(Object.entries(attrs).filter(([, v]) => v !== null && v !== undefined));
+  const node = nodeType.create(clean);
   const tr = view.state.tr.replaceSelectionWith(node);
   view.dispatch(tr);
   view.focus();
@@ -87,6 +89,8 @@ function insertTableNode(view: EditorView) {
 }
 
 export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile }, ref) {
+  const [focusMode, setFocusMode] = useState(false);
+  const [inline, setInline] = useState<{ top: number; left: number } | null>(null);
   const [slash, setSlash] = useState<SlashQuery | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const slashRef = useRef<{ q: SlashQuery | null; index: number }>({ q: null, index: 0 });
@@ -102,7 +106,14 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     insertImage: (mediaId, attrs) => {
       const view = viewRef.current;
       if (!view) return;
-      insertAtom(view, "image", { mediaId, caption: attrs?.caption ?? null, credit: attrs?.credit ?? null, altText: attrs?.altText ?? null });
+      // altText is passed through verbatim: "" is a deliberate "decorative", which is
+      // different from not having been asked.
+      insertAtom(view, "image", {
+        mediaId,
+        caption: attrs?.caption,
+        credit: attrs?.credit,
+        altText: attrs?.altText,
+      });
     },
     insertGallery: (mediaIds) => {
       const view = viewRef.current;
@@ -170,6 +181,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   const applySlashRef = useRef(applySlash);
   applySlashRef.current = applySlash;
 
+  const focusModeRef = useRef(focusMode);
+  focusModeRef.current = focusMode;
+
   /** Returns true when the slash menu consumed the key. */
   function slashKey(action: "up" | "down" | "enter" | "escape"): boolean {
     const q = slashRef.current.q;
@@ -209,7 +223,14 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
           ArrowDown: () => slashKey("down"),
           ArrowUp: () => slashKey("up"),
           Enter: () => slashKey("enter"),
-          Escape: () => slashKey("escape"),
+          Escape: () => {
+            if (slashKey("escape")) return true;
+            if (focusModeRef.current) {
+              setFocusMode(false);
+              return true;
+            }
+            return false;
+          },
         }),
         keymap({ Enter: splitListItem(listItem), Tab: sinkListItem(listItem), "Shift-Tab": liftListItem(listItem) }),
         keymap(baseKeymap),
@@ -230,6 +251,22 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         if (!q) {
           slashRef.current.index = 0;
           setSlashIndex(0);
+        }
+
+        // Contextual inline toolbar: anchored to the selection, only while there IS one.
+        const view = viewRef.current;
+        if (!view || next.selection.empty || q) {
+          setInline(null);
+        } else {
+          const start = view.coordsAtPos(next.selection.from);
+          const end = view.coordsAtPos(next.selection.to);
+          const host = hostRef.current?.getBoundingClientRect();
+          if (host) {
+            setInline({
+              top: Math.min(start.top, end.top) - host.top - 44,
+              left: Math.max(0, (start.left + end.left) / 2 - host.left - 90),
+            });
+          }
         }
       },
 
@@ -321,7 +358,15 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   const slashItems = slash ? filterSlashItems(slash.query) : [];
 
   return (
-    <div className="peg-editor">
+    <div className={`peg-editor ${focusMode ? "peg-editor--focus" : ""}`}>
+      {focusMode && (
+        <div className="peg-editor__focus-bar">
+          <span className="peg-editor__focus-hint">Modo sem distrações · Esc para sair</span>
+          <button type="button" className="peg-btn peg-btn--sm peg-btn--secondary" onClick={() => setFocusMode(false)}>
+            Sair do modo foco
+          </button>
+        </div>
+      )}
       <div className="peg-editor__toolbar" role="toolbar" aria-label="Formatar texto">
         <ToolbarButton label="Negrito" onClick={() => view && toggleMarkCommand(view.state.schema.marks.bold)(view)}>B</ToolbarButton>
         <ToolbarButton label="Itálico" onClick={() => view && toggleMarkCommand(view.state.schema.marks.italic)(view)}><i>I</i></ToolbarButton>
@@ -336,6 +381,13 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         <ToolbarButton label="Lista com marcadores" onClick={() => view && toggleListType(view, view.state.schema.nodes.bulletList)}>•≡</ToolbarButton>
         <ToolbarButton label="Lista numerada" onClick={() => view && toggleListType(view, view.state.schema.nodes.orderedList)}>1≡</ToolbarButton>
         <ToolbarButton label="Citação" onClick={() => view && run(view, wrapIn(view.state.schema.nodes.blockquote))}>”</ToolbarButton>
+        <span className="peg-editor__sep" />
+        <ToolbarButton
+          label={focusMode ? "Sair do modo sem distrações" : "Modo sem distrações"}
+          onClick={() => setFocusMode((f) => !f)}
+        >
+          {focusMode ? "◱" : "◰"}
+        </ToolbarButton>
         <span className="peg-editor__sep" />
         <ToolbarButton label="Desfazer" onClick={() => view && run(view, undo)}>↺</ToolbarButton>
         <ToolbarButton label="Refazer" onClick={() => view && run(view, redo)}>↻</ToolbarButton>
@@ -366,6 +418,43 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         </div>
       </div>
       <div style={{ position: "relative" }}>
+        {inline && (
+          <div
+            className="peg-inline-toolbar"
+            role="toolbar"
+            aria-label="Formatação da seleção"
+            style={{ top: inline.top, left: inline.left }}
+          >
+            <button
+              type="button"
+              className="peg-inline-toolbar__btn"
+              aria-label="Negrito"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => view && toggleMarkCommand(view.state.schema.marks.bold)(view)}
+            >
+              <strong>B</strong>
+            </button>
+            <button
+              type="button"
+              className="peg-inline-toolbar__btn"
+              aria-label="Itálico"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => view && toggleMarkCommand(view.state.schema.marks.italic)(view)}
+            >
+              <em>I</em>
+            </button>
+            <span className="peg-inline-toolbar__sep" />
+            <button
+              type="button"
+              className="peg-inline-toolbar__btn"
+              aria-label="Link"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={setLink}
+            >
+              🔗
+            </button>
+          </div>
+        )}
         <div ref={hostRef} className="peg-editor__surface" />
         {slash && slashItems.length > 0 && (
           <div className="peg-slash-menu" role="listbox" aria-label="Inserir bloco">

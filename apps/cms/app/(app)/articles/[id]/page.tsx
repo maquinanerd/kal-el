@@ -28,6 +28,7 @@ import {
 } from "../../../../lib/api";
 import { RichTextEditor, type RichTextEditorHandle } from "../../../../components/editor/RichTextEditor";
 import { MediaPicker } from "../../../../components/MediaPicker";
+import { ImageDetailsDialog, type ImageDetails } from "../../../../components/ImageDetailsDialog";
 
 const EMPTY_DOC: ArticleDocumentV2 = { version: 2, nodes: [] };
 const SAVE_LABEL: Record<string, string> = { idle: "", saving: "Salvando…", saved: "Salvo", error: "Erro ao salvar" };
@@ -133,6 +134,8 @@ export default function ArticlePage() {
   const [selAuthors, setSelAuthors] = useState<Set<string>>(new Set());
 
   const [mediaPicker, setMediaPicker] = useState<"image" | "gallery" | "featured" | "social" | null>(null);
+  // an image chosen from the library, waiting for its alt text before it enters the document
+  const [pendingImage, setPendingImage] = useState<{ id: string; filename: string; url: string; altText: string | null; caption: string | null; credit: string | null } | null>(null);
   const [compareRevision, setCompareRevision] = useState<ArticleRevision | null>(null);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
 
@@ -431,19 +434,52 @@ export default function ArticlePage() {
         open={mediaPicker !== null}
         multiple={mediaPicker === "gallery"}
         onClose={() => setMediaPicker(null)}
-        onSelect={(ids) => {
+        onSelect={(ids, picked) => {
           if (mediaPicker === "featured") {
             setFeaturedMediaId(ids[0] ?? "");
             scheduleSave();
           } else if (mediaPicker === "gallery") {
             editorRef.current?.insertGallery(ids);
           } else if (mediaPicker === "image") {
-            editorRef.current?.insertImage(ids[0] ?? "");
+            // ask for alt text before the node exists, instead of writing alt="" silently
+            const first = picked[0];
+            if (first) {
+              setPendingImage({
+                id: first.id,
+                filename: first.filename,
+                url: first.url,
+                altText: first.altText ?? null,
+                caption: first.caption ?? null,
+                credit: first.credit ?? null,
+              });
+            }
           } else if (mediaPicker === "social") {
             setSocialImageId(ids[0] ?? "");
             scheduleSave();
           }
           setMediaPicker(null);
+        }}
+      />
+
+      <ImageDetailsDialog
+        open={pendingImage !== null}
+        filename={pendingImage?.filename}
+        previewUrl={pendingImage?.url}
+        initial={
+          pendingImage
+            ? { altText: pendingImage.altText, caption: pendingImage.caption, credit: pendingImage.credit }
+            : undefined
+        }
+        onCancel={() => setPendingImage(null)}
+        onConfirm={(details: ImageDetails) => {
+          if (pendingImage) {
+            editorRef.current?.insertImage(pendingImage.id, {
+              altText: details.altText ?? undefined,
+              caption: details.caption ?? undefined,
+              credit: details.credit ?? undefined,
+            });
+          }
+          setPendingImage(null);
         }}
       />
 

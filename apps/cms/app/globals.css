@@ -150,3 +150,38 @@ a {
   color: var(--peg-text-tertiary);
   font: var(--peg-font-caption);
 }
+
+/* --- Distraction-free writing (docs/02-EDITOR-UX.md) ---
+   Reduces chrome without becoming a separate page: the save state and an explicit exit
+   stay visible, and Escape leaves. */
+.peg-editor--focus {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  max-width: none;
+  border-radius: 0;
+  overflow-y: auto;
+  background: var(--peg-canvas);
+}
+.peg-editor--focus .peg-editor__surface {
+  max-width: var(--peg-editor-width);
+  margin: 0 auto;
+}
+.peg-editor--focus .peg-editor__toolbar {
+  max-width: var(--peg-editor-width);
+  margin: 0 auto;
+  border-bottom: 1px solid var(--peg-border);
+}
+.peg-editor__focus-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peg-space-3);
+  padding: var(--peg-space-2) var(--peg-space-4);
+  border-bottom: 1px solid var(--peg-border);
+  background: var(--peg-surface);
+}
+.peg-editor__focus-hint {
+  font: var(--peg-font-caption);
+  color: var(--peg-text-secondary);
+}

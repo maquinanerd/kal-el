@@ -739,6 +739,9 @@
 }
 
 .peg-inline-toolbar {
+  /* anchored to the selection by the editor, which sets top/left */
+  position: absolute;
+  z-index: 25;
   display: inline-flex;
   align-items: center;
   gap: var(--peg-space-1);

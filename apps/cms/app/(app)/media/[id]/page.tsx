@@ -14,6 +14,8 @@ export default function MediaDetailPage() {
   const [altText, setAltText] = useState("");
   const [caption, setCaption] = useState("");
   const [credit, setCredit] = useState("");
+  const [focalX, setFocalX] = useState("");
+  const [focalY, setFocalY] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -26,6 +28,8 @@ export default function MediaDetailPage() {
         setAltText(found?.altText ?? "");
         setCaption(found?.caption ?? "");
         setCredit(found?.credit ?? "");
+        setFocalX(found?.focalX != null ? String(found.focalX) : "");
+        setFocalY(found?.focalY != null ? String(found.focalY) : "");
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Falha ao carregar"));
   }, [activeSiteId, params.id]);
@@ -35,7 +39,15 @@ export default function MediaDetailPage() {
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateMedia(activeSiteId, item.id, { altText: altText || null, caption: caption || null, credit: credit || null });
+      const updated = await updateMedia(activeSiteId, item.id, {
+        altText: altText || null,
+        caption: caption || null,
+        credit: credit || null,
+        // focal point is metadata only: consumers decide how to crop, so no image
+        // transformation pipeline is introduced here and StorageProvider stays independent
+        focalX: focalX === "" ? null : Number(focalX),
+        focalY: focalY === "" ? null : Number(focalY),
+      });
       setItem(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao salvar");
@@ -75,6 +87,28 @@ export default function MediaDetailPage() {
                 <Input label="Alt text" value={altText} onChange={(e) => setAltText(e.target.value)} />
                 <Textarea label="Legenda (caption)" rows={2} value={caption} onChange={(e) => setCaption(e.target.value)} />
                 <Input label="Crédito" value={credit} onChange={(e) => setCredit(e.target.value)} />
+                <div style={{ display: "flex", gap: 12 }}>
+                  <Input
+                    label="Ponto focal X"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={focalX}
+                    onChange={(e) => setFocalX(e.target.value)}
+                    hint="0 = esquerda, 1 = direita"
+                  />
+                  <Input
+                    label="Ponto focal Y"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={focalY}
+                    onChange={(e) => setFocalY(e.target.value)}
+                    hint="0 = topo, 1 = base"
+                  />
+                </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <Button variant="primary" onClick={() => void save()} disabled={saving}>{saving ? "Salvando…" : "Salvar"}</Button>
                   <Button variant="destructive" onClick={() => void remove()}>Excluir</Button>

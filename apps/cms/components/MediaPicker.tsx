@@ -14,7 +14,8 @@ export function MediaPicker({
   open: boolean;
   multiple?: boolean;
   onClose: () => void;
-  onSelect: (ids: string[]) => void;
+  /** `items` carries the chosen media records so the caller can default alt text from them. */
+  onSelect: (ids: string[], items: MediaItem[]) => void;
 }) {
   const { activeSiteId } = useAuth();
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -41,7 +42,8 @@ export function MediaPicker({
   }
 
   function confirm() {
-    onSelect([...selected]);
+    const ids = [...selected];
+    onSelect(ids, items.filter((m) => selected.has(m.id)));
     setSelected(new Set());
     onClose();
   }
@@ -62,7 +64,7 @@ export function MediaPicker({
               aria-pressed={selected.has(m.id)}
               onClick={() => toggle(m.id)}
               style={{
-                border: selected.has(m.id) ? "2px solid var(--peg-accent, #2563eb)" : "1px solid var(--peg-border-color, #e5e7eb)",
+                border: selected.has(m.id) ? "2px solid var(--peg-accent)" : "1px solid var(--peg-border)",
                 borderRadius: 6,
                 padding: 2,
                 background: "none",

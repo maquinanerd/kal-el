@@ -88,6 +88,86 @@ test.describe("editor contract", () => {
     expect(persisted.id).toBeTruthy();
   });
 
+  test("selecting text reveals a contextual toolbar that applies formatting", async ({ page }) => {
+    const editor = await openNewArticle(page);
+    await page.keyboard.type("uma frase para formatar");
+
+    const toolbar = page.getByRole("toolbar", { name: "Formatação da seleção" });
+    await expect(toolbar, "no selection, no contextual toolbar").toBeHidden();
+
+    // select the whole paragraph
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+End");
+    await expect(toolbar, "a selection must reveal it").toBeVisible({ timeout: 10_000 });
+
+    await toolbar.getByRole("button", { name: "Negrito" }).click();
+    await expect(editor.locator("strong")).toHaveText("uma frase para formatar");
+
+    // collapsing the selection dismisses it again
+    await page.keyboard.press("End");
+    await expect(toolbar).toBeHidden();
+  });
+
+  test("distraction-free mode reduces chrome and Escape leaves it", async ({ page }) => {
+    await openNewArticle(page);
+
+    const enter = page.getByRole("button", { name: "Modo sem distrações" });
+    await enter.click();
+
+    const focusBar = page.getByText("Modo sem distrações · Esc para sair");
+    await expect(focusBar).toBeVisible();
+    // the inspector is out of the way but the editor is not a separate page
+    await expect(page.locator(".peg-editor--focus")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Sair do modo foco" })).toBeVisible();
+
+    await page.locator(".peg-editor__surface .ProseMirror").click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".peg-editor--focus")).toHaveCount(0);
+  });
+
+  test("inserting an image requires alt text or an explicit decorative choice", async ({ page }) => {
+    await openNewArticle(page);
+
+    // the media library is empty on a fresh run; upload through the API so the picker has something
+    const uploaded = await page.evaluate(async () => {
+      const api = "http://localhost:3101";
+      const sites = await fetch(`${api}/v1/me/sites`, { credentials: "include" }).then((r) => r.json());
+      const siteId = sites.data[0].id as string;
+      const csrf = document.cookie.split("; ").find((c) => c.startsWith("ke_csrf="))?.slice("ke_csrf=".length) ?? "";
+      // a minimal valid GIF
+      const bytes = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0]);
+      const form = new FormData();
+      form.append("file", new Blob([bytes], { type: "image/gif" }), "pixel.gif");
+      const res = await fetch(`${api}/v1/sites/${siteId}/media`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "x-kal-el-csrf": decodeURIComponent(csrf) },
+        body: form,
+      });
+      return { status: res.status };
+    });
+    expect(uploaded.status, "media upload for the fixture").toBe(201);
+
+    await page.getByRole("button", { name: "Inserir" }).click();
+    await page.getByRole("menuitem", { name: "Imagem" }).or(page.getByText("Imagem", { exact: true })).first().click();
+
+    const picker = page.getByRole("dialog", { name: /Selecionar imagem/i });
+    await expect(picker).toBeVisible({ timeout: 10_000 });
+    await picker.getByRole("button", { name: /Selecionar pixel\.gif/ }).click();
+    await picker.getByRole("button", { name: "Selecionar", exact: true }).click();
+
+    const details = page.getByRole("dialog", { name: "Detalhes da imagem" });
+    await expect(details, "alt text must be asked for before the node exists").toBeVisible({ timeout: 10_000 });
+
+    const insert = details.getByRole("button", { name: "Inserir" });
+    await expect(insert, "cannot insert with no alt and no decorative choice").toBeDisabled();
+
+    await details.getByRole("textbox", { name: /Texto alternativo/ }).first().fill("Cartaz do filme");
+    await expect(insert).toBeEnabled();
+    await insert.click();
+    await expect(details).toBeHidden();
+  });
+
   test("a plain URL that is not a video is left alone", async ({ page }) => {
     const editor = await openNewArticle(page);
 
