@@ -14,17 +14,19 @@
   box-sizing: border-box;
 }
 
-/* Base reset: form controls inherit typography and drop UA quirks */
-.peg-body button,
-.peg-body input,
-.peg-body select,
-.peg-body textarea {
+/* Base reset: form controls inherit typography and drop UA quirks.
+   Wrapped in :where() so the whole rule carries ZERO specificity. It previously read
+   `.peg-body button { color: inherit }` — specificity (0,1,1) — which outranked
+   `.peg-btn--primary { color: ... }` at (0,1,0). Every primary button therefore drew its
+   label in `--peg-text-primary` on a `--peg-text-primary` background: foreground and
+   background identical, contrast exactly 1:1, the label invisible. The reset still does
+   its job (a chrome-less button no longer falls back to the UA `buttontext` colour) but
+   can no longer beat a variant class. */
+:where(.peg-body button, .peg-body input, .peg-body select, .peg-body textarea) {
   margin: 0;
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
-  /* without this a chrome-less button falls back to the UA `buttontext` colour, which is
-     dark in both themes - unreadable on a dark surface */
   color: inherit;
 }
 
@@ -81,12 +83,14 @@
 }
 .peg-theme-toggle:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
 
+/* PEG button system. Every variant states BOTH background and colour explicitly — no
+   variant may rely on an inherited colour, which is what made `--primary` invisible. */
 .peg-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--peg-space-2);
-  border-radius: var(--peg-radius-sm);
+  border-radius: var(--peg-radius-md);
   font: var(--peg-font-label);
   height: var(--peg-control-md);
   padding: 0 var(--peg-space-3);
@@ -103,31 +107,39 @@
 .peg-btn:active:not(:disabled) {
   transform: translateY(0.5px);
 }
-.peg-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+
+/* Primary is INK, never accent — PEG rule 5. 12.89:1 light, 16.79:1 dark. */
 .peg-btn--primary {
-  background: var(--peg-text-primary);
-  color: var(--peg-canvas);
+  background: var(--peg-ink);
+  border-color: var(--peg-ink);
+  color: var(--peg-text-on-ink);
 }
 .peg-btn--primary:hover:not(:disabled) {
-  filter: brightness(0.94);
+  background: #454a40;
+  border-color: #454a40;
+  color: var(--peg-text-on-ink);
+}
+[data-theme="dark"] .peg-btn--primary:hover:not(:disabled) {
+  background: #d8d8d4;
+  border-color: #d8d8d4;
 }
 .peg-btn--secondary {
   background: var(--peg-surface);
   border-color: var(--peg-border-strong);
-  color: var(--peg-text-primary);
+  color: var(--peg-text-strong);
+  box-shadow: var(--peg-shadow-1);
 }
 .peg-btn--secondary:hover:not(:disabled) {
   background: var(--peg-surface-muted);
+  color: var(--peg-text-primary);
 }
 .peg-btn--tertiary {
   background: transparent;
-  color: var(--peg-text-primary);
+  color: var(--peg-text-secondary);
 }
 .peg-btn--tertiary:hover:not(:disabled) {
   background: var(--peg-surface-muted);
+  color: var(--peg-text-primary);
 }
 .peg-btn--destructive {
   background: var(--peg-surface);
@@ -138,6 +150,27 @@
   background: var(--peg-danger);
   border-color: var(--peg-danger);
   color: #fff;
+}
+[data-theme="dark"] .peg-btn--destructive:hover:not(:disabled) {
+  color: var(--peg-canvas);
+}
+.peg-btn--destructive:focus-visible {
+  box-shadow: var(--peg-focus-ring-danger);
+}
+
+/* Disabled: a dedicated PEG token set, not opacity. Opacity on `--primary` produced a
+   washed ink slab whose label still had to carry the contrast; these are explicit. */
+.peg-btn:disabled,
+.peg-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  background: var(--peg-surface-subtle);
+  border-color: var(--peg-border);
+  color: var(--peg-text-disabled);
+  box-shadow: none;
+}
+.peg-btn--tertiary:disabled {
+  background: transparent;
+  border-color: transparent;
 }
 .peg-btn--xs { height: var(--peg-control-xs); font: var(--peg-font-micro); padding: 0 var(--peg-space-2); }
 .peg-btn--sm { height: var(--peg-control-sm); }
