@@ -64,15 +64,17 @@ async function assertPrimaryCategoryInSite(db: Db, siteId: string, categoryId?: 
  * of that article, which also made it unrepairable: the PATCH that would fix it reads the
  * old value on the way through.
  *
- * Reads degrade to an empty document so the row stays reachable and fixable. Nothing that
- * *writes* history uses this - see `publishableDocument` in the worker.
+ * Reads degrade to an empty document so the row stays reachable and fixable. Callers that
+ * do anything other than display it must check `readable` first: a degraded document that
+ * gets written back - to the column, or into a revision - destroys the original bytes and
+ * leaves nothing in the history to recover from.
  */
-function storedDocument(value: unknown): ArticleDocumentV2 {
-  if (!value) return DEFAULT_DOCUMENT;
+function storedDocument(value: unknown): { document: ArticleDocumentV2; readable: boolean } {
+  if (!value) return { document: DEFAULT_DOCUMENT, readable: true };
   try {
-    return migrateDocumentToV2(value as Parameters<typeof migrateDocumentToV2>[0]);
+    return { document: migrateDocumentToV2(value as Parameters<typeof migrateDocumentToV2>[0]), readable: true };
   } catch {
-    return DEFAULT_DOCUMENT;
+    return { document: DEFAULT_DOCUMENT, readable: false };
   }
 }
 
@@ -142,7 +144,7 @@ async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
     version: row.version,
     externalKey: row.externalKey ?? null,
     featuredMediaId: row.featuredMediaId ?? null,
-    document: storedDocument(row.document),
+    document: storedDocument(row.document).document,
     seo: row.seo,
     provenance: row.provenance ?? null,
     ...rel,
@@ -408,7 +410,13 @@ export async function updateArticle(
     });
   }
 
-  const document = body.document ? migrateDocumentToV2(body.document) : storedDocument(row.document);
+  const previous = storedDocument(row.document);
+  // Only a request that carries a document touches the column. Resolving it to the stored
+  // value meant a metadata-only PATCH rewrote the body with whatever the read produced -
+  // and for a malformed column that read produces an empty document, so `PATCH {title}`
+  // silently erased the bytes and filed no revision, because the revision guard below only
+  // fires when the caller sent a document.
+  const document = body.document ? migrateDocumentToV2(body.document) : previous.document;
   const seo = body.seo ? { ...row.seo, ...body.seo } : row.seo;
   const updatedBy = actorUserId(actor);
   const featuredMediaId = body.featuredMediaId !== undefined ? body.featuredMediaId : row.featuredMediaId;
@@ -435,7 +443,7 @@ export async function updateArticle(
         slug,
         dek: body.dek !== undefined ? body.dek : row.dek,
         excerpt: body.excerpt !== undefined ? body.excerpt : row.excerpt,
-        document,
+        ...(body.document ? { document } : {}),
         seo,
         provenance: body.provenance !== undefined ? body.provenance : row.provenance,
         featuredMediaId,
@@ -447,7 +455,24 @@ export async function updateArticle(
       .returning();
     if (!result) throw await concurrentChange(tx, siteId, articleId, row.version);
 
-    if (body.document && JSON.stringify(document) !== JSON.stringify(storedDocument(row.document))) {
+    // The stored body could not be read, and this update is about to replace it. Keep the
+    // raw bytes as a revision of their own: after the write there is no other copy, and a
+    // read-degraded document written back over the original destroys it silently.
+    if (body.document && !previous.readable) {
+      const rawRev = await tx
+        .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.articleId, articleId));
+      await tx.insert(articleRevisions).values({
+        articleId,
+        revisionNumber: Number(rawRev[0]?.n ?? 0) + 1,
+        document: row.document as never,
+        createdBy: updatedBy,
+        note: "documento anterior ilegivel (preservado)",
+      });
+    }
+
+    if (body.document && (!previous.readable || JSON.stringify(document) !== JSON.stringify(previous.document))) {
       const maxRev = await tx
         .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
         .from(articleRevisions)
@@ -569,7 +594,7 @@ export async function listRevisions(db: Db, siteId: string, articleId: string) {
     id: r.id,
     articleId: r.articleId,
     revisionNumber: r.revisionNumber,
-    document: storedDocument(r.document),
+    document: storedDocument(r.document).document,
     createdBy: r.createdBy,
     note: r.note,
     createdAt: r.createdAt.toISOString(),
@@ -611,6 +636,17 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
 
   const publishedAt = row.publishedAt ?? new Date();
   const updatedBy = actorUserId(actor);
+  // The worker refuses to promote an article whose body it cannot read, because filing a
+  // degraded document as the revision for a publish puts an empty revision in the history
+  // that the CMS restore button writes straight back over the live article. The manual
+  // publish path files the same revision and had no such guard.
+  const body = storedDocument(row.document);
+  if (!body.readable) {
+    throw conflict("the stored document cannot be read; fix the article body before publishing", {
+      articleId,
+      field: "document",
+    });
+  }
 
   const updated = await db.transaction(async (tx) => {
     const [result] = await tx
@@ -634,7 +670,7 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
     await tx.insert(articleRevisions).values({
       articleId,
       revisionNumber: Number(maxRev[0]?.n ?? 0) + 1,
-    document: storedDocument(row.document),
+      document: body.document,
       createdBy: updatedBy,
       note: note ?? "published",
     });

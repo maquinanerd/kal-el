@@ -160,6 +160,32 @@ describe("articles", () => {
     expect(read.statusCode).toBe(200);
     expect(read.json().data.document).toEqual({ version: 2, nodes: [] });
 
+    // a PATCH that does not carry a document must not touch the column: resolving it to
+    // the degraded read meant `PATCH {title}` silently replaced the original bytes with an
+    // empty document, and filed no revision, because the revision guard only fires when
+    // the caller sent one
+    const metadataOnly = await ctx.app.inject({
+      method: "PATCH",
+      url: `/v1/sites/${siteId}/articles/${article.id}`,
+      headers: articleHeaders(),
+      payload: { title: "Só o título" },
+    });
+    expect(metadataOnly.statusCode).toBe(200);
+    const stillBroken = await ctx.db.query.articles.findFirst({ where: eq(articles.id, article.id) });
+    expect(stillBroken?.document).toEqual({});
+
+    // publishing refuses, exactly as the scheduler does: the revision it would file is an
+    // empty document that the CMS restore button writes back over the live article
+    const refused = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles/${article.id}/publish`,
+      headers: articleHeaders(),
+      payload: {},
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error.message).toMatch(/cannot be read/);
+
+    // and a PATCH that does carry one repairs it, keeping the raw bytes in the history
     const repaired = await ctx.app.inject({
       method: "PATCH",
       url: `/v1/sites/${siteId}/articles/${article.id}`,
@@ -168,6 +194,12 @@ describe("articles", () => {
     });
     expect(repaired.statusCode).toBe(200);
     expect(repaired.json().data.document.nodes).toHaveLength(1);
+
+    const kept = await ctx.db
+      .select()
+      .from(articleRevisions)
+      .where(eq(articleRevisions.articleId, article.id));
+    expect(kept.some((r) => r.note === "documento anterior ilegivel (preservado)")).toBe(true);
   });
 
   it("publishes an article exactly once and emits an outbox event", async () => {
