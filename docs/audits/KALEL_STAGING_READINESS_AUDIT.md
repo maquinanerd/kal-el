@@ -174,14 +174,14 @@ Detalhe completo de visual/responsivo/a11y em
 | `pnpm -r typecheck` | PASS (13 projetos) |
 | `pnpm -r lint` | PASS (13 projetos) |
 | `pnpm -r build` | PASS |
-| `pnpm -r test` | **211 passed, 0 failed, 0 skipped** (era 139) |
+| `pnpm -r test` | **222 passed, 0 failed, 0 skipped** (era 139) |
 | Playwright | **24 passed, 0 failed, 0 skipped** (era 2) |
 | axe (WCAG 2.1 A+AA, 76 varreduras) | **0 violações** |
 | Navegação alcançável (190 medições) | **190/190** |
 | Overflow horizontal | 0 |
 | Erros de console na varredura | 0 |
 
-Distribuicao dos 211: api 136 · importer 18 · contracts 15 · db 8 · worker 8 · editor 7 ·
+Distribuicao dos 222: api 146 · importer 18 · contracts 15 · db 8 · worker 8 · editor 7 ·
 auth 5 · sdk 5 · design-system 5 · fixture 4.
 
 *Media Detail* entrou nas varreduras nesta rodada (180 → 190 medicoes, 72 → 76 varreduras
@@ -383,6 +383,52 @@ Registrados porque a origem importa: ambos foram encontrados por verificacao, na
 
 ---
 
+## 5c. Revisao independente: o que ela encontrou, e o que isso diz
+
+Apos o fechamento dos nove P1, tres revisoes independentes adversariais foram executadas
+em sequencia, cada uma apontada para as correcoes da anterior.
+
+| revisao | achados | criados pela correcao anterior |
+|---|---|---|
+| 1a | 6 | 4 |
+| 2a | 8 | 3 |
+| 3a | 11 | 3, mais **2 correcoes que nao existiam** |
+
+**A taxa nao esta convergindo.** Cada rodada encontra defeitos em quantidade comparavel, e
+uma fracao consistente e criada pela rodada imediatamente anterior. Isso nao e sinal de
+trabalho malfeito: e o que acontece ao mexer ao mesmo tempo em workflow, idempotencia,
+permissoes e contrato de integracao, onde cada correcao cria uma fronteira nova.
+
+### O achado mais serio nao foi de codigo
+
+O commit `27b9eaa` afirmava oito correcoes e continha seis. `packages/importer/src/import.ts`
+e `apps/worker/src/worker.ts` nao aparecem em sua lista de arquivos. Os scripts de edicao
+reportaram sucesso sem verificar que a substituicao casou, e a mensagem de commit passou a
+afirmar trabalho que a arvore nao continha.
+
+Duas consequencias que importam mais que o defeito em si:
+
+1. **Nenhum gate pegou.** Typecheck, lint e 219 testes passavam. Uma correcao ausente e um
+   teste ausente sao indistinguiveis por gate verde — se nada exercita o comportamento que
+   a correcao deveria criar, sua ausencia e invisivel.
+2. **O desenho descrito tambem estava errado.** O guard de documento derivaria completude
+   por grep de `"media not imported"` em warnings de escopo de lote. Galeria totalmente
+   perdida empurra outra string; galeria parcialmente resolvida nao empurrava nada; e
+   warnings de lote fariam a falha de um artigo congelar o documento de todos os outros.
+   `finalizeDocument` passou a sinalizar degradacao diretamente, por artigo.
+
+O commit seguinte declara isso no registro permanente em vez de reescrever a historia.
+
+### Implicacao para a Definition of Done
+
+Declarar `P1 = 0` em sentido absoluto nao seria defensavel com esta evidencia. O que e
+defensavel — e o que este documento afirma — e **zero P1 conhecidos apos tres revisoes
+independentes adversariais**, com a taxa de descoberta registrada acima. Uma quarta revisao
+provavelmente encontraria mais; a decisao de parar e de escopo, nao uma conclusao de que o
+codigo esta livre de defeitos.
+
+---
+
 ## 6. O que continua aberto
 
 ### Bloqueia staging
@@ -445,15 +491,22 @@ e Payload contra fixtures; revisão adversarial de segurança de `apps/api`, `pa
 | | |
 |---|---|
 | P0 remanescentes | **0** |
-| P1 remanescentes | **0** |
-| P2 remanescentes | documentados na secao 6 |
+| P1 remanescentes | **0 conhecidos**, apos tres revisoes independentes (ver 5c) |
+| P2 remanescentes | documentados na secao 6 e na secao 10 do PIPELINE_API |
 | **READY FOR STAGING** | **SIM** |
-| **READY FOR PRODUCTION** | **NAO** - PROD-1...4 |
+| **READY FOR PRODUCTION** | **NAO** — PROD-1...4 |
 
-A Definition of Done exigia `P0 = 0` e `P1 = 0`. **Ambos foram atingidos**, cada P1 com
-regressao propria, sem reclassificar nada para P2 para fechar o gate.
+A Definition of Done exigia `P0 = 0` e `P1 = 0`. Os nove P1 originais (P1-A ... P1-I) foram
+fechados, cada um com regressao propria, sem reclassificar nada para P2 para fechar o gate.
+As tres revisoes independentes que se seguiram encontraram 25 defeitos adicionais, todos
+corrigidos.
+
+**A qualificacao importa.** Como a secao 5c documenta, a taxa de descoberta nao convergiu:
+cada revisao encontrou defeitos em quantidade comparavel a anterior. `P1 = 0` aqui significa
+"zero conhecidos apos tres passagens adversariais", nao "livre de defeitos". Uma quarta
+revisao provavelmente encontraria mais.
 
 Producao segue bloqueada por quatro lacunas operacionais (PROD-1...4 na secao 6), que por
 instrucao explicita nao foram tratadas nesta rodada. A mais grave continua sendo
 `logger: false`: toda implantacao real sobe sem log de servidor, o que torna invisivel em
-operacao exatamente a classe de defeito que estas duas auditorias encontraram lendo codigo.
+operacao exatamente a classe de defeito que estas auditorias encontraram lendo codigo.
