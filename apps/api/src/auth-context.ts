@@ -14,6 +14,15 @@ export const PERMISSIONS = {
   articleSubmit: "articles.submit",
   articleApprove: "articles.approve",
   articleDelete: "articles.delete",
+  /**
+   * Read the raw stored bytes of an unreadable article document, and replace it.
+   *
+   * Deliberately separate from `articles.update`: repairing a corrupt body means seeing
+   * whatever is actually in the column - which is unvalidated data from a restore, a
+   * hand-run statement or a bad migration - and then overwriting the only copy of it.
+   * That is an operator action, not an editing action, and an `autor` must not have it.
+   */
+  articleRecover: "articles.recover",
   categoryManage: "taxonomy.categories.manage",
   tagManage: "taxonomy.tags.manage",
   entityManage: "taxonomy.entities.manage",

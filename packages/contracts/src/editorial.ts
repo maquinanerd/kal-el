@@ -392,6 +392,31 @@ export const publishArticleBodySchema = z
   })
   .strict();
 
+/**
+ * Deliberate replacement of an article's stored document (A6 recovery).
+ *
+ * Separate from `updateArticleBodySchema` on purpose: this endpoint destroys the current
+ * bytes, so the request may carry nothing but the replacement and a note. Anything else
+ * an operator wants to change goes through the ordinary PATCH.
+ */
+export const replaceDocumentBodySchema = z
+  .object({
+    document: documentSchema,
+    note: z.string().max(500).optional(),
+  })
+  .strict();
+
+/**
+ * Machine-readable states an article can be in that an editor must act on.
+ *
+ * `document_unreadable` is what the CMS turns into "this document needs repair": the
+ * stored body does not parse, every reader is showing an empty document, and editing
+ * normally would overwrite whatever is really in the column.
+ */
+export const QUALITY_FLAGS = {
+  documentUnreadable: "document_unreadable",
+} as const;
+
 export const scheduleArticleBodySchema = z
   .object({
     scheduledAt: z.string().datetime({ offset: true }),
@@ -433,6 +458,8 @@ export type Source = z.infer<typeof sourceSchema>;
 export type CreateSourceBody = z.infer<typeof createSourceBodySchema>;
 export type UpdateSourceBody = z.infer<typeof updateSourceBodySchema>;
 export type ArticleRevision = z.infer<typeof articleRevisionSchema>;
+export type ReplaceDocumentBody = z.infer<typeof replaceDocumentBodySchema>;
+export type QualityFlag = (typeof QUALITY_FLAGS)[keyof typeof QUALITY_FLAGS];
 
 // ---- document migration (v1 <-> v2) ----
 
