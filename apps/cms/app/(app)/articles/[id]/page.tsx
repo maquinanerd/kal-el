@@ -150,6 +150,11 @@ export default function ArticlePage() {
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
 
   const loadedRef = useRef(false);
+  // Every autosave sent `document`, including one triggered by editing the title. If the
+  // stored body could not be read the API returns an empty document, the editor loads it,
+  // and the first keystroke anywhere on the page writes that empty document over the
+  // original bytes. The body is sent only when the body was actually touched.
+  const docTouchedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef({ title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version });
   draftRef.current = { title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version };
@@ -200,7 +205,7 @@ export default function ArticlePage() {
           title: s.title,
           dek: s.dek || null,
           slug: s.slug || null,
-          document: s.doc,
+          ...(docTouchedRef.current ? { document: s.doc } : {}),
           seo: {
             seoTitle: s.seoTitle || null,
             metaDescription: s.seoDesc || null,
@@ -313,16 +318,18 @@ export default function ArticlePage() {
 
   function restore(revision: ArticleRevision) {
     const target = (revision.document as ArticleDocumentV2) ?? EMPTY_DOC;
-    // A revision whose stored document could not be read comes back empty, and this
-    // writes it straight over the live article. Ask first: an unreadable revision is
-    // indistinguishable from a genuinely empty one in the list, and the difference is a
-    // destroyed body.
-    if (target.nodes.length === 0 && doc.nodes.length > 0) {
+    // A revision whose stored document could not be read comes back empty, and this writes
+    // it straight over the live article. Confirm on every empty revision, not only when the
+    // editor's own copy is non-empty: when the article itself is the unreadable one - the
+    // case that motivates the guard - the editor is holding an empty document too, and a
+    // guard that compared against it was inert exactly then.
+    if (target.nodes.length === 0) {
       const ok = window.confirm(
-        `A revisão ${revision.revisionNumber} está vazia. Restaurá-la apaga o conteúdo atual. Continuar?`,
+        `A revisão ${revision.revisionNumber} está vazia. Restaurá-la deixa o artigo sem conteúdo. Continuar?`,
       );
       if (!ok) return;
     }
+    docTouchedRef.current = true;
     setDoc(target);
     setEditorKey((k) => k + 1);
     void save({ document: target });
@@ -376,7 +383,7 @@ export default function ArticlePage() {
             key={`${article?.id ?? "loading"}-${editorKey}`}
             ref={editorRef}
             document={doc}
-            onChange={(next) => { setDoc(next); scheduleSave(); }}
+            onChange={(next) => { docTouchedRef.current = true; setDoc(next); scheduleSave(); }}
             statusSlot={
               <>
                 <span className="peg-save-state" role="status" aria-live="polite">

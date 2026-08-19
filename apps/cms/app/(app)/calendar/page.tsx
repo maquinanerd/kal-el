@@ -14,6 +14,7 @@ export default function CalendarPage() {
   // "Nada agendado" from first paint until up to twenty sequential requests resolve is the
   // same wrong answer the pagination was added to remove, just earlier in the sequence
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!activeSiteId) {
@@ -28,8 +29,11 @@ export default function CalendarPage() {
       const all: ArticleSummary[] = [];
       let cursor: string | undefined;
       let note: string | null = null;
+      let failedRun = false;
       const MAX_PAGES = 20;
       for (let page = 0; page < MAX_PAGES; page++) {
+        // a site switch used to keep paging the old site for up to seventeen more requests
+        if (cancelled) return;
         try {
           const res = await listArticles(activeSiteId, { status: "scheduled", limit: 100, cursor });
           all.push(...res.items);
@@ -40,12 +44,14 @@ export default function CalendarPage() {
           if (page === MAX_PAGES - 1) note = `Mostrando os primeiros ${all.length} agendamentos.`;
         } catch {
           note = all.length === 0 ? "Falha ao carregar o calendário." : "Falha ao carregar parte do calendário.";
+          failedRun = true;
           break;
         }
       }
       if (!cancelled) {
         setItems(all);
         setNotice(note);
+        setFailed(failedRun);
         setLoading(false);
       }
     })();
@@ -75,6 +81,10 @@ export default function CalendarPage() {
       {notice && <Alert tone="warning">{notice}</Alert>}
       {loading ? (
         <p className="peg-table__muted">Carregando…</p>
+      ) : items.length === 0 && failed ? (
+        // "Nada agendado" on a page that failed to find out is the same wrong answer the
+        // pagination and the loading state were added to remove, one case further along
+        <EmptyState title="Não foi possível carregar" body="Tente novamente em instantes." />
       ) : items.length === 0 ? (
         <EmptyState title="Nada agendado" body="Agende artigos para aparecerem aqui." />
       ) : (

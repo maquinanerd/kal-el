@@ -227,10 +227,14 @@ export async function importBatch(
       // The diff is field-by-field over exactly what an update can carry. Comparing whole
       // objects would report "changed" every run, because the stored article carries the
       // normalised full SEO shape while the source supplies only a few keys.
+
+
+      // counted only once the read succeeded: incrementing before it meant a failed
+      // lookup counted the article as both `existing` and `failed`, and pushed an id the
+      // run never actually read into `articleIds`, which callers use to drive later work
+      const full = await client.getArticle(siteId, first.id);
       report.existing.articles++;
       report.articleIds.push(first.id);
-
-      const full = await client.getArticle(siteId, first.id);
       const sorted = (ids: readonly string[]) => [...ids].sort();
 
       const desired: Record<string, unknown> = {

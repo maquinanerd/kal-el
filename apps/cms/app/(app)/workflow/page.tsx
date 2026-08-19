@@ -112,9 +112,13 @@ export default function WorkflowPage() {
     // in flight the effect issues its own load, and reloading with the captured pair would
     // win the generation race and paint the old site's rows under the new selection.
     const issuedAt = generation.current;
+    // Returns false when the user has already moved to another tab or site: the message
+    // that follows would then be about a list nobody is looking at, and its "a fila está
+    // atualizada" would be a claim about the wrong tab.
     const reload = async () => {
-      if (generation.current !== issuedAt) return;
+      if (generation.current !== issuedAt) return false;
       await load(activeSiteId, active);
+      return true;
     };
     try {
       // The idempotency key is scoped to the version the action was issued against, and
@@ -128,16 +132,16 @@ export default function WorkflowPage() {
         throw err;
       });
       if (!fresh) {
-        await reload();
-        setNotice(`"${row.title}" não existe mais. A fila foi atualizada.`);
+        if (await reload()) setNotice(`"${row.title}" não existe mais. A fila foi atualizada.`);
         return;
       }
       // Only the status decides. The key at the next line is built from `fresh.version`,
       // so a version that moved is already unspent - and reporting "in_review → in_review"
       // because a writer edited the text would be a message about nothing.
       if (fresh.status !== row.status) {
-        await reload();
-        setNotice(`"${row.title}" mudou desde que a fila foi carregada (${row.status} → ${fresh.status}). Nada foi alterado; a fila está atualizada.`);
+        if (await reload()) {
+          setNotice(`"${row.title}" mudou desde que a fila foi carregada (${row.status} → ${fresh.status}). Nada foi alterado; a fila está atualizada.`);
+        }
         return;
       }
       const key = `cms.${row.id}.${action}.v${fresh.version}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
@@ -146,8 +150,7 @@ export default function WorkflowPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) setError("Sem permissão para esta ação");
       else if (err instanceof ApiError && err.status === 409) {
-        setError("O artigo mudou durante a ação. A fila foi atualizada.");
-        await reload();
+        if (await reload()) setError("O artigo mudou durante a ação. A fila foi atualizada.");
       } else setError(err instanceof ApiError ? err.message : "Falha na ação");
     } finally {
       setPending(null);

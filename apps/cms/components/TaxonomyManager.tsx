@@ -22,10 +22,11 @@ function slugify(input: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      // the tightest taxonomy slug contract is `tagSchema` at 100 (categories, authors
-      // and sources allow 140), and the server stores what the client sends - so an
-      // over-long tag name used to come back as a raw English 400. Names themselves are
-      // still sent unmodified and can still be refused on length.
+      // Of the kinds that carry a slug through this component, tags cap at 100 and
+      // categories and authors at 140; sources and entities have no slug field at all and
+      // pass slugField={false}. The server stores what the client sends, so an over-long
+      // tag slug used to come back as a raw English 400. Names themselves are still sent
+      // unmodified and can still be refused on length.
       .slice(0, 100) || "untitled"
   );
 }
