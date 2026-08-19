@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, Badge, Button, EmptyState, PageHead, Table, type BadgeTone, type Column } from "@kal-el/design-system";
 import { useAuth } from "../../../lib/auth";
@@ -57,29 +57,39 @@ export default function WorkflowPage() {
   // one action at a time: a double click used to fire two POSTs and surface the second
   // as a raw INVALID_TRANSITION in a Portuguese UI
   const [pending, setPending] = useState<string | null>(null);
+  // Every fetch is stamped with the (site, tab) it was issued for. Without it, switching
+  // tabs while a "Carregar mais" was in flight appended in-review rows into the drafts
+  // list and left the drafts cursor pointing at the in-review query.
+  const generation = useRef(0);
 
   const load = useCallback(async (siteId: string, status: ArticleStatus) => {
+    const mine = ++generation.current;
     setLoading(true);
     setError(null);
     try {
       const page = await listArticles(siteId, { status, limit: PAGE_SIZE });
+      if (mine !== generation.current) return;
       setItems(page.items);
       setCursor(page.nextCursor);
     } catch (err) {
+      if (mine !== generation.current) return;
       setError(err instanceof ApiError ? err.message : "Falha ao carregar");
     } finally {
-      setLoading(false);
+      if (mine === generation.current) setLoading(false);
     }
   }, []);
 
   async function loadMore() {
     if (!activeSiteId || !cursor || loadingMore) return;
+    const mine = generation.current;
     setLoadingMore(true);
     try {
       const page = await listArticles(activeSiteId, { status: active, limit: PAGE_SIZE, cursor });
+      if (mine !== generation.current) return;
       setItems((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
+      if (mine !== generation.current) return;
       setError(err instanceof ApiError ? err.message : "Falha ao carregar mais");
     } finally {
       setLoadingMore(false);
@@ -103,8 +113,19 @@ export default function WorkflowPage() {
       // response: 200, no transition, no audit row, and a UI that reports success. The
       // server-side version predicate cannot catch it because the replay happens before
       // the handler runs. So re-read, and act only on what is actually there.
-      const fresh = await getArticle(activeSiteId, row.id);
-      if (fresh.status !== row.status || fresh.version !== row.version) {
+      const fresh = await getArticle(activeSiteId, row.id).catch((err) => {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      });
+      if (!fresh) {
+        await load(activeSiteId, active);
+        setNotice(`"${row.title}" não existe mais. A fila foi atualizada.`);
+        return;
+      }
+      // Only the status decides. The key at the next line is built from `fresh.version`,
+      // so a version that moved is already unspent - and reporting "in_review → in_review"
+      // because a writer edited the text would be a message about nothing.
+      if (fresh.status !== row.status) {
         await load(activeSiteId, active);
         setNotice(`"${row.title}" mudou desde que a fila foi carregada (${row.status} → ${fresh.status}). Nada foi alterado; a fila está atualizada.`);
         return;

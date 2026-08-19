@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { EmptyState, PageHead, Table, type Column } from "@kal-el/design-system";
+import { Alert, EmptyState, PageHead, Table, type Column } from "@kal-el/design-system";
 import { useAuth } from "../../../lib/auth";
 import { listArticles, type ArticleSummary } from "../../../lib/api";
 
@@ -10,6 +10,7 @@ export default function CalendarPage() {
   const router = useRouter();
   const { activeSiteId } = useAuth();
   const [items, setItems] = useState<ArticleSummary[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeSiteId) return;
@@ -19,17 +20,26 @@ export default function CalendarPage() {
     void (async () => {
       const all: ArticleSummary[] = [];
       let cursor: string | undefined;
-      for (let page = 0; page < 20; page++) {
+      let note: string | null = null;
+      const MAX_PAGES = 20;
+      for (let page = 0; page < MAX_PAGES; page++) {
         try {
           const res = await listArticles(activeSiteId, { status: "scheduled", limit: 100, cursor });
           all.push(...res.items);
           if (!res.nextCursor) break;
           cursor = res.nextCursor;
+          // silently stopping here would recreate the defect this loop replaced, only
+          // further along: an empty calendar reads as "nothing scheduled"
+          if (page === MAX_PAGES - 1) note = `Mostrando os primeiros ${all.length} agendamentos.`;
         } catch {
+          note = all.length === 0 ? "Falha ao carregar o calendário." : "Falha ao carregar parte do calendário.";
           break;
         }
       }
-      if (!cancelled) setItems(all);
+      if (!cancelled) {
+        setItems(all);
+        setNotice(note);
+      }
     })();
     return () => {
       cancelled = true;
@@ -54,6 +64,7 @@ export default function CalendarPage() {
   return (
     <>
       <PageHead title="Calendário editorial" description="Artigos agendados para publicação." />
+      {notice && <Alert tone="warning">{notice}</Alert>}
       {items.length === 0 ? <EmptyState title="Nada agendado" body="Agende artigos para aparecerem aqui." /> : <Table columns={columns} rows={items} selectable={false} />}
     </>
   );

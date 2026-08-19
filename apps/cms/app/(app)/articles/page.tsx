@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, Badge, Button, EmptyState, IconPlus, PageHead, Table, type BadgeTone, type Column } from "@kal-el/design-system";
 import { useAuth } from "../../../lib/auth";
@@ -26,28 +26,38 @@ export default function ArticlesPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
+  // switching the active site mid-request used to append the other site's articles into
+  // this list, and clicking one routed to an id that 404s under the current site
+  const generation = useRef(0);
+
   const load = useCallback(async (siteId: string) => {
+    const mine = ++generation.current;
     setLoading(true);
     setError(null);
     try {
       const page = await listArticles(siteId, { limit: 50 });
+      if (mine !== generation.current) return;
       setArticles(page.items);
       setCursor(page.nextCursor);
     } catch (err) {
+      if (mine !== generation.current) return;
       setError(err instanceof ApiError ? err.message : "Falha ao carregar artigos");
     } finally {
-      setLoading(false);
+      if (mine === generation.current) setLoading(false);
     }
   }, []);
 
   async function loadMore() {
     if (!activeSiteId || !cursor || loadingMore) return;
+    const mine = generation.current;
     setLoadingMore(true);
     try {
       const page = await listArticles(activeSiteId, { limit: 50, cursor });
+      if (mine !== generation.current) return;
       setArticles((prev) => [...prev, ...page.items]);
       setCursor(page.nextCursor);
     } catch (err) {
+      if (mine !== generation.current) return;
       setError(err instanceof ApiError ? err.message : "Falha ao carregar mais");
     } finally {
       setLoadingMore(false);

@@ -22,7 +22,9 @@ function slugify(input: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .slice(0, 120) || "untitled"
+      // the taxonomy contracts cap slugs at 100, not the 120 articles use, and the
+      // server stores what the client sends - so an over-long name got a raw English 400
+      .slice(0, 100) || "untitled"
   );
 }
 
