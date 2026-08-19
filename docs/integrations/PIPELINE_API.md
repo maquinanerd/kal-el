@@ -136,6 +136,14 @@ sucesso. Para essas duas, **envie `Idempotency-Key`**: é o que torna o retry se
 Transição genuinamente ilegal → **409 `INVALID_TRANSITION`** com `details.from` e
 `details.to`.
 
+**Concorrência.** As transições são `UPDATE` guardados por versão: se o artigo mudar entre
+a leitura e a escrita, a transição não é aplicada e a resposta é **409 `VERSION_CONFLICT`**
+com `details.expectedVersion` (a versão contra a qual a transição foi emitida),
+`details.currentVersion` e `details.currentStatus`. Isso é uma corrida perdida, não um
+retry: releia o artigo e decida se a ação ainda faz sentido. O no-op de reaplicação
+descrito acima continua valendo — ele acontece antes do `UPDATE` e não chega a disputar
+versão.
+
 ### `If-Match`
 
 **Opcional.** Sem ele o update é last-write-wins. Com ele, versão divergente →
@@ -289,7 +297,7 @@ Envelope: `{"error": {"code", "message", "details"?, "requestId"?}}`.
 | `SITE_SCOPE_MISMATCH` | 403 | token ou sessão não alcança este site |
 | `NOT_FOUND` | 404 | recurso inexistente neste site |
 | `CONFLICT` | 409 | slug duplicado, mídia em uso |
-| `VERSION_CONFLICT` | 409 | `If-Match` divergente |
+| `VERSION_CONFLICT` | 409 | `If-Match` divergente, ou transição que perdeu a corrida de versão |
 | `IDEMPOTENCY_REPLAY` | 409 | mesma chave, corpo diferente |
 | `INVALID_TRANSITION` | 409 | transição ilegal |
 | `PAYLOAD_TOO_LARGE` | 413 | arquivo acima do limite |

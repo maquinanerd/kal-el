@@ -423,7 +423,7 @@ export async function updateArticle(
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw versionConflict("article changed concurrently");
+    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
 
     if (body.document && JSON.stringify(document) !== JSON.stringify(row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT)) {
       const maxRev = await tx
@@ -547,11 +547,29 @@ export async function listRevisions(db: Db, siteId: string, articleId: string) {
     id: r.id,
     articleId: r.articleId,
     revisionNumber: r.revisionNumber,
-    document: migrateDocumentToV2(r.document),
+    // the only unguarded migrate call site: a NOT NULL jsonb column still accepts
+    // 'null'::jsonb, and one such row made the whole revision history 500
+    document: r.document ? migrateDocumentToV2(r.document) : DEFAULT_DOCUMENT,
     createdBy: r.createdBy,
     note: r.note,
     createdAt: r.createdAt.toISOString(),
   }));
+}
+
+/**
+ * A guarded transition lost its race. Re-read so the 409 says what to retry against
+ * instead of only saying no: PIPELINE_API documents `currentVersion` and
+ * `expectedVersion` on VERSION_CONFLICT, and these sites were sending neither.
+ */
+async function concurrentChange(db: Db, siteId: string, articleId: string, expectedVersion: number) {
+  const current = await db.query.articles.findFirst({
+    where: and(eq(articles.id, articleId), eq(articles.siteId, siteId)),
+  });
+  return versionConflict("article changed concurrently", {
+    expectedVersion,
+    currentVersion: current?.version ?? null,
+    currentStatus: current?.status ?? null,
+  });
 }
 
 export async function publishArticle(db: Db, siteId: string, articleId: string, actor: ActorRef, note?: string) {
@@ -580,7 +598,7 @@ export async function publishArticle(db: Db, siteId: string, articleId: string, 
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw versionConflict("article changed concurrently");
+    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
 
     const maxRev = await tx
       .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
@@ -646,7 +664,7 @@ export async function scheduleArticle(db: Db, siteId: string, articleId: string,
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw versionConflict("article changed concurrently");
+    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
 
     await writeAudit(tx, {
       siteId,
@@ -716,7 +734,7 @@ async function applyStatusTransition(
       })
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
-    if (!result) throw versionConflict("article changed concurrently");
+    if (!result) throw await concurrentChange(db, siteId, articleId, row.version);
 
     await writeAudit(tx, {
       siteId,

@@ -290,7 +290,10 @@ describe("retry and error contract", () => {
       action(siteA, article.id, "submit"),
     ]);
     const ok = results.filter((r) => r.statusCode === 200);
-    expect(ok.length, "both may answer 200 - one applies, one is the no-op replay").toBeGreaterThan(0);
+    // exactly one wins: with the version predicate in place the loser is either the
+    // unambiguous-target no-op (200) or a 409 VERSION_CONFLICT, never a second transition
+    expect(ok.length, "at least one applies; the other is a no-op or a version conflict").toBeGreaterThan(0);
+    expect(results.every((r) => r.statusCode === 200 || r.statusCode === 409)).toBe(true);
 
     const log = await ctx.app.inject({
       method: "GET",
