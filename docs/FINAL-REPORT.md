@@ -124,9 +124,15 @@ All additive. No deployed database exists, so no data migration is required.
 | `pnpm -r lint` | PASS — 13 projects |
 | `pnpm -r build` | PASS |
 | `pnpm -r test` | **248 passed, 0 failed, 0 skipped** |
+| `pnpm test:e2e` (Playwright) | **25 passed, 0 failed, 0 flaky** |
 
 Distribution: api 161 · importer 21 · contracts 15 · worker 13 · editor 9 · db 8 · sdk 7 ·
 auth 5 · design-system 5 · fixture 4.
+
+The e2e sweep — accessibility (axe, WCAG 2.1 A+AA), horizontal overflow and navigation
+reachability at five widths in both themes — now includes the new `/webhooks` surface, for
+the same reason it includes every other page reachable from the sidebar: a surface excluded
+from the scan is a surface nothing checks.
 
 **No new test suites were written this round** — the instruction was implementation, not
 another QA campaign, and the count is unchanged from the staging audit's 248 for that
