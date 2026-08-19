@@ -12,10 +12,16 @@ import { liftListItem, sinkListItem, splitListItem, wrapInList } from "@tiptap/p
 import type { MarkType, NodeType } from "@tiptap/pm/model";
 import { buildTiptapSchema, documentToProseMirror, proseMirrorToDocument } from "@kal-el/editor";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
-import { Menu } from "@kal-el/design-system";
+import { Button, Input, LinkDialog, Menu, Modal } from "@kal-el/design-system";
 import { deleteSlashQuery, filterSlashItems, readSlashQuery, type SlashItem, type SlashQuery } from "./slash";
 
 type Command = (state: EditorState, dispatch?: (tr: Transaction) => void, view?: EditorView) => boolean;
+
+/** Slash menu box, used to decide whether it fits below the caret. Mirrors the CSS. */
+const MENU_WIDTH = 240;
+const MENU_MAX_HEIGHT = 280;
+
+const CLOSED_LINK = { open: false, href: "", text: "", canRemove: false };
 
 export type RichTextEditorHandle = {
   insertImage: (mediaId: string, attrs?: { caption?: string; credit?: string; altText?: string }) => void;
@@ -39,6 +45,11 @@ type Props = {
    * document with `alt=""` while a picked one has to be described.
    */
   onUploadFile?: (file: File) => Promise<string | null>;
+  /**
+   * Renders the internal-article search inside the link dialog. Supplied by the article
+   * page, which owns the API client and the active site.
+   */
+  renderLinkBrowser?: (select: (href: string) => void) => ReactNode;
 };
 
 function run(view: EditorView, command: Command) {
@@ -94,11 +105,19 @@ function insertTableNode(view: EditorView) {
   view.focus();
 }
 
-export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile, statusSlot }, ref) {
+export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile, statusSlot, renderLinkBrowser }, ref) {
   const [focusMode, setFocusMode] = useState(false);
   const [inline, setInline] = useState<{ top: number; left: number } | null>(null);
   const [slash, setSlash] = useState<SlashQuery | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
+  /** Where the slash menu is drawn — the caret, not the top of the block. */
+  const [slashAt, setSlashAt] = useState<{ top: number; left: number; flip: boolean } | null>(null);
+  const [linkDialog, setLinkDialog] = useState(CLOSED_LINK);
+  const [embedOpen, setEmbedOpen] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  // Ctrl+K is bound inside the ProseMirror keymap, which is created once; the ref lets it
+  // reach the dialog opener that is defined further down.
+  const openLinkDialogRef = useRef<() => void>(() => {});
   const slashRef = useRef<{ q: SlashQuery | null; index: number }>({ q: null, index: 0 });
   const uploadRef = useRef(onUploadFile);
   uploadRef.current = onUploadFile;
@@ -249,6 +268,33 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
             return false;
           },
         }),
+        /**
+         * Writing shortcuts. `baseKeymap` carries none of these - it is Enter, Backspace,
+         * Delete and friends - and `history()` is only the state plugin, so nothing was
+         * bound to undo either. Ctrl+B, Ctrl+I and Ctrl+Z were all inert in the shipped
+         * editor; the product review confirmed it in Chrome. An editor that needs the
+         * mouse for bold is not keyboard-first.
+         *
+         * `Mod-` resolves to Cmd on macOS and Ctrl elsewhere, so both platforms are
+         * covered by one binding. These live on the EDITOR view, not on `window`, so they
+         * cannot fire while focus is in the title field or the inspector.
+         */
+        keymap({
+          "Mod-b": toggleMark(schema.marks.bold),
+          "Mod-i": toggleMark(schema.marks.italic),
+          "Mod-e": toggleMark(schema.marks.code),
+          "Mod-k": () => {
+            openLinkDialogRef.current();
+            return true;
+          },
+          "Mod-z": undo,
+          "Mod-y": redo,
+          "Mod-Shift-z": redo,
+          "Mod-Alt-0": setBlockType(schema.nodes.paragraph),
+          "Mod-Alt-2": setBlockType(schema.nodes.heading, { level: 2 }),
+          "Mod-Alt-3": setBlockType(schema.nodes.heading, { level: 3 }),
+          "Mod-Alt-4": setBlockType(schema.nodes.heading, { level: 4 }),
+        }),
         keymap({ Enter: splitListItem(listItem), Tab: sinkListItem(listItem), "Shift-Tab": liftListItem(listItem) }),
         keymap(baseKeymap),
       ],
@@ -276,6 +322,30 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         if (!q) {
           slashRef.current.index = 0;
           setSlashIndex(0);
+          setSlashAt(null);
+        } else {
+          /**
+           * Anchor the menu to the caret. It used to be pinned by CSS to the top-left of
+           * the writing surface, so typing `/` halfway down an article opened the menu
+           * over paragraphs the writer had already written, nowhere near the cursor.
+           *
+           * `coordsAtPos` gives viewport coordinates for the slash character; they are
+           * made relative to the positioned host. When there is not enough room below the
+           * caret the menu flips above it, so it never runs off the bottom.
+           */
+          const v = viewRef.current;
+          const host = hostRef.current?.getBoundingClientRect();
+          if (v && host) {
+            const caret = v.coordsAtPos(q.from);
+            const spaceBelow = window.innerHeight - caret.bottom;
+            const flip = spaceBelow < MENU_MAX_HEIGHT && caret.top > spaceBelow;
+            setSlashAt({
+              top: flip ? caret.top - host.top : caret.bottom - host.top + 6,
+              // keep the menu inside the surface even when the caret is near its right edge
+              left: Math.max(0, Math.min(caret.left - host.left, host.width - MENU_WIDTH)),
+              flip,
+            });
+          }
         }
 
         // Contextual inline toolbar: anchored to the selection, only while there IS one.
@@ -341,17 +411,78 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
 
   const view = viewRef.current;
 
-  function setLink() {
-    if (!view) return;
-    const href = window.prompt("URL do link (https://… ou /slug-interno)");
-    if (href == null) return;
-    const { state } = view;
+  /**
+   * Reads the link mark the caret currently sits in, so the dialog can open pre-filled
+   * and offer "remove" instead of silently creating a second overlapping link.
+   */
+  function currentLink(): { href: string; text: string; from: number; to: number } | null {
+    const v = viewRef.current;
+    if (!v) return null;
+    const { state } = v;
     const markType = state.schema.marks.link;
-    const { from, to } = state.selection;
-    let tr = state.tr.removeMark(from, to, markType);
-    tr = tr.addMark(from, to, markType.create({ href }));
-    view.dispatch(tr);
-    view.focus();
+    const { from, to, $from } = state.selection;
+    const mark = markType.isInSet(state.storedMarks ?? $from.marks());
+    if (!mark) return null;
+    // widen to the full extent of the mark, so editing it replaces the whole link
+    let start = from;
+    let end = to;
+    const parent = $from.parent;
+    const startIndex = $from.index();
+    if (parent.child(startIndex)) {
+      let pos = $from.start();
+      for (let i = 0; i < parent.childCount; i += 1) {
+        const child = parent.child(i);
+        const childEnd = pos + child.nodeSize;
+        if (pos <= from && from <= childEnd && markType.isInSet(child.marks)) {
+          start = pos;
+          end = childEnd;
+          break;
+        }
+        pos = childEnd;
+      }
+    }
+    return { href: String(mark.attrs.href ?? ""), text: state.doc.textBetween(start, end), from: start, to: end };
+  }
+
+  function openLinkDialog() {
+    const existing = currentLink();
+    setLinkDialog({
+      open: true,
+      href: existing?.href ?? "",
+      text: existing?.text ?? (view ? view.state.doc.textBetween(view.state.selection.from, view.state.selection.to) : ""),
+      canRemove: existing !== null,
+    });
+  }
+  openLinkDialogRef.current = openLinkDialog;
+
+  function applyLink(href: string) {
+    const v = viewRef.current;
+    if (!v) return;
+    const { state } = v;
+    const markType = state.schema.marks.link;
+    const existing = currentLink();
+    const from = existing ? existing.from : state.selection.from;
+    const to = existing ? existing.to : state.selection.to;
+    if (from === to) {
+      // no selection and not inside a link: insert the URL as its own linked text
+      const node = state.schema.text(href, [markType.create({ href })]);
+      v.dispatch(state.tr.replaceSelectionWith(node, false));
+    } else {
+      let tr = state.tr.removeMark(from, to, markType);
+      tr = tr.addMark(from, to, markType.create({ href }));
+      v.dispatch(tr);
+    }
+    setLinkDialog(CLOSED_LINK);
+    v.focus();
+  }
+
+  function removeLink() {
+    const v = viewRef.current;
+    const existing = currentLink();
+    if (!v || !existing) return;
+    v.dispatch(v.state.tr.removeMark(existing.from, existing.to, v.state.schema.marks.link));
+    setLinkDialog(CLOSED_LINK);
+    v.focus();
   }
 
   // stable refs so the slash applier (defined above the view) can reach these
@@ -359,19 +490,11 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   const requestSourceRef = useRef<() => void>(() => {});
 
   function requestEmbed() {
-    if (!view) return;
-    const url = window.prompt("URL do vídeo (YouTube)");
-    if (!url) return;
-    const id = youtubeId(url);
-    insertAtom(view, "embed", { url, provider: id ? "youtube" : "unknown", id: id ?? null });
+    setEmbedOpen(true);
   }
 
   function requestSource() {
-    if (!view) return;
-    const label = window.prompt("Fonte (ex: IMDb)");
-    if (!label) return;
-    const url = window.prompt("URL da fonte") ?? "";
-    insertAtom(view, "source", { label, url, kind: "external" });
+    setSourceOpen(true);
   }
 
   requestEmbedRef.current = requestEmbed;
@@ -393,10 +516,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         </div>
       )}
       <div className="peg-editor__toolbar" role="toolbar" aria-label="Formatar texto">
-        <ToolbarButton label="Negrito" onClick={() => view && toggleMarkCommand(view.state.schema.marks.bold)(view)}>B</ToolbarButton>
-        <ToolbarButton label="Itálico" onClick={() => view && toggleMarkCommand(view.state.schema.marks.italic)(view)}><i>I</i></ToolbarButton>
+        <ToolbarButton label="Negrito (Ctrl+B)" onClick={() => view && toggleMarkCommand(view.state.schema.marks.bold)(view)}>B</ToolbarButton>
+        <ToolbarButton label="Itálico (Ctrl+I)" onClick={() => view && toggleMarkCommand(view.state.schema.marks.italic)(view)}><i>I</i></ToolbarButton>
         <ToolbarButton label="Código" onClick={() => view && toggleMarkCommand(view.state.schema.marks.code)(view)}>{"<>"}</ToolbarButton>
-        <ToolbarButton label="Link" onClick={setLink}>🔗</ToolbarButton>
+        <ToolbarButton label="Link (Ctrl+K)" onClick={openLinkDialog}>🔗</ToolbarButton>
         <span className="peg-editor__sep" />
         <ToolbarButton label="Parágrafo" onClick={() => view && setParagraph(view)}>P</ToolbarButton>
         <ToolbarButton label="Título 2" onClick={() => view && setHeading(view, 2)}>H2</ToolbarButton>
@@ -414,8 +537,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
           {focusMode ? "◱" : "◰"}
         </ToolbarButton>
         <span className="peg-editor__sep" />
-        <ToolbarButton label="Desfazer" onClick={() => view && run(view, undo)}>↺</ToolbarButton>
-        <ToolbarButton label="Refazer" onClick={() => view && run(view, redo)}>↻</ToolbarButton>
+        <ToolbarButton label="Desfazer (Ctrl+Z)" onClick={() => view && run(view, undo)}>↺</ToolbarButton>
+        <ToolbarButton label="Refazer (Ctrl+Shift+Z)" onClick={() => view && run(view, redo)}>↻</ToolbarButton>
         <span className="peg-editor__sep" />
         <div style={{ position: "relative" }}>
           <ToolbarButton label="Inserir" onClick={() => setMenuOpen((o) => !o)}>+</ToolbarButton>
@@ -474,7 +597,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
               className="peg-inline-toolbar__btn"
               aria-label="Link"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={setLink}
+              onClick={openLinkDialog}
             >
               🔗
             </button>
@@ -482,7 +605,18 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         )}
         <div ref={hostRef} className="peg-editor__surface" />
         {slash && slashItems.length > 0 && (
-          <div className="peg-slash-menu" role="listbox" aria-label="Inserir bloco">
+          <div
+            className="peg-slash-menu"
+            role="listbox"
+            aria-label="Inserir bloco"
+            style={
+              slashAt
+                ? slashAt.flip
+                  ? { top: "auto", left: slashAt.left, bottom: `calc(100% - ${slashAt.top}px + 6px)` }
+                  : { top: slashAt.top, left: slashAt.left }
+                : undefined
+            }
+          >
             {slashItems.map((item, i) => (
               <button
                 key={item.id}
@@ -506,9 +640,185 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
           </div>
         )}
       </div>
+
+      {/* Every native prompt the editor used is now a PEG dialog: styled, validated,
+          cancellable, and reachable by keyboard. `window.prompt` could not do any of it. */}
+      <LinkDialog
+        open={linkDialog.open}
+        initialHref={linkDialog.href}
+        initialText={linkDialog.text}
+        canRemove={linkDialog.canRemove}
+        browse={renderLinkBrowser}
+        onApply={(href) => applyLink(href)}
+        onRemove={removeLink}
+        onClose={() => {
+          setLinkDialog(CLOSED_LINK);
+          viewRef.current?.focus();
+        }}
+      />
+
+      <UrlDialog
+        open={embedOpen}
+        title="Inserir vídeo"
+        label="URL do vídeo"
+        placeholder="https://youtube.com/watch?v=…"
+        hint="Cole o endereço do YouTube. O vídeo entra como embed, nunca como marcação bruta."
+        onConfirm={(url) => {
+          const v = viewRef.current;
+          if (v) {
+            const id = youtubeId(url);
+            insertAtom(v, "embed", { url, provider: id ? "youtube" : "unknown", id: id ?? null });
+          }
+          setEmbedOpen(false);
+        }}
+        onClose={() => setEmbedOpen(false)}
+      />
+
+      <SourceDialog
+        open={sourceOpen}
+        onConfirm={(label, url) => {
+          const v = viewRef.current;
+          if (v) insertAtom(v, "source", { label, url, kind: "external" });
+          setSourceOpen(false);
+        }}
+        onClose={() => setSourceOpen(false)}
+      />
     </div>
   );
 });
+
+/** Single-URL dialog, for the embed block. */
+function UrlDialog({
+  open,
+  title,
+  label,
+  placeholder,
+  hint,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  label: string;
+  placeholder?: string;
+  hint?: string;
+  onConfirm: (url: string) => void;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setUrl("");
+      setTouched(false);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const valid = /^https?:\/\/\S+$/.test(url.trim());
+  const submit = () => {
+    setTouched(true);
+    if (valid) onConfirm(url.trim());
+  };
+
+  return (
+    <Modal
+      title={title}
+      onClose={onClose}
+      width={440}
+      footer={
+        <>
+          <span style={{ flex: 1 }} />
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" onClick={submit} disabled={touched && !valid}>Inserir</Button>
+        </>
+      }
+    >
+      <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <Input
+          label={label}
+          autoFocus
+          value={url}
+          placeholder={placeholder}
+          hint={hint}
+          error={touched && !valid ? "Informe uma URL http(s) completa." : undefined}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
+      </form>
+    </Modal>
+  );
+}
+
+/** Label + URL, for the linked-source block. Two chained prompts before this. */
+function SourceDialog({
+  open,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  onConfirm: (label: string, url: string) => void;
+  onClose: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setLabel("");
+      setUrl("");
+      setTouched(false);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const labelOk = label.trim().length > 0;
+  const urlOk = url.trim() === "" || /^https?:\/\/\S+$/.test(url.trim());
+  const submit = () => {
+    setTouched(true);
+    if (labelOk && urlOk) onConfirm(label.trim(), url.trim());
+  };
+
+  return (
+    <Modal
+      title="Fonte / referência"
+      onClose={onClose}
+      width={460}
+      footer={
+        <>
+          <span style={{ flex: 1 }} />
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" onClick={submit} disabled={touched && (!labelOk || !urlOk)}>Inserir</Button>
+        </>
+      }
+    >
+      <form className="peg-stack" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <Input
+          label="Fonte"
+          autoFocus
+          value={label}
+          placeholder="IMDb, Reuters, assessoria…"
+          error={touched && !labelOk ? "Informe o nome da fonte." : undefined}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <Input
+          label="URL"
+          optional
+          value={url}
+          placeholder="https://…"
+          hint="Deixe em branco para uma fonte sem link público."
+          error={touched && !urlOk ? "Informe uma URL http(s) completa ou deixe em branco." : undefined}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
+      </form>
+    </Modal>
+  );
+}
 
 function ToolbarButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (

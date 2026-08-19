@@ -111,19 +111,23 @@ a {
   }
 }
 
-/* --- Slash command menu (docs/02-EDITOR-UX.md) --- */
+/* --- Slash command menu (docs/02-EDITOR-UX.md) ---
+   `top`/`left` are set inline from the caret's own coordinates. They used to be fixed
+   here at the top-left of the writing surface, so typing `/` halfway down an article
+   opened the menu over paragraphs already written, far from the cursor. The values below
+   are only the fallback for the frame before the first measurement. */
 .peg-slash-menu {
   position: absolute;
   left: var(--peg-space-5);
   top: var(--peg-space-6);
   z-index: 30;
-  min-width: 240px;
+  width: 240px;
   max-height: 280px;
   overflow-y: auto;
   padding: var(--peg-space-1);
   background: var(--peg-surface);
-  border: 1px solid var(--peg-border-strong);
-  border-radius: var(--peg-radius-md);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
   box-shadow: var(--peg-shadow-2);
 }
 .peg-slash-menu__item {
