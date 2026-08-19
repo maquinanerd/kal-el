@@ -1,6 +1,6 @@
 import { and, eq, lte, sql } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
-import { articleRevisions, articles, outboxEvents } from "@kal-el/db/schema";
+import { articleRevisions, articles, auditLog, outboxEvents } from "@kal-el/db/schema";
 
 export type PromoteSummary = { promoted: number };
 
@@ -24,11 +24,19 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
   let promoted = 0;
   for (const { id } of due) {
     const updated = await db.transaction(async (tx) => {
+      // Read the intended time before nulling it. Stamping `new Date()` recorded the
+      // promotion moment instead of the time the editor scheduled, and since
+      // `scheduledAt` is cleared on the same statement the intent was unrecoverable.
+      const scheduled = await tx.query.articles.findFirst({
+        where: and(eq(articles.id, id), eq(articles.status, "scheduled")),
+      });
+      const intendedAt = scheduled?.scheduledAt ?? new Date();
+
       const rows = await tx
         .update(articles)
         .set({
           status: "published",
-          publishedAt: new Date(),
+          publishedAt: intendedAt,
           scheduledAt: null,
           version: sql`${articles.version} + 1`,
           updatedAt: new Date(),
@@ -50,7 +58,19 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
         note: "scheduled publish",
       });
 
-      const publishedAt = new Date();
+      const publishedAt = intendedAt;
+      // Every other publish path writes an audit row; an unattended 03:00 publish left no
+      // record at all. `actorType: "system"` exists for exactly this.
+      await tx.insert(auditLog).values({
+        siteId: row.siteId,
+        actorType: "system",
+        actorId: null,
+        action: "articles.publish",
+        objectType: "article",
+        objectId: id,
+        details: { via: "scheduler", scheduledAt: intendedAt.toISOString(), version: row.version },
+      });
+
       await tx
         .insert(outboxEvents)
         .values({

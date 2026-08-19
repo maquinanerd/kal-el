@@ -25,7 +25,9 @@ export default function CalendarPage() {
         </button>
       ),
     },
-    { key: "scheduledAt", header: "Agendado para", render: (a) => (a.publishedAt ? new Date(a.publishedAt).toLocaleString("pt-BR") : "—") },
+    // the API nulls publishedAt while an article is scheduled, so reading it here
+    // rendered an em dash on every single row
+    { key: "scheduledAt", header: "Agendado para", render: (a) => (a.scheduledAt ? new Date(a.scheduledAt).toLocaleString("pt-BR") : "—") },
   ];
 
   return (

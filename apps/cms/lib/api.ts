@@ -50,6 +50,9 @@ export type ArticleSummary = {
   version: number;
   updatedAt: string;
   publishedAt: string | null;
+  // the API has always returned this; the local type omitted it, which is why the
+  // calendar column had no choice but to read publishedAt and render an em dash
+  scheduledAt: string | null;
 };
 export type ArticlePage = { items: ArticleSummary[]; nextCursor: string | null };
 
@@ -129,8 +132,24 @@ export function listRevisions(siteId: string, articleId: string): Promise<Articl
   return request("GET", `/v1/sites/${siteId}/articles/${articleId}/revisions`);
 }
 
-export function articleAction(siteId: string, articleId: string, action: string): Promise<ArticleDetail> {
-  return request("POST", `/v1/sites/${siteId}/articles/${articleId}/${action}`, {});
+/**
+ * @param idempotencyKey stable per user intent, so a double click or a lost response
+ * replays instead of re-deriving. `approve` and `unpublish` both target `draft`, so the
+ * server cannot tell a retry from a call that was never legal - the key is what makes
+ * those two safe, and without it a double click surfaced a raw INVALID_TRANSITION.
+ */
+export function articleAction(
+  siteId: string,
+  articleId: string,
+  action: string,
+  idempotencyKey?: string,
+): Promise<ArticleDetail> {
+  return request(
+    "POST",
+    `/v1/sites/${siteId}/articles/${articleId}/${action}`,
+    {},
+    idempotencyKey ? { "idempotency-key": idempotencyKey } : undefined,
+  );
 }
 
 export function getPreviewUrl(siteId: string, articleId: string): Promise<{ url: string }> {

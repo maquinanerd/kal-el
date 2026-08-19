@@ -739,7 +739,29 @@ export async function submitArticle(db: Db, siteId: string, articleId: string, a
   return applyStatusTransition(db, siteId, articleId, actor, "in_review", "articles.submit", note);
 }
 
+/**
+ * Approve returns the article to `draft` for final editing.
+ *
+ * It must not double as an unpublish. `approve` and `unpublish` share the target
+ * `draft`, and `published -> draft` is a legal transition - so an `editor` (who holds
+ * `articles.approve` and deliberately NOT `articles.publish`) could withdraw a live
+ * article through `/approve`, and `clearDates` would destroy its original `publishedAt`
+ * with no way to recover it. Approving is only meaningful from a review state.
+ */
+const APPROVABLE_FROM: ArticleStatus[] = ["in_review", "blocked"];
+
 export async function approveArticle(db: Db, siteId: string, articleId: string, actor: ActorRef, note?: string) {
+  const row = await db.query.articles.findFirst({
+    where: and(eq(articles.id, articleId), eq(articles.siteId, siteId)),
+  });
+  if (!row) throw notFound("article not found");
+  if (!APPROVABLE_FROM.includes(row.status)) {
+    throw invalidTransition(`cannot approve an article in "${row.status}"`, {
+      from: row.status,
+      to: "draft",
+      expected: APPROVABLE_FROM,
+    });
+  }
   return applyStatusTransition(db, siteId, articleId, actor, "draft", "articles.approve", note, true);
 }
 

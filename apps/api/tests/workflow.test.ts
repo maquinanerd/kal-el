@@ -167,4 +167,44 @@ describe("editorial workflow", () => {
     expect(await roleHasPermission(ctx.db, "admin", "articles.publish")).toBe(true);
     expect(await roleHasPermission(ctx.db, "admin", "media.manage")).toBe(true);
   });
+
+  it("approve cannot be used as an unpublish by a role without publish rights", async () => {
+    // `approve` and `unpublish` share the target `draft`, and `published -> draft` is a
+    // legal transition - so `/approve`, guarded by articles.approve, would withdraw a
+    // live article and `clearDates` would destroy its original publishedAt.
+    const created = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles`,
+      headers: { Cookie: ownerSession.cookieHeader, "x-kal-el-csrf": ownerSession.csrf },
+      payload: { title: "Publicado de verdade" },
+    });
+    const id = created.json().data.id as string;
+
+    const published = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles/${id}/publish`,
+      headers: { Cookie: ownerSession.cookieHeader, "x-kal-el-csrf": ownerSession.csrf },
+      payload: {},
+    });
+    expect(published.statusCode).toBe(200);
+    const originalPublishedAt = published.json().data.publishedAt as string;
+    expect(originalPublishedAt).toBeTruthy();
+
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles/${id}/approve`,
+      headers: { Cookie: headEditorSession.cookieHeader, "x-kal-el-csrf": headEditorSession.csrf },
+      payload: {},
+    });
+    expect(res.statusCode, "approving a published article is not a thing").toBe(409);
+    expect(res.json().error.code).toBe("INVALID_TRANSITION");
+
+    const still = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteId}/articles/${id}`,
+      headers: { Cookie: ownerSession.cookieHeader },
+    });
+    expect(still.json().data.status, "the article must still be live").toBe("published");
+    expect(still.json().data.publishedAt, "its publication date must survive").toBe(originalPublishedAt);
+  });
 });

@@ -99,7 +99,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const row = await app.db.query.serviceTokens.findFirst({
         where: eq(serviceTokens.tokenHash, hashToken(credentials.token)),
       });
+      // revocation and expiry are checked everywhere else; without them here a revoked
+      // token still got 200 disclosing its id, name, site and full scope list
       if (!row) throw unauthorized("invalid service token");
+      if (row.revokedAt) throw forbidden("service token revoked");
+      if (row.expiresAt && row.expiresAt < new Date()) throw unauthorized("service token expired");
       return { data: { kind: "service", id: row.id, name: row.name, siteId: row.siteId, scopes: row.scopes } };
     }
     const sessionByToken = await app.db.query.sessions.findFirst({
@@ -108,6 +112,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     if (!sessionByToken || sessionByToken.expiresAt < new Date()) throw unauthorized("session expired");
     const user = await app.db.query.users.findFirst({ where: eq(users.id, sessionByToken.userId) });
     if (!user) throw unauthorized();
+    // a disabled account keeps an unexpired session; every data route rejects it, so this
+    // one should not keep answering with the profile either
+    if (user.status === "disabled") throw forbidden("user is not active");
     return { data: { kind: "user", user: toUserDto(user), sessionId: sessionByToken.id } };
   });
 

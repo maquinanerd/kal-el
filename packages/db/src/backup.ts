@@ -73,19 +73,30 @@ export async function restoreBackup(db: Db, backup: Backup): Promise<{ restoredT
   });
 
   let rows = 0;
-  for (const name of names) {
-    const dataRows = backup.data[name] ?? [];
-    if (dataRows.length === 0) continue;
-    await db.execute(sql.raw(`TRUNCATE ${quote(name)} CASCADE`));
-    const columns = Object.keys(dataRows[0] as Record<string, unknown>);
-    if (columns.length === 0) continue;
-    const values = sql.join(
-      dataRows.map((r) => sql`(${sql.join(columns.map((c) => sql`${(r as Record<string, unknown>)[c]}`), sql`, `)})`),
-      sql`, `,
-    );
-    await db.execute(sql`INSERT INTO ${sql.raw(quote(name))} (${sql.raw(columns.map(quote).join(", "))}) VALUES ${values}`);
-    rows += dataRows.length;
-  }
+
+  // One transaction for the whole restore: a failure partway used to leave the tail of
+  // the table list truncated and empty, with no rollback and a reported success.
+  await db.transaction(async (tx) => {
+    for (const name of names) {
+      const dataRows = backup.data[name] ?? [];
+
+      // TRUNCATE happens even when the snapshot has no rows for this table. Skipping it
+      // meant a table that is empty in the backup kept its live rows - restoring a clean
+      // snapshot over a compromised database left the attacker's sessions and service
+      // tokens in place, and reported success.
+      await tx.execute(sql.raw(`TRUNCATE ${quote(name)} CASCADE`));
+      if (dataRows.length === 0) continue;
+
+      const columns = Object.keys(dataRows[0] as Record<string, unknown>);
+      if (columns.length === 0) continue;
+      const values = sql.join(
+        dataRows.map((r) => sql`(${sql.join(columns.map((c) => sql`${(r as Record<string, unknown>)[c]}`), sql`, `)})`),
+        sql`, `,
+      );
+      await tx.execute(sql`INSERT INTO ${sql.raw(quote(name))} (${sql.raw(columns.map(quote).join(", "))}) VALUES ${values}`);
+      rows += dataRows.length;
+    }
+  });
 
   return { restoredTables: names.filter((n) => (backup.data[n]?.length ?? 0) > 0).length, rows };
 }

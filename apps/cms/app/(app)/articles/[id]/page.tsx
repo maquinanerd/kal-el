@@ -123,6 +123,8 @@ export default function ArticlePage() {
   const [editorKey, setEditorKey] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // workflow buttons are disabled while their action is in flight
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const [cats, setCats] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -232,14 +234,22 @@ export default function ArticlePage() {
   }, []);
 
   async function doAction(action: string) {
-    if (!activeSiteId) return;
+    if (!activeSiteId || pendingAction) return;
     setActionError(null);
+    setPendingAction(action);
+    // One key per (article, action, current status): a double click or a lost response
+    // replays the same intent instead of being re-derived. `approve` and `unpublish`
+    // both target `draft`, so the server cannot tell a retry from a call that was never
+    // legal - the key is what makes those two safe from the UI.
+    const key = `cms.${params.id}.${action}.${status}`.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 128);
     try {
-      const updated = await articleAction(activeSiteId, params.id, action);
+      const updated = await articleAction(activeSiteId, params.id, action, key);
       setStatus(updated.status);
       setVersion(updated.version);
     } catch (err) {
       setActionError(err instanceof ApiError ? (err.status === 403 ? "Sem permissão para esta ação" : err.message) : "Falha na ação");
+    } finally {
+      setPendingAction(null);
     }
   }
 
@@ -287,7 +297,15 @@ export default function ArticlePage() {
         <Button size="sm" variant="secondary" onClick={() => void openPreview()}>Preview</Button>
         <Button size="sm" variant="secondary" onClick={() => setLinkPickerOpen(true)}>Link interno</Button>
         {WORKFLOW_ACTIONS[status]?.map((a) => (
-          <Button key={a.key} size="sm" variant={a.variant} onClick={() => void doAction(a.key)}>{a.label}</Button>
+          <Button
+            key={a.key}
+            size="sm"
+            variant={a.variant}
+            disabled={pendingAction !== null}
+            onClick={() => void doAction(a.key)}
+          >
+            {pendingAction === a.key ? "…" : a.label}
+          </Button>
         ))}
       </div>
 
