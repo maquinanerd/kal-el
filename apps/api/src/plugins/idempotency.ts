@@ -139,7 +139,13 @@ export async function respondIdempotent(
 
 /**
  * Same contract as `respondIdempotent`, but returns the produced value instead of
- * sending it - for handlers that shape their own DTO after the write.
+ * sending it.
+ *
+ * IMPORTANT: `run` must return the FINISHED response value, not a database row. The value
+ * is persisted as JSONB and replayed verbatim, so anything that only survives in memory -
+ * a `Date`, a `Buffer`, a class instance - comes back as a plain string or object on the
+ * replay. Shaping the DTO after this call worked on the first request and threw
+ * `row.createdAt.toISOString is not a function` on every retry.
  */
 export async function respondIdempotentValue<T>(
   db: { transaction: <R>(cb: (tx: any) => Promise<R>) => Promise<R> },

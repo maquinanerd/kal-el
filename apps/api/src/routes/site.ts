@@ -261,11 +261,9 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const parsed = createCategoryBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         const actor = req.actor as ActorRef;
-        const row = await respondIdempotentValue(app.db, req, actor.actorKey, (tx) =>
-          createCategory(tx as unknown as Db, siteId, actor, parsed.data),
-        );
-        return reply.status(201).send({
-          data: {
+        const data = await respondIdempotentValue(app.db, req, actor.actorKey, async (tx) => {
+          const row = await createCategory(tx as unknown as Db, siteId, actor, parsed.data);
+          return {
             id: row.id,
             siteId: row.siteId,
             parentId: row.parentId,
@@ -274,8 +272,9 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
             description: row.description ?? null,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
-          },
+          };
         });
+        return reply.status(201).send({ data });
       });
 
       siteApp.get("/tags", { preHandler: guard("taxonomy.tags.manage") }, async (req) => {
@@ -287,19 +286,18 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const parsed = createTagBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         const actor = req.actor as ActorRef;
-        const row = await respondIdempotentValue(app.db, req, actor.actorKey, (tx) =>
-          createTag(tx as unknown as Db, siteId, actor, parsed.data),
-        );
-        return reply.status(201).send({
-          data: {
+        const data = await respondIdempotentValue(app.db, req, actor.actorKey, async (tx) => {
+          const row = await createTag(tx as unknown as Db, siteId, actor, parsed.data);
+          return {
             id: row.id,
             siteId: row.siteId,
             name: row.name,
             slug: row.slug,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
-          },
+          };
         });
+        return reply.status(201).send({ data });
       });
 
       siteApp.get("/entities", { preHandler: guard("taxonomy.entities.manage") }, async (req) => {
@@ -327,11 +325,9 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const parsed = createAuthorBodySchema.safeParse(req.body);
         if (!parsed.success) throw badRequest("validation failed", { issues: parsed.error.issues });
         const actor = req.actor as ActorRef;
-        const row = await respondIdempotentValue(app.db, req, actor.actorKey, (tx) =>
-          createAuthor(tx as unknown as Db, siteId, actor, parsed.data),
-        );
-        return reply.status(201).send({
-          data: {
+        const data = await respondIdempotentValue(app.db, req, actor.actorKey, async (tx) => {
+          const row = await createAuthor(tx as unknown as Db, siteId, actor, parsed.data);
+          return {
             id: row.id,
             siteId: row.siteId,
             name: row.name,
@@ -342,8 +338,9 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
             avatarMediaId: row.avatarMediaId ?? null,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
-          },
+          };
         });
+        return reply.status(201).send({ data });
       });
 
       siteApp.get("/sources", { preHandler: guard("taxonomy.sources.manage") }, async (req) => {

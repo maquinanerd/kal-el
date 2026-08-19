@@ -137,6 +137,41 @@ describe("retry and error contract", () => {
     expect(clash.json().error.code).toBe("IDEMPOTENCY_REPLAY");
   });
 
+  it("a replayed taxonomy create returns the same body, not a 500", async () => {
+    // These handlers shape their DTO after the write. A replay returns the stored body
+    // from JSONB, where timestamps have become strings - calling .toISOString() on them
+    // throws. Regression guard for that specific shape.
+    const first = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteA}/categories`,
+      headers: h("cat-replay-key"),
+      payload: { name: "Séries", slug: "series-replay" },
+    });
+    expect(first.statusCode).toBe(201);
+
+    const retry = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteA}/categories`,
+      headers: h("cat-replay-key"),
+      payload: { name: "Séries", slug: "series-replay" },
+    });
+    expect(retry.statusCode, "a replay must not 500").toBe(201);
+    expect(retry.json().data.id).toBe(first.json().data.id);
+    expect(retry.json().data.createdAt).toBe(first.json().data.createdAt);
+
+    for (const [path, payload] of [
+      ["tags", { name: "Estreias", slug: "estreias-replay" }],
+      ["authors", { name: "Repórter Replay", slug: "reporter-replay" }],
+    ] as const) {
+      const key = `${path}-replay-key`;
+      const a = await ctx.app.inject({ method: "POST", url: `/v1/sites/${siteA}/${path}`, headers: h(key), payload });
+      const b = await ctx.app.inject({ method: "POST", url: `/v1/sites/${siteA}/${path}`, headers: h(key), payload });
+      expect(a.statusCode, `${path} first`).toBe(201);
+      expect(b.statusCode, `${path} replay`).toBe(201);
+      expect(b.json().data.id).toBe(a.json().data.id);
+    }
+  });
+
   it("a slug clash stays a plain CONFLICT, so the three are distinguishable", async () => {
     await ctx.app.inject({
       method: "POST",
