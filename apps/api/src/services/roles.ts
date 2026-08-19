@@ -7,6 +7,29 @@ import { badRequest, conflict, isForeignKeyViolation, isUniqueViolation, notFoun
 import { writeAudit } from "../plugins/audit.js";
 import { PERMISSIONS } from "../auth-context.js";
 
+/**
+ * Who performed a role change, for the audit trail.
+ *
+ * `actorKey` used to be the only identity available here and the audit row derived the
+ * user id by string-stripping its `user:` prefix - which produced `null` for a service
+ * token (whose key is `service:<id>`) and would have silently produced garbage had the
+ * prefix ever changed. The id and the label are carried explicitly instead.
+ */
+export type RoleAuditActor = {
+  kind: "user" | "service" | "system";
+  actorKey: string;
+  /** `users.id` or `service_tokens.id`, depending on `kind`. */
+  id?: string | null;
+  /** Display name recorded with the action. Never a secret. */
+  label?: string | null;
+  ip?: string;
+  requestId?: string;
+};
+
+function actorRefId(actor: RoleAuditActor): string | null {
+  return actor.id ?? null;
+}
+
 export const OWNER_ROLE_KEY = "owner";
 
 export async function listRoles(db: Db) {
@@ -23,7 +46,7 @@ export async function listRoles(db: Db) {
 export async function createRole(
   db: Db,
   body: CreateRoleBody,
-  actor?: { kind: "user" | "service" | "system"; actorKey: string; ip?: string; requestId?: string },
+  actor?: RoleAuditActor,
 ) {
   const permRows = await db
     .select({ id: permissions.id, key: permissions.key })
@@ -46,7 +69,8 @@ export async function createRole(
       if (actor) {
         await writeAudit(tx, {
           actorType: actor.kind,
-          actorId: actor.kind === "user" ? actor.actorKey.replace("user:", "") : null,
+          actorId: actorRefId(actor),
+          actorLabel: actor.label ?? null,
           action: "roles.create",
           objectType: "role",
           objectId: role.id,
@@ -99,7 +123,7 @@ export async function assignRoleToUser(
   userId: string,
   roleId: string,
   siteId: string,
-  actor?: { kind: "user" | "service" | "system"; actorKey: string; ip?: string; requestId?: string },
+  actor?: RoleAuditActor,
 ) {
   const role = await db.query.roles.findFirst({ where: eq(roles.id, roleId) });
   if (!role) throw notFound("role not found");
@@ -112,7 +136,8 @@ export async function assignRoleToUser(
         await writeAudit(tx, {
           siteId,
           actorType: actor.kind,
-          actorId: actor.kind === "user" ? actor.actorKey.replace("user:", "") : null,
+          actorId: actorRefId(actor),
+          actorLabel: actor.label ?? null,
           action: "roles.assign",
           objectType: "user",
           objectId: userId,
@@ -184,6 +209,7 @@ export const PRESET_ROLES: Array<{ key: string; name: string; description: strin
       PERMISSIONS.articleSubmit,
       PERMISSIONS.articleApprove,
       PERMISSIONS.articleDelete,
+      PERMISSIONS.articleRecover,
       ...TAXONOMY,
       PERMISSIONS.seoManage,
       PERMISSIONS.mediaManage,
@@ -202,6 +228,8 @@ export const PRESET_ROLES: Array<{ key: string; name: string; description: strin
       PERMISSIONS.articleSchedule,
       PERMISSIONS.articleSubmit,
       PERMISSIONS.articleApprove,
+      // the editor-in-chief is the editorial role that answers for a broken article body
+      PERMISSIONS.articleRecover,
       ...TAXONOMY,
       PERMISSIONS.seoManage,
       PERMISSIONS.mediaManage,

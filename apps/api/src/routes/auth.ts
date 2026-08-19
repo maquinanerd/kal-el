@@ -190,6 +190,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       await writeAudit(tx, {
         siteId: siteRow.id,
         actorType: "system",
+        actorLabel: "Bootstrap",
         action: "bootstrap.init",
         objectType: "site",
         objectId: siteRow.id,

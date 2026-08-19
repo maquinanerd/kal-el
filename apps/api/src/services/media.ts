@@ -7,7 +7,7 @@ import { articles, authors, media } from "@kal-el/db/schema";
 import type { UpdateMediaBody } from "@kal-el/contracts";
 
 import { badRequest, conflict, notFound } from "../plugins/errors.js";
-import { writeAudit } from "../plugins/audit.js";
+import { auditActorFields, writeAudit } from "../plugins/audit.js";
 import type { StorageProvider } from "../storage/provider.js";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import type { ActorRef } from "./articles.js";
@@ -134,8 +134,7 @@ export async function uploadMedia(
     if (!inserted) throw new Error("uploadMedia returned no row");
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: actor.kind === "user" ? actor.userId ?? null : null,
+      ...auditActorFields(actor),
       action: "media.upload",
       objectType: "media",
       objectId: inserted.id,
@@ -206,8 +205,7 @@ export async function updateMedia(db: Db, siteId: string, mediaId: string, actor
     if (!row) throw notFound("media not found");
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: actor.kind === "user" ? actor.userId ?? null : null,
+      ...auditActorFields(actor),
       action: "media.update",
       objectType: "media",
       objectId: mediaId,
@@ -267,8 +265,7 @@ export async function deleteMedia(db: Db, storage: StorageProvider, siteId: stri
     await tx.delete(media).where(and(eq(media.id, mediaId), eq(media.siteId, siteId)));
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: actor.kind === "user" ? actor.userId ?? null : null,
+      ...auditActorFields(actor),
       action: "media.delete",
       objectType: "media",
       objectId: mediaId,

@@ -15,7 +15,7 @@ import type {
 } from "@kal-el/contracts";
 
 import { badRequest, conflict, isUniqueViolation, notFound, pgConstraint } from "../plugins/errors.js";
-import { writeAudit } from "../plugins/audit.js";
+import { auditActorFields, writeAudit } from "../plugins/audit.js";
 import type { ActorRef } from "./articles.js";
 
 /**
@@ -55,8 +55,7 @@ export async function createCategory(db: Db, siteId: string, actor: ActorRef, bo
       if (!inserted) throw new Error("createCategory failed");
       await writeAudit(tx, {
         siteId,
-        actorType: actor.kind,
-        actorId: actor.kind === "user" ? actor.userId ?? null : null,
+        ...auditActorFields(actor),
         action: "categories.create",
         objectType: "category",
         objectId: inserted.id,
@@ -95,8 +94,7 @@ export async function createTag(db: Db, siteId: string, actor: ActorRef, body: C
       if (!inserted) throw new Error("createTag failed");
       await writeAudit(tx, {
         siteId,
-        actorType: actor.kind,
-        actorId: actor.kind === "user" ? actor.userId ?? null : null,
+        ...auditActorFields(actor),
         action: "tags.create",
         objectType: "tag",
         objectId: inserted.id,
@@ -126,8 +124,7 @@ export async function createEntity(db: Db, siteId: string, actor: ActorRef, body
     if (!inserted) throw new Error("createEntity failed");
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: actor.kind === "user" ? actor.userId ?? null : null,
+      ...auditActorFields(actor),
       action: "entities.create",
       objectType: "entity",
       objectId: inserted.id,
@@ -174,8 +171,7 @@ export async function createAuthor(db: Db, siteId: string, actor: ActorRef, body
       if (!inserted) throw new Error("createAuthor failed");
       await writeAudit(tx, {
         siteId,
-        actorType: actor.kind,
-        actorId: actor.kind === "user" ? actor.userId ?? null : null,
+        ...auditActorFields(actor),
         action: "authors.create",
         objectType: "author",
         objectId: inserted.id,
@@ -213,8 +209,7 @@ export async function createSource(db: Db, siteId: string, actor: ActorRef, body
     if (!inserted) throw new Error("createSource failed");
     await writeAudit(tx, {
       siteId,
-      actorType: actor.kind,
-      actorId: actor.kind === "user" ? actor.userId ?? null : null,
+      ...auditActorFields(actor),
       action: "sources.create",
       objectType: "source",
       objectId: inserted.id,
@@ -236,8 +231,7 @@ export async function listSources(db: Db, siteId: string) {
 async function writeUpdateAudit(tx: any, siteId: string, actor: ActorRef, action: string, objectType: string, objectId: string, changed: string[]) {
   await writeAudit(tx, {
     siteId,
-    actorType: actor.kind,
-    actorId: actor.kind === "user" ? actor.userId ?? null : null,
+    ...auditActorFields(actor),
     action,
     objectType,
     objectId,
