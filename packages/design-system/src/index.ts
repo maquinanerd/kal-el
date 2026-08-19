@@ -8,3 +8,5 @@ export * from "./components/Overlays";
 export * from "./components/Shell";
 export * from "./components/Editor";
 export * from "./icons";
+export * from "./components/Patterns";
+export * from "./status";

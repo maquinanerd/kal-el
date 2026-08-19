@@ -14,7 +14,7 @@ export function Tabs({ tabs, active, onChange }: { tabs: Tab[]; active: string; 
           onClick={() => onChange(t.id)}
         >
           {t.label}
-          {typeof t.count === "number" && ` · ${t.count}`}
+          {typeof t.count === "number" && <span className="peg-tab__count"> {t.count}</span>}
         </button>
       ))}
     </div>
