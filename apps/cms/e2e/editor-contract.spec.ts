@@ -108,19 +108,27 @@ test.describe("editor contract", () => {
     await expect(toolbar).toBeHidden();
   });
 
-  test("distraction-free mode reduces chrome and Escape leaves it", async ({ page }) => {
+  test("distraction-free mode keeps the save state visible and Escape leaves it", async ({ page }) => {
     await openNewArticle(page);
 
-    const enter = page.getByRole("button", { name: "Modo sem distrações" });
-    await enter.click();
+    // type something so autosave has a state to report
+    await page.keyboard.type("texto antes do modo foco");
 
-    const focusBar = page.getByText("Modo sem distrações · Esc para sair");
-    await expect(focusBar).toBeVisible();
-    // the inspector is out of the way but the editor is not a separate page
+    await page.getByRole("button", { name: "Modo sem distrações" }).click();
     await expect(page.locator(".peg-editor--focus")).toHaveCount(1);
+
+    // The overlay is opaque and covers the page, so anything it hides is invisible.
+    // Autosave state hidden behind it meant a writer could work for an hour into a
+    // failing save and see nothing.
+    const bar = page.locator(".peg-editor__focus-bar");
+    await expect(bar.locator(".peg-save-state"), "save state must travel into focus mode").toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByRole("button", { name: "Sair do modo foco" })).toBeVisible();
 
-    await page.locator(".peg-editor__surface .ProseMirror").click();
+    // Escape works from anywhere in the mode, not only while the writing surface has
+    // DOM focus - it used to be inert after clicking any toolbar button.
+    await page.getByRole("button", { name: "Sair do modo foco" }).focus();
     await page.keyboard.press("Escape");
     await expect(page.locator(".peg-editor--focus")).toHaveCount(0);
   });
