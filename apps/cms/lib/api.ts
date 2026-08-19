@@ -40,7 +40,14 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
 
 export type MeUser = { id: string; email: string; name: string; status: string };
 export type MeResponse = { kind: "user"; user: MeUser; sessionId: string };
-export type SiteInfo = { id: string; slug: string; name: string; status: string };
+export type SiteInfo = {
+  id: string;
+  slug: string;
+  name: string;
+  /** Bare canonical host, e.g. `maquinanerd.com.br`. Null until an admin sets one. */
+  primaryDomain: string | null;
+  status: string;
+};
 export type ArticleStatus = "draft" | "in_review" | "scheduled" | "published" | "blocked" | "archived";
 export type ArticleSummary = {
   id: string;
@@ -114,6 +121,8 @@ export type ArticleDetail = {
   };
   updatedAt: string;
   publishedAt: string | null;
+  /** Set while the article is scheduled; seeds the reschedule dialog. */
+  scheduledAt?: string | null;
   /**
    * States an editor has to act on. `document_unreadable` means the stored body did not
    * parse and the `document` above is a placeholder, not the content - saving over it
@@ -151,16 +160,22 @@ export function listRevisions(siteId: string, articleId: string): Promise<Articl
  * server cannot tell a retry from a call that was never legal - the key is what makes
  * those two safe, and without it a double click surfaced a raw INVALID_TRANSITION.
  */
+/**
+ * `note` is the editorial comment attached to the transition. The API has accepted it on
+ * submit/approve/reject/publish/unpublish from the start and wrote it to the audit trail;
+ * the CMS simply never sent one, so a rejection reached the writer with no reason.
+ */
 export function articleAction(
   siteId: string,
   articleId: string,
   action: string,
   idempotencyKey?: string,
+  note?: string,
 ): Promise<ArticleDetail> {
   return request(
     "POST",
     `/v1/sites/${siteId}/articles/${articleId}/${action}`,
-    {},
+    note ? { note } : {},
     idempotencyKey ? { "idempotency-key": idempotencyKey } : undefined,
   );
 }
@@ -274,13 +289,30 @@ export const updateSource = (siteId: string, id: string, body: Record<string, un
 export const deleteSource = (siteId: string, id: string) => request<{ deleted: boolean }>("DELETE", `/v1/sites/${siteId}/sources/${id}`);
 
 // ---- users / roles / tokens ----
-export type User = { id: string; email: string; name: string; status: string };
-export type Role = { id: string; key: string; name: string; description?: string };
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  /** Roles the user already holds, per site. */
+  memberships: Membership[];
+};
+export type Role = {
+  id: string;
+  key: string;
+  name: string;
+  description?: string;
+  /** Permission keys this role grants, e.g. `articles.publish`. */
+  permissions: string[];
+};
+export type Membership = { siteId: string; roleId: string; roleKey: string; roleName: string };
+export type PermissionInfo = { key: string; description?: string };
 export type ServiceToken = { id: string; name: string; scopes: string[]; expiresAt: string | null; revokedAt: string | null; createdAt: string };
 
 export const listUsers = () => request<User[]>("GET", "/v1/admin/users");
 export const createUser = (body: { email: string; name: string; password: string }) => request<User>("POST", "/v1/admin/users", body);
 export const listRoles = () => request<Role[]>("GET", "/v1/admin/roles");
+export const listPermissions = () => request<PermissionInfo[]>("GET", "/v1/admin/permissions");
 export const createRole = (body: { key: string; name: string; permissions: string[] }) => request<Role>("POST", "/v1/admin/roles", body);
 export const assignRole = (userId: string, body: { roleId: string; siteId: string }) => request<{ assigned: boolean }>("POST", `/v1/admin/users/${userId}/roles`, body);
 export const listServiceTokens = (siteId: string) => request<ServiceToken[]>("GET", `/v1/admin/sites/${siteId}/service-tokens`);
@@ -289,8 +321,8 @@ export const revokeServiceToken = (siteId: string, tokenId: string) => request<{
 
 // ---- admin sites ----
 export const listSites = () => request<SiteInfo[]>("GET", "/v1/admin/sites");
-export const createSite = (body: { slug: string; name: string }) => request<SiteInfo>("POST", "/v1/admin/sites", body);
-export const updateSite = (siteId: string, body: { name?: string; status?: string }) => request<SiteInfo>("PATCH", `/v1/admin/sites/${siteId}`, body);
+export const createSite = (body: { slug: string; name: string; primaryDomain?: string }) => request<SiteInfo>("POST", "/v1/admin/sites", body);
+export const updateSite = (siteId: string, body: { name?: string; primaryDomain?: string | null; status?: string }) => request<SiteInfo>("PATCH", `/v1/admin/sites/${siteId}`, body);
 
 // ---- webhooks ----
 export type WebhookDeliveryInfo = {
@@ -381,6 +413,9 @@ export type AuditEntry = {
   createdAt: string;
 };
 export const listAudit = (siteId: string) => request<AuditEntry[]>("GET", `/v1/sites/${siteId}/audit-log`);
+/** Audit trail for one object. This is where a workflow transition's comment is stored. */
+export const listObjectAudit = (siteId: string, objectType: string, objectId: string) =>
+  request<AuditEntry[]>("GET", `/v1/sites/${siteId}/audit-log/${objectType}/${objectId}`);
 
 // ---- redirects ----
 export type Redirect = { id: string; sourcePath: string; targetPath: string; kind: string };

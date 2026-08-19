@@ -166,6 +166,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         id: r.id,
         slug: r.slug,
         name: r.name,
+        primaryDomain: r.primaryDomain,
         status: r.status,
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),

@@ -18,7 +18,16 @@ import { badRequest, forbidden, unauthorized } from "../plugins/errors.js";
 import { csrfFailed } from "../plugins/auth.js";
 import { getSite, listSites, createSite, updateSite } from "../services/sites.js";
 import { createUser, listUsers } from "../services/users.js";
-import { createRole, listRoles, assignRoleToUser, getRolePermissions, grantOwnerOnSite, type RoleAuditActor } from "../services/roles.js";
+import {
+  createRole,
+  listRoles,
+  listPermissions,
+  listUserMemberships,
+  assignRoleToUser,
+  getRolePermissions,
+  grantOwnerOnSite,
+  type RoleAuditActor,
+} from "../services/roles.js";
 import { createServiceToken, listServiceTokens, revokeServiceToken } from "../services/tokens.js";
 import { createWebhook, deleteWebhook, listWebhooks, updateWebhook } from "../services/webhooks.js";
 import { auditActorFields, writeAudit, type AuditEntry } from "../plugins/audit.js";
@@ -178,6 +187,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
             id: r.id,
             slug: r.slug,
             name: r.name,
+            primaryDomain: r.primaryDomain,
             status: r.status,
             createdAt: r.createdAt.toISOString(),
             updatedAt: r.updatedAt.toISOString(),
@@ -217,6 +227,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
             id: row.id,
             slug: row.slug,
             name: row.name,
+            primaryDomain: row.primaryDomain,
             status: row.status,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
@@ -249,6 +260,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
             id: row.id,
             slug: row.slug,
             name: row.name,
+            primaryDomain: row.primaryDomain,
             status: row.status,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
@@ -256,7 +268,19 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         };
       });
 
-      adminApp.get("/users", { preHandler: adminGuard(app, "users.read") }, async () => ({ data: await listUsers(app.db) }));
+      /**
+       * Users with the roles they already hold, per site. The screen previously let an
+       * administrator grant a role without showing the current ones, so the same grant
+       * was applied twice and a mistaken one was invisible.
+       */
+      adminApp.get("/users", { preHandler: adminGuard(app, "users.read") }, async () => {
+        const [rows, memberships] = await Promise.all([listUsers(app.db), listUserMemberships(app.db)]);
+        return { data: rows.map((u) => ({ ...u, memberships: memberships.get(u.id) ?? [] })) };
+      });
+
+      adminApp.get("/permissions", { preHandler: adminGuard(app, "roles.manage") }, async () => ({
+        data: await listPermissions(app.db),
+      }));
 
       adminApp.post("/users", { preHandler: adminGuard(app, "users.create") }, async (req, reply) => {
         const parsed = createUserBodySchema.safeParse(req.body);

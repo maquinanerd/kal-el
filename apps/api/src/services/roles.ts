@@ -32,15 +32,81 @@ function actorRefId(actor: RoleAuditActor): string | null {
 
 export const OWNER_ROLE_KEY = "owner";
 
+/**
+ * Roles with the permission keys each one grants.
+ *
+ * The CMS role screen could only show a name and a key, which is precisely the part an
+ * administrator already knows. "What can `editor` actually do" was answerable only from
+ * the database. One grouped query rather than N+1 - the set is small and read rarely, but
+ * a per-role round trip in a list is a habit worth not starting.
+ */
 export async function listRoles(db: Db) {
   const rows = await db.select().from(roles).orderBy(desc(roles.createdAt));
+  if (rows.length === 0) return [];
+
+  const grants = await db
+    .select({ roleId: rolePermissions.roleId, key: permissions.key })
+    .from(rolePermissions)
+    .innerJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
+    .where(
+      inArray(
+        rolePermissions.roleId,
+        rows.map((r) => r.id),
+      ),
+    );
+
+  const byRole = new Map<string, string[]>();
+  for (const g of grants) {
+    const list = byRole.get(g.roleId);
+    if (list) list.push(g.key);
+    else byRole.set(g.roleId, [g.key]);
+  }
+
   return rows.map((r) => ({
     id: r.id,
     siteId: r.siteId,
     key: r.key,
     name: r.name,
     description: r.description ?? undefined,
+    permissions: (byRole.get(r.id) ?? []).sort(),
   }));
+}
+
+/**
+ * Every user's role grants, keyed by user.
+ *
+ * The users screen let an administrator assign a role without showing which roles the
+ * person already held, so the same grant was applied twice and a mistaken one was
+ * invisible. Site-scoped, because a role means nothing without the site it applies to.
+ */
+export async function listUserMemberships(db: Db) {
+  const rows = await db
+    .select({
+      userId: userRoles.userId,
+      siteId: userRoles.siteId,
+      roleId: roles.id,
+      roleKey: roles.key,
+      roleName: roles.name,
+    })
+    .from(userRoles)
+    .innerJoin(roles, eq(roles.id, userRoles.roleId));
+
+  const byUser = new Map<string, { siteId: string; roleId: string; roleKey: string; roleName: string }[]>();
+  for (const r of rows) {
+    const entry = { siteId: r.siteId, roleId: r.roleId, roleKey: r.roleKey, roleName: r.roleName };
+    const list = byUser.get(r.userId);
+    if (list) list.push(entry);
+    else byUser.set(r.userId, [entry]);
+  }
+  return byUser;
+}
+
+/** All permission keys the platform knows about, for building a custom role. */
+export async function listPermissions(db: Db) {
+  const rows = await db.select({ key: permissions.key, description: permissions.description }).from(permissions);
+  return rows
+    .map((r) => ({ key: r.key, description: r.description ?? undefined }))
+    .sort((a, b) => a.key.localeCompare(b.key));
 }
 
 export async function createRole(

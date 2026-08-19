@@ -109,6 +109,15 @@ export async function freshTestDb(
   const adminPool = createPool(target);
   await adminPool.query(`DROP SCHEMA IF EXISTS public CASCADE`);
   await adminPool.query(`CREATE SCHEMA public`);
+  /**
+   * The migrator's bookkeeping table lives in the `drizzle` schema, not `public`.
+   * Dropping only `public` left that table behind still claiming every migration was
+   * applied, so `runMigrations` below became a no-op and the suite ran against an empty
+   * database - every test failing with 42P01 "relation does not exist". Invisible against
+   * the embedded per-process PostgreSQL, which is fresh anyway; it only bites when
+   * DATABASE_URL points at a database that has been migrated before.
+   */
+  await adminPool.query(`DROP SCHEMA IF EXISTS drizzle CASCADE`);
   await adminPool.end();
 
   await runMigrations(target);
