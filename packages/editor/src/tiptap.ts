@@ -83,6 +83,11 @@ export function buildTiptapSchema(): Schema {
   });
 }
 
+/** ProseMirror's `null` default for an absent attribute is `undefined` in the contract. */
+function opt(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 function attrsFor(node: DocumentNodeV2): Record<string, unknown> {
   switch (node.type) {
     case "heading":
@@ -227,16 +232,23 @@ export function proseMirrorToDocument(node: Node): ArticleDocumentV2 {
         break;
       }
       case "image":
-        nodes.push({ type: "image", attrs: { mediaId: child.attrs.mediaId as string, caption: child.attrs.caption as string | undefined, credit: child.attrs.credit as string | undefined, altText: child.attrs.altText as string | undefined } });
+        // ProseMirror fills absent attributes with the node type's default, which is
+        // `null` - and the contract's optional strings accept `undefined`, not `null`. The
+        // cast said `| undefined` and was simply a lie: inserting an image and leaving the
+        // caption blank produced a document the API rejected with a 400, so nothing typed
+        // after that ever saved. Imported articles store those keys absent, which is the
+        // same shape, so any WordPress article with an image reproduced it on the first
+        // keystroke.
+        nodes.push({ type: "image", attrs: { mediaId: child.attrs.mediaId as string, caption: opt(child.attrs.caption), credit: opt(child.attrs.credit), altText: opt(child.attrs.altText) } });
         break;
       case "gallery":
         nodes.push({ type: "gallery", attrs: { mediaIds: child.attrs.mediaIds as string[] } });
         break;
       case "embed":
-        nodes.push({ type: "embed", attrs: { url: child.attrs.url as string, provider: child.attrs.provider as string, id: child.attrs.id as string | undefined } });
+        nodes.push({ type: "embed", attrs: { url: child.attrs.url as string, provider: child.attrs.provider as string, id: opt(child.attrs.id) } });
         break;
       case "source":
-        nodes.push({ type: "source", attrs: { label: child.attrs.label as string, url: child.attrs.url as string, kind: child.attrs.kind as string | undefined } });
+        nodes.push({ type: "source", attrs: { label: child.attrs.label as string, url: child.attrs.url as string, kind: opt(child.attrs.kind) as "external" | "internal" | undefined } });
         break;
     }
   });

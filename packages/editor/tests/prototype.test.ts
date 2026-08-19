@@ -50,6 +50,47 @@ const MARKED_DOC: ArticleDocumentV2 = {
   ],
 };
 
+/**
+ * The shape the previous test never used: an image with no caption, credit or alt text.
+ * ProseMirror fills absent attributes with the node type's default, which is `null`, and
+ * the contract's optional strings accept `undefined`, not `null` - so this document came
+ * back out of the editor in a shape the API answered with a 400, and nothing typed after
+ * that ever saved. WordPress imports store exactly this shape, with the keys absent.
+ */
+const BARE_ATOMS: ArticleDocumentV2 = {
+  version: 2,
+  nodes: [
+    { type: "paragraph", attrs: {}, content: [{ type: "text", text: "Antes da imagem.", marks: [] }] },
+    { type: "image", attrs: { mediaId: "22222222-2222-4222-8222-222222222222" } },
+    { type: "embed", attrs: { url: "https://example.com/v", provider: "unknown" } },
+    { type: "source", attrs: { label: "Fonte", url: "https://example.com" } },
+  ],
+};
+
+describe("optional atom attributes survive the ProseMirror round trip", () => {
+  it("comes back valid against the contract the API enforces", () => {
+    const back = proseMirrorToDocument(documentToProseMirror(BARE_ATOMS));
+
+    // the assertion that matters: this is the exact check `PATCH /articles/:id` runs
+    const parsed = documentV2Schema.safeParse(back);
+    expect(parsed.success, JSON.stringify(parsed.success ? {} : parsed.error.issues)).toBe(true);
+
+    const image = back.nodes[1];
+    expect(image).toMatchObject({ type: "image", attrs: { mediaId: "22222222-2222-4222-8222-222222222222" } });
+    // not null - null is what the contract rejects
+    expect((image as { attrs: Record<string, unknown> }).attrs.caption).toBeUndefined();
+    expect((image as { attrs: Record<string, unknown> }).attrs.credit).toBeUndefined();
+    expect((image as { attrs: Record<string, unknown> }).attrs.altText).toBeUndefined();
+    expect((back.nodes[2] as { attrs: Record<string, unknown> }).attrs.id).toBeUndefined();
+  });
+
+  it("is idempotent, so an unedited body is not rewritten on every save", () => {
+    const once = proseMirrorToDocument(documentToProseMirror(BARE_ATOMS));
+    const twice = proseMirrorToDocument(documentToProseMirror(once));
+    expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
+  });
+});
+
 describe("TipTap (ProseMirror) prototype", () => {
   it("round-trips the full Kal El node set deterministically", () => {
     const pm = documentToProseMirror(FULL_DOC);

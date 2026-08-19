@@ -1,11 +1,21 @@
 import { z } from "zod";
 import { timestampSchema, uuidSchema } from "./common";
 
+/**
+ * Addresses are stored and compared lower-case.
+ *
+ * The create path inserted the address verbatim while login looked it up lower-cased, so an
+ * account created as Alice@Example.com could never authenticate - and there is no user
+ * update endpoint. Through bootstrap it was terminal: the route is one-shot, so a
+ * deployment bootstrapped with a capitalised address could neither log in nor re-run it.
+ */
+const emailSchema = z.string().email().transform((v) => v.trim().toLowerCase());
+
 export const userStatusSchema = z.enum(["active", "invited", "disabled"]);
 
 export const userSchema = z.object({
   id: uuidSchema,
-  email: z.string().email(),
+  email: emailSchema,
   name: z.string().min(1).max(120),
   status: userStatusSchema,
   createdAt: timestampSchema,
@@ -14,7 +24,7 @@ export const userSchema = z.object({
 
 export const createUserBodySchema = z
   .object({
-    email: z.string().email(),
+    email: emailSchema,
     name: z.string().min(1).max(120),
     password: z.string().min(12).max(128),
   })
@@ -22,7 +32,7 @@ export const createUserBodySchema = z
 
 export const loginBodySchema = z
   .object({
-    email: z.string().email(),
+    email: emailSchema,
     password: z.string().min(1),
   })
   .strict();

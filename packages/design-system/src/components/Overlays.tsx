@@ -63,6 +63,13 @@ export function Modal({
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const restoreTo = useRef<Element | null>(null);
+  // The effect below sets up the focus trap once, on open. Depending on `onClose` re-ran
+  // it on every parent render - and every call site passes a fresh closure - so typing one
+  // character into the media picker's search field tore focus out of the field, restored
+  // it to the trigger, and re-focused the dialog's close button. The next Space closed the
+  // dialog. A ref keeps the latest handler without making the effect depend on it.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     restoreTo.current = document.activeElement;
@@ -73,7 +80,7 @@ export function Modal({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose?.();
+        closeRef.current?.();
         return;
       }
       if (e.key !== "Tab" || !node) return;
@@ -101,7 +108,7 @@ export function Modal({
       document.removeEventListener("keydown", onKeyDown, true);
       if (restoreTo.current instanceof HTMLElement) restoreTo.current.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="peg-overlay" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>

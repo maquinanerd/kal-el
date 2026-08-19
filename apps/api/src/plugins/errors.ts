@@ -124,6 +124,35 @@ export function registerErrorHandler(app: FastifyInstance): void {
       );
     }
 
+    // Everything below this line used to fall through to 500. Two of the most common
+    // refusals in a real deployment arrive here: the rate limiter's own error (429, no
+    // `code`) and Fastify's malformed-JSON error (400). Both were reported to the client as
+    // INTERNAL_ERROR and logged as `unhandled error`, so a brute-force attempt read like an
+    // outage - and RATE_LIMITED, which the contract defines, was emitted nowhere.
+    if (typed.statusCode === 429) {
+      return reply.status(429).send(
+        errorBody(API_ERROR_CODES.RATE_LIMITED, "too many requests", { requestId }),
+      );
+    }
+
+    if (typeof typed.statusCode === "number" && typed.statusCode >= 400 && typed.statusCode < 500) {
+      return reply.status(typed.statusCode).send(
+        errorBody(
+          typed.statusCode === 401
+            ? API_ERROR_CODES.UNAUTHENTICATED
+            : typed.statusCode === 403
+              ? API_ERROR_CODES.FORBIDDEN
+              : typed.statusCode === 404
+                ? API_ERROR_CODES.NOT_FOUND
+                : typed.statusCode === 415
+                  ? API_ERROR_CODES.UNSUPPORTED
+                  : API_ERROR_CODES.VALIDATION,
+          typed.message || "request refused",
+          { requestId },
+        ),
+      );
+    }
+
     request.log.error({ err, requestId }, "unhandled error");
     return reply.status(500).send(
       errorBody(API_ERROR_CODES.INTERNAL, "internal server error", { requestId }),
