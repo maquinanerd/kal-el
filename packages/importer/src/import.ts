@@ -11,6 +11,7 @@ export type ImportReport = {
   updated: { articles: number };
   /** Existing articles whose source content was identical - no write performed. */
   unchanged: { articles: number };
+  failed: { articles: number };
   /** Media rows reused because they were already imported under the same source id. */
   reusedMedia: number;
   warnings: string[];
@@ -129,6 +130,7 @@ export async function importBatch(
     existing: { categories: 0, tags: 0, authors: 0, articles: 0 },
     updated: { articles: 0 },
     unchanged: { articles: 0 },
+    failed: { articles: 0 },
     reusedMedia: 0,
     // adapter-level losses (unsupported richtext nodes, etc.) surface in the same report
     warnings: [...(batch.warnings ?? [])],
@@ -305,29 +307,38 @@ export async function importBatch(
       continue;
     }
 
-    const created = await client.createArticle(siteId, {
-      type: article.type,
-      title: article.title,
-      slug: article.slug,
-      excerpt: article.excerpt,
-      document,
-      status: article.status,
-      publishedAt: article.publishedAt,
-      scheduledAt: article.scheduledAt,
-      categories: categoryIds,
-      tags: tagIds,
-      authors: authorIds,
-      featuredMediaId,
-      externalKey,
-      provenance: {
-        system: batch.sourceName.toLowerCase(),
-        sources: [{ provider: batch.sourceName.toLowerCase(), externalId: article.externalId, externalUrl: article.externalUrl || undefined }],
-      },
-      seo: article.seo,
-    });
+    // Media fetch, update and redirects were each guarded; this call was not. One 403 -
+    // a token without `articles.schedule` meeting a single source article that carries a
+    // scheduled date, say - threw out of the loop, so every remaining article was skipped
+    // and the report, with all its warnings, was never returned to the caller.
+    try {
+      const created = await client.createArticle(siteId, {
+        type: article.type,
+        title: article.title,
+        slug: article.slug,
+        excerpt: article.excerpt,
+        document,
+        status: article.status,
+        publishedAt: article.publishedAt,
+        scheduledAt: article.scheduledAt,
+        categories: categoryIds,
+        tags: tagIds,
+        authors: authorIds,
+        featuredMediaId,
+        externalKey,
+        provenance: {
+          system: batch.sourceName.toLowerCase(),
+          sources: [{ provider: batch.sourceName.toLowerCase(), externalId: article.externalId, externalUrl: article.externalUrl || undefined }],
+        },
+        seo: article.seo,
+      });
 
-    report.imported.articles++;
-    report.articleIds.push(created.id);
+      report.imported.articles++;
+      report.articleIds.push(created.id);
+    } catch (err) {
+      report.failed.articles++;
+      report.warnings.push(`create failed for "${article.slug}": ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   for (const redirect of batch.redirects) {

@@ -75,6 +75,43 @@ describe("html → document transform", () => {
     expect(warnings.some((w) => w.includes("media not imported"))).toBe(true);
   });
 
+  it("reports degradation through the dropped flag, per article, on every path", () => {
+    // This flag is what stops a re-import from overwriting a good stored document with a
+    // degraded one. It had no test at all - and the commit that introduced it was, once,
+    // never actually applied to the tree.
+    const image = htmlToIntermediate('<p>a</p><img src="https://a.example.com/x.jpg" />').nodes;
+
+    const clean = { value: false };
+    finalizeDocument(image, new Map([["https://a.example.com/x.jpg", "11111111-1111-4111-8111-111111111111"]]), [], clean);
+    expect(clean.value).toBe(false);
+
+    const missingImage = { value: false };
+    finalizeDocument(image, new Map(), [], missingImage);
+    expect(missingImage.value).toBe(true);
+
+    // galleries reach finalizeDocument from the Payload importer, not from HTML
+    const gallery: Parameters<typeof finalizeDocument>[0] = [
+      { type: "gallery", attrs: { sourceUrls: ["https://a.example.com/1.jpg", "https://a.example.com/2.jpg"] } },
+    ];
+
+    const emptyGalleryWarnings: string[] = [];
+    const noneResolved = { value: false };
+    const emptied = finalizeDocument(gallery, new Map(), emptyGalleryWarnings, noneResolved);
+    expect(noneResolved.value).toBe(true);
+    expect(emptied.nodes).toHaveLength(0);
+    // a fully dropped gallery warns with a different string than a dropped image, which
+    // is why grepping the batch warnings for "media not imported" could never catch it
+    expect(emptyGalleryWarnings.some((w) => w.includes("gallery dropped"))).toBe(true);
+
+    const partialWarnings: string[] = [];
+    const partial = { value: false };
+    const half = finalizeDocument(gallery, new Map([["https://a.example.com/1.jpg", "22222222-2222-4222-8222-222222222222"]]), partialWarnings, partial);
+    expect(partial.value).toBe(true);
+    expect(half.nodes[0]).toMatchObject({ type: "gallery", attrs: { mediaIds: ["22222222-2222-4222-8222-222222222222"] } });
+    // a partially resolved gallery lost images and reported nothing at all
+    expect(partialWarnings.some((w) => w.includes("gallery partially imported: 1/2"))).toBe(true);
+  });
+
   it("never emits arbitrary html or unsafe urls", () => {
     const { nodes } = htmlToIntermediate('<p>ok</p><a href="javascript:evil()">x</a><img src="data:text/html;base64,AAAA" />');
     const flattened = JSON.stringify(nodes);
