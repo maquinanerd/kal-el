@@ -18,7 +18,8 @@ test.describe("media library", () => {
       buffer: Buffer.from(PIXEL_GIF),
     });
 
-    const card = page.locator(`a[href^='/media/']`).filter({ hasText: name });
+    // the grid renders each asset as a button, not a link
+    const card = page.getByRole("button", { name: `Abrir ${name}` });
     await expect(card, "the uploaded asset must appear in the library").toBeVisible({ timeout: 30_000 });
 
     // open the detail surface and write metadata
@@ -49,7 +50,7 @@ test.describe("media library", () => {
       mimeType: "image/gif",
       buffer: Buffer.from(PIXEL_GIF),
     });
-    await expect(page.locator("a[href^='/media/']").filter({ hasText: name })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: `Abrir ${name}` })).toBeVisible({ timeout: 30_000 });
 
     await page.goto("/articles");
     await page.getByRole("button", { name: "Novo artigo" }).first().click();

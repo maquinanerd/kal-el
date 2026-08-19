@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 
 import { STORAGE_STATE, SURFACES } from "./_surfaces";
+import { seedMedia } from "./_seed";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ARTIFACTS = join(here, "..", "artifacts");
@@ -85,9 +86,11 @@ test.describe("accessibility", () => {
     const anonContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const anonPage = await anonContext.newPage();
 
+    // Media Detail is now in scope: seed an asset so the surface has an id
+    const seeded = await seedMedia(page, "a11y.gif");
+
     for (const surface of SURFACES) {
-      if (surface.needsMedia) continue; // media detail requires seeded media
-      const path = surface.path.replace("__ARTICLE__", articleId);
+      const path = surface.path.replace("__ARTICLE__", articleId).replace("__MEDIA__", seeded.id);
       const target = surface.anonymous ? anonPage : page;
       for (const vp of viewports) {
         for (const theme of ["light", "dark"]) {
@@ -132,7 +135,8 @@ test.describe("accessibility", () => {
   test("keyboard: primary navigation is reachable and operable without a mouse", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/articles");
-    await page.waitForTimeout(600);
+    // the shell is client-rendered; assert on it only once it exists
+    await page.waitForSelector(".peg-topbar", { state: "attached", timeout: 30_000 });
 
     // At mobile width the user must still be able to reach primary navigation.
     // Either the sidebar is on-screen, or a control exists to reveal it.

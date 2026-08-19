@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 
 import { BREAKPOINTS, STORAGE_STATE, SURFACES, THEMES } from "./_surfaces";
+import { seedMedia } from "./_seed";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ARTIFACTS = join(here, "..", "artifacts");
@@ -162,15 +163,10 @@ test("collect responsive/visual evidence for every surface", async ({ browser })
     articleId = page.url().split("/articles/")[1];
   }
 
-  // find a media id if one exists (media detail is optional evidence)
-  await page.goto("/media");
-  await page.waitForTimeout(1500);
-  let mediaId = "";
-  const mediaLink = page.locator("a[href^='/media/']").first();
-  if ((await mediaLink.count()) > 0) {
-    const href = await mediaLink.getAttribute("href");
-    if (href) mediaId = href.replace("/media/", "");
-  }
+  // Media Detail needs a real asset. It used to be skipped because the grid renders
+  // buttons rather than links, so the id was never found - seed one instead.
+  const seeded = await seedMedia(page, "sweep.gif");
+  const mediaId = seeded.id;
 
   for (const surface of SURFACES) {
     if (surface.needsArticle && !articleId) continue;

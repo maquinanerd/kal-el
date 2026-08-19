@@ -39,7 +39,7 @@ describe("pipeline contract", () => {
   });
 
   it("every path in the OpenAPI document resolves to a real route", async () => {
-    const doc = buildOpenApiDocument() as { paths: Record<string, Record<string, unknown>> };
+    const doc = buildOpenApiDocument() as unknown as { paths: Record<string, Record<string, unknown>> };
     const missing: string[] = [];
 
     for (const [path, methods] of Object.entries(doc.paths)) {

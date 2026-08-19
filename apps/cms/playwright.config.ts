@@ -6,6 +6,17 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
   retries: 0,
+  /*
+   * Serial on purpose.
+   *
+   * Every spec shares one dev server and one database, so parallel workers were never
+   * isolated - the responsive sweep counts articles while another spec is creating them.
+   * They also share one egress IP against the API's 600 req/min global limit: with four
+   * workers the sweep's ~190 navigations plus the other specs pushed past it, `/v1/auth/me`
+   * started answering 429, and the CMS bounced to /login mid-test. The limit is a real
+   * production control, so the suite yields rather than the limit.
+   */
+  workers: 1,
   use: {
     baseURL: "http://localhost:3100",
     headless: true,
