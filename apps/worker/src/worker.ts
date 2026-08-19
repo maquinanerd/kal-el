@@ -45,7 +45,8 @@ async function tick() {
     });
     await run("scheduled-publish", async () => {
       const promoted = await promoteScheduledArticles(db);
-      if (promoted.promoted > 0) console.log(`[worker] scheduled publish ${JSON.stringify(promoted)}`);
+      // a tick in which every due article was refused used to print nothing at all
+      if (promoted.promoted > 0 || promoted.blocked > 0) console.log(`[worker] scheduled publish ${JSON.stringify(promoted)}`);
     });
     await run("idempotency-purge", async () => {
       const purged = await purgeExpiredIdempotencyKeys(db);

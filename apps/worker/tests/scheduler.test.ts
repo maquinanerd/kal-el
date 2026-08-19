@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { freshTestDb, seedSite } from "@kal-el/testkit";
 import { createDb, createPool, type Db } from "@kal-el/db";
-import { articleRevisions, articles, outboxEvents } from "@kal-el/db/schema";
+import { articleRevisions, articles, auditLog, outboxEvents } from "@kal-el/db/schema";
 
 import { promoteScheduledArticles } from "../src/scheduler.js";
 
@@ -21,6 +21,7 @@ describe("scheduled publish promotion", () => {
 
   beforeEach(async () => {
     await db.delete(outboxEvents);
+    await db.delete(auditLog);
     await db.delete(articleRevisions);
     await db.delete(articles);
   });
@@ -90,17 +91,30 @@ describe("scheduled publish promotion", () => {
 
     // the healthy one is not held back by its neighbour
     expect(summary.promoted).toBe(1);
+    expect(summary.blocked).toBe(1);
     const ok = await db.query.articles.findFirst({ where: eq(articles.id, healthy.id) });
     expect(ok?.status).toBe("published");
 
-    // and the unreadable one is left exactly as it was: not published, no revision, no event
+    // nothing was published or announced for the unreadable one
     const bad = await db.query.articles.findFirst({ where: eq(articles.id, broken.id) });
-    expect(bad?.status).toBe("scheduled");
-    expect(bad?.scheduledAt).not.toBeNull();
+    expect(bad?.publishedAt).toBeNull();
     const revisions = await db.select().from(articleRevisions).where(eq(articleRevisions.articleId, broken.id));
     expect(revisions).toHaveLength(0);
     const events = await db.select().from(outboxEvents).where(eq(outboxEvents.aggregateId, broken.id));
     expect(events).toHaveLength(0);
+
+    // and it is out of the due window: left `scheduled` with a past date it would match
+    // the query forever, and since a new schedule must be in the future it would sort
+    // ahead of every healthy article and fill the window on every tick
+    expect(bad?.status).toBe("blocked");
+    const audit = await db.select().from(auditLog).where(eq(auditLog.objectId, broken.id));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.action).toBe("articles.block");
+    expect(audit[0]?.actorType).toBe("system");
+
+    const second = await promoteScheduledArticles(db);
+    expect(second.promoted).toBe(0);
+    expect(second.blocked).toBe(0);
   });
 
   it("does not promote articles scheduled in the future", async () => {

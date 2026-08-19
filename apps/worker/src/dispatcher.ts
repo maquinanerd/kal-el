@@ -169,11 +169,18 @@ export async function processDueEvents(db: Db, opts: DispatchOptions = {}): Prom
     } catch (err) {
       const message = err instanceof Error ? err.message.slice(0, 500) : String(err);
       onLog(`event ${event.id}: pass aborted: ${message}`);
-      // release the claim, but hold the event back: clearing the lock alone re-claimed it
-      // on the very next tick and span on whatever was throwing
+      // Release the claim, hold the event back, and spend an attempt. Clearing the lock
+      // alone re-claimed it on the next tick and span on whatever was throwing - and with
+      // no budget at this level, twenty such events at the head of the claim order would
+      // take all twenty slots forever and no real delivery would ever happen again.
+      const attempts = event.attempts + 1;
       await db
         .update(outboxEvents)
-        .set({ lockedUntil: null, availableAt: new Date(Date.now() + baseDelayMs * 10), lastError: message })
+        .set(
+          attempts >= maxAttempts
+            ? { status: "failed", attempts, lastError: message, lockedUntil: null }
+            : { attempts, lastError: message, lockedUntil: null, availableAt: new Date(Date.now() + baseDelayMs * 2 ** attempts) },
+        )
         .where(eq(outboxEvents.id, event.id));
     }
   }

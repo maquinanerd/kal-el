@@ -3,7 +3,7 @@ import type { Db } from "@kal-el/db";
 import { articleRevisions, articles, auditLog, outboxEvents } from "@kal-el/db/schema";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
 
-export type PromoteSummary = { promoted: number };
+export type PromoteSummary = { promoted: number; blocked: number };
 
 const DEFAULT_DOCUMENT = { version: 2, nodes: [] };
 
@@ -38,25 +38,68 @@ export async function promoteScheduledArticles(db: Db): Promise<PromoteSummary> 
     .select({ id: articles.id })
     .from(articles)
     .where(and(eq(articles.status, "scheduled"), lte(articles.scheduledAt, now)))
-    // oldest first: without an order an article that can never be promoted kept its slot
-    // in every tick, and a hundred of them would starve scheduled publishing entirely
+    // oldest first is what an editorial queue means; a refusal is taken out of the queue
+    // by `blockArticle`, so nothing can pin the head of this ordering
     .orderBy(asc(articles.scheduledAt))
     .limit(100);
 
   let promoted = 0;
+  let blocked = 0;
   for (const { id } of due) {
     // One unpromotable article used to reject the whole function, and the worker abandons
     // the scheduled-publish job for that tick - so a single malformed document stopped
     // every other due article from publishing, on every tick, permanently.
+    let failure: unknown;
     const updated = await promoteOne(db, id, now).catch((err) => {
-      console.error(`[scheduler] article ${id} could not be promoted`, err);
+      failure = err;
       return null;
     });
 
-    if (updated) promoted++;
+    if (updated) {
+      promoted++;
+      continue;
+    }
+    if (failure) {
+      console.error(`[scheduler] article ${id} could not be promoted`, failure);
+      // Isolating the failure is not enough. A refused article keeps `status='scheduled'`
+      // and its past `scheduledAt`, so it matches the due query forever - and since a new
+      // schedule must be in the future, it sorts ahead of every healthy article. A hundred
+      // of them would fill the window on every tick and nothing would ever publish again.
+      // Move it out of the queue and into a state an editor can see and act on.
+      if (await blockArticle(db, id, failure)) blocked++;
+    }
   }
 
-  return { promoted };
+  return { promoted, blocked };
+}
+
+/** Take a permanently unpromotable article out of the due window. */
+async function blockArticle(db: Db, id: string, failure: unknown): Promise<boolean> {
+  const message = failure instanceof Error ? failure.message.slice(0, 500) : String(failure);
+  try {
+    return await db.transaction(async (tx) => {
+      const rows = await tx
+        .update(articles)
+        .set({ status: "blocked", updatedAt: new Date() })
+        .where(and(eq(articles.id, id), eq(articles.status, "scheduled")))
+        .returning();
+      const row = rows[0];
+      if (!row) return false;
+      await tx.insert(auditLog).values({
+        siteId: row.siteId,
+        actorType: "system",
+        actorId: null,
+        action: "articles.block",
+        objectType: "article",
+        objectId: id,
+        details: { via: "scheduler", reason: message, scheduledAt: row.scheduledAt?.toISOString() ?? null },
+      });
+      return true;
+    });
+  } catch (err) {
+    console.error(`[scheduler] article ${id} could not be blocked either`, err);
+    return false;
+  }
 }
 
 async function promoteOne(db: Db, id: string, now: Date) {
