@@ -627,3 +627,219 @@ a {
   .kalel-site-form { grid-template-columns: 1fr; }
   .kalel-perm-picker__items { grid-template-columns: 1fr; }
 }
+
+/* --- Media library --------------------------------------------------------
+   Shell B again: grid workspace + 336px contextual inspector. */
+.kalel-media { display: flex; align-items: flex-start; gap: var(--peg-space-4); min-height: 0; }
+.kalel-media__stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--peg-space-4);
+  border: 1px dashed transparent;
+  border-radius: var(--peg-radius-lg);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.kalel-media__stage--drag {
+  border-color: var(--peg-accent);
+  background: var(--peg-accent-wash);
+}
+/* five columns at the package width, degrading by available space */
+.kalel-media__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--peg-space-3);
+}
+.kalel-media__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--peg-space-2);
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+.kalel-media__tile:hover { background: var(--peg-canvas); }
+.kalel-media__tile--selected {
+  border-color: var(--peg-ink);
+  box-shadow: var(--peg-focus-ring);
+}
+.kalel-media__thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--peg-radius-md);
+  overflow: hidden;
+  background: var(--peg-surface-muted);
+  margin-bottom: var(--peg-space-1);
+}
+.kalel-media__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kalel-media__flag {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  font: var(--peg-font-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: var(--peg-radius-xs);
+  background: var(--peg-warning-bg);
+  color: var(--peg-badge-warning-fg);
+  border: 1px solid var(--peg-warning-bd);
+}
+.kalel-media__flag--inline { position: static; }
+.kalel-media__name {
+  font: var(--peg-font-caption);
+  color: var(--peg-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kalel-media__meta { font: var(--peg-font-micro); font-weight: 400; color: var(--peg-text-tertiary); }
+.kalel-media__row { cursor: pointer; }
+.kalel-media__rowthumb { width: 32px; height: 32px; object-fit: cover; border-radius: var(--peg-radius-xs); flex-shrink: 0; }
+.kalel-media__more { display: flex; justify-content: center; }
+.kalel-media__placeholder { padding: var(--peg-space-6); text-align: center; }
+.kalel-media__title {
+  flex: 1;
+  font: var(--peg-font-label-strong);
+  color: var(--peg-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kalel-media__mono { font-family: var(--peg-font-mono); font-size: 11px; }
+.kalel-media__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--peg-space-3);
+  margin: 0;
+  font: var(--peg-font-caption);
+}
+.kalel-media__facts dt { color: var(--peg-text-tertiary); }
+.kalel-media__facts dd { margin: 0; color: var(--peg-text-primary); text-align: right; }
+
+/* the inspector here is a panel inside the page, not a full-height rail */
+.kalel-media__inspector {
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  overflow: hidden;
+  max-height: calc(100dvh - var(--peg-topbar-height) - var(--peg-space-12));
+}
+
+/* Focal point: a position on a picture, set by clicking the picture. */
+.kalel-focal {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: var(--peg-radius-md);
+  overflow: hidden;
+  cursor: crosshair;
+  background: var(--peg-surface-muted);
+}
+.kalel-focal img { width: 100%; display: block; max-height: 168px; object-fit: cover; }
+.kalel-focal__dot {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+@media (max-width: 1023px) {
+  .kalel-media { display: block; }
+  .kalel-media__inspector {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: 47;
+    width: 100%;
+    max-height: 86dvh;
+    border: 0;
+    border-top: 1px solid var(--peg-border);
+    border-radius: var(--peg-radius-lg) var(--peg-radius-lg) 0 0;
+    box-shadow: var(--peg-shadow-3);
+    transform: translateY(100%);
+    visibility: hidden;
+    transition: transform 180ms ease, visibility 180ms ease;
+  }
+  .kalel-media__inspector.kalel-inspector--open { transform: translateY(0); visibility: visible; }
+}
+
+/* --- Dashboard -----------------------------------------------------------
+   Operational, not analytical. Every counter is a queue you can open, and the
+   lists carry the four things an editor needs to decide: what, where it is,
+   whose it is, and how stale. */
+.kalel-dash__counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--peg-space-3);
+}
+.kalel-counter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--peg-space-3) var(--peg-space-4);
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  text-align: left;
+  cursor: pointer;
+}
+.kalel-counter:hover { background: var(--peg-canvas); }
+.kalel-counter__value {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--peg-text-primary);
+}
+.kalel-counter__label { font: var(--peg-font-caption); color: var(--peg-text-secondary); }
+/* attention is a left rule, not a red card: the accent marks, it does not shout */
+.kalel-counter--attention { border-left: 2px solid var(--peg-accent-strong); }
+[data-theme="dark"] .kalel-counter--attention { border-left-color: var(--peg-accent); }
+
+.kalel-dash__cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--peg-space-4); align-items: start; }
+.kalel-dash__card { min-width: 0; }
+.kalel-dash__list { display: flex; flex-direction: column; padding: 0; }
+.kalel-dash__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--peg-space-3);
+  width: 100%;
+  min-height: var(--peg-table-row-height);
+  padding: var(--peg-space-2) var(--peg-space-4);
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: var(--peg-font-body-sm);
+  color: var(--peg-text-primary);
+}
+.kalel-dash__row + .kalel-dash__row { border-top: 1px dotted var(--peg-divider); }
+.kalel-dash__row:hover { background: var(--peg-canvas); }
+.kalel-dash__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.kalel-dash__author { color: var(--peg-text-tertiary); font: var(--peg-font-caption); white-space: nowrap; }
+.kalel-dash__time { color: var(--peg-text-tertiary); font: var(--peg-font-caption); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.kalel-dash__next { color: var(--peg-text-secondary); font: var(--peg-font-caption); white-space: nowrap; }
+.kalel-dash__list .peg-table__muted { padding: var(--peg-space-4); }
+
+@media (max-width: 1023px) {
+  .kalel-dash__cols { grid-template-columns: 1fr; }
+  .kalel-dash__row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+  .kalel-dash__author, .kalel-dash__next { display: none; }
+}
+
+.kalel-taxonomy__extras { display: flex; flex-direction: column; gap: var(--peg-space-3); max-width: 520px; }
+.kalel-author__bio { display: inline-block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--peg-text-secondary); }

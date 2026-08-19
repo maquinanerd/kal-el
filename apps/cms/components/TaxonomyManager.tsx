@@ -41,9 +41,17 @@ type Props = {
   remove: (siteId: string, id: string) => Promise<unknown>;
   columns?: Column<TaxonomyRow>[];
   createExtras?: (value: Record<string, string>, set: (k: string, v: string) => void) => ReactNode;
+  /**
+   * Extra fields in the edit row. Editing used to send only name and slug, so a value set
+   * at creation - an entity's type, an author's bio - could never be changed afterwards
+   * except through the API.
+   */
+  editExtras?: (value: Record<string, string>, set: (k: string, v: string) => void) => ReactNode;
+  /** Keys `editExtras` owns, so the PATCH carries them. */
+  extraKeys?: string[];
 };
 
-export function TaxonomyManager({ title, description, slugField = true, load, create, update, remove, columns = [], createExtras }: Props) {
+export function TaxonomyManager({ title, description, slugField = true, load, create, update, remove, columns = [], createExtras, editExtras, extraKeys = [] }: Props) {
   const { activeSiteId } = useAuth();
   const [rows, setRows] = useState<TaxonomyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,6 +115,11 @@ export function TaxonomyManager({ title, description, slugField = true, load, cr
     try {
       const body: Record<string, unknown> = { name: editForm.name };
       if (slugField) body.slug = editForm.slug ? slugify(editForm.slug) : slugify(editForm.name ?? "");
+      for (const k of extraKeys) {
+        // "" clears an optional field rather than being dropped, which is how a bio or a
+        // credit could be added but never removed
+        if (k in editForm) body[k] = editForm[k] === "" ? null : editForm[k];
+      }
       await update(activeSiteId, id, body);
       setEditingId(null);
       await reload();
@@ -171,7 +184,18 @@ export function TaxonomyManager({ title, description, slugField = true, load, cr
             </>
           ) : (
             <>
-              <Button size="xs" variant="secondary" onClick={() => { setEditingId(r.id); setEditForm({ name: r.name, slug: r.slug ?? "" }); }}>Editar</Button>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={() => {
+                  setEditingId(r.id);
+                  const seed: Record<string, string> = { name: r.name, slug: r.slug ?? "" };
+                  for (const k of extraKeys) seed[k] = r[k] == null ? "" : String(r[k]);
+                  setEditForm(seed);
+                }}
+              >
+                Editar
+              </Button>
               <Button size="xs" variant="destructive" disabled={busyId !== null} onClick={() => void onDelete(r.id)}>Excluir</Button>
             </>
           )}
@@ -195,6 +219,17 @@ export function TaxonomyManager({ title, description, slugField = true, load, cr
           </Button>
         </div>
       </div>
+
+      {editingId && editExtras && (
+        <div className="peg-card">
+          <div className="peg-card__header">
+            <h3 className="peg-card__title">Editando {editForm.name || "item"}</h3>
+          </div>
+          <div className="peg-card__body kalel-taxonomy__extras">
+            {editExtras(editForm, (k, v) => setEditForm((prev) => ({ ...prev, [k]: v })))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="peg-table__muted">Carregando…</p>
