@@ -7,13 +7,14 @@ import {
   articleRevisions,
   articles,
   articleTags,
+  auditLog,
   authors,
   categories,
   entities,
   outboxEvents,
   tags,
 } from "@kal-el/db/schema";
-import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
+import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody, WorkflowNote } from "@kal-el/contracts";
 import { migrateDocumentToV2, QUALITY_FLAGS } from "@kal-el/contracts";
 
 import { badRequest, conflict, forbidden, invalidTransition, notFound, versionConflict } from "../plugins/errors.js";
@@ -150,8 +151,46 @@ function qualityFlagsFor(row: ArticleRow): string[] {
   return flags;
 }
 
+/**
+ * The editorial note behind the article's CURRENT status.
+ *
+ * The workflow has written these notes to the audit trail from the start, and the review
+ * queue shows them - but the author, opening a blocked article, saw "Bloqueado" and
+ * "Reenviar p/ revisão" and nowhere the reason they were asked to change something. The
+ * note existed and was unreachable from the one screen where it decides what to do next.
+ *
+ * Scoped to the transition that produced the status the article is in, not merely the
+ * latest note of any kind: an older "enviado para revisão" comment presented as the
+ * reason for a block would be worse than showing nothing. Read from the log, never copied
+ * onto the article - a second stored copy is a duplicate that can disagree.
+ */
+async function workflowNoteFor(db: Db, row: ArticleRow): Promise<WorkflowNote | null> {
+  const [entry] = await db
+    .select({
+      action: auditLog.action,
+      details: auditLog.details,
+      actorLabel: auditLog.actorLabel,
+      createdAt: auditLog.createdAt,
+    })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.objectType, "article"),
+        eq(auditLog.objectId, row.id),
+        // the transition INTO the current status, whatever wrote it
+        sql`${auditLog.details}->>'to' = ${row.status}`,
+      ),
+    )
+    .orderBy(desc(auditLog.createdAt))
+    .limit(1);
+
+  const note = typeof entry?.details?.note === "string" ? entry.details.note.trim() : "";
+  if (!entry || !note) return null;
+  return { action: entry.action, note, actorLabel: entry.actorLabel ?? null, createdAt: entry.createdAt.toISOString() };
+}
+
 async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
-  const rel = await relationIds(db, row.id);
+  const [rel, workflowNote] = await Promise.all([relationIds(db, row.id), workflowNoteFor(db, row)]);
   return {
     id: row.id,
     siteId: row.siteId,
@@ -168,6 +207,7 @@ async function articleDto(db: Db, row: ArticleRow): Promise<Article> {
     seo: row.seo,
     provenance: row.provenance ?? null,
     ...rel,
+    workflowNote,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),

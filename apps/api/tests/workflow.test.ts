@@ -71,6 +71,44 @@ describe("editorial workflow", () => {
     });
   }
 
+  /**
+   * The author is the person who has to act on a rejection, and the reason lived only in
+   * the audit log, behind `audit.read` - a permission an author does not have. The
+   * article itself now carries the note of the transition that produced its status, so it
+   * arrives with the same read the editor already does.
+   */
+  it("carries the rejection note on the blocked article, readable by the author", async () => {
+    const article = await createDraft(authorSession, "bloqueado-com-motivo");
+    await act(authorSession, article.id, "submit");
+
+    const reject = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles/${article.id}/reject`,
+      headers: headers(headEditorSession),
+      payload: { note: "Rever a introducao antes de reenviar." },
+    });
+    expect(reject.statusCode).toBe(200);
+    expect(reject.json().data.status).toBe("blocked");
+
+    const seen = await ctx.app.inject({
+      method: "GET",
+      url: `/v1/sites/${siteId}/articles/${article.id}`,
+      headers: { Cookie: authorSession.cookieHeader },
+    });
+    expect(seen.statusCode).toBe(200);
+    const note = seen.json().data.workflowNote;
+    expect(note, "the author must be able to read why it came back").toBeTruthy();
+    expect(note.note).toBe("Rever a introducao antes de reenviar.");
+    expect(note.action).toBe("articles.reject");
+    expect(note.actorLabel).toBe("Editor chefe");
+
+    // resubmitting leaves the block behind: the note must not follow the article forward
+    const again = await act(authorSession, article.id, "submit");
+    expect(again.statusCode).toBe(200);
+    expect(again.json().data.status).toBe("in_review");
+    expect(again.json().data.workflowNote, "a submit with no note carries none").toBeNull();
+  });
+
   it("author can create a draft and submit it for review", async () => {
     const article = await createDraft(authorSession, "autor-rascunho");
     expect(article.status).toBe("draft");

@@ -168,6 +168,7 @@ export default function ArticlePage() {
   const [version, setVersion] = useState(0);
   const [status, setStatus] = useState<ArticleStatus>("draft");
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+  const [workflowNote, setWorkflowNote] = useState<ArticleDetail["workflowNote"]>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<ArticleRevision[]>([]);
@@ -245,6 +246,7 @@ export default function ArticlePage() {
         setVersion(a.version);
         setStatus(a.status);
         setScheduledAt(a.scheduledAt ?? null);
+        setWorkflowNote(a.workflowNote ?? null);
         setSelCats(new Set(a.categories ?? []));
         setSelTags(new Set(a.tags ?? []));
         setSelEntities(new Set(a.entities ?? []));
@@ -378,6 +380,8 @@ export default function ArticlePage() {
       setStatus(updated.status);
       setVersion(updated.version);
       setScheduledAt(updated.scheduledAt ?? null);
+      // the response already carries the note this transition just wrote
+      setWorkflowNote(updated.workflowNote ?? null);
     } catch (err) {
       setActionError(err instanceof ApiError ? (err.status === 403 ? "Sem permissão para esta ação" : err.message) : "Falha na ação");
     } finally {
@@ -471,6 +475,30 @@ export default function ArticlePage() {
       <div className="kalel-editor__main">
         {actionError && <Alert tone="danger">{actionError}</Alert>}
         {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
+
+        {/*
+          * Why the article is blocked, at the top of the screen that has to act on it.
+          *
+          * The reviewer's comment was persisted and shown in the workflow queue, but the
+          * author opening the article saw only "Bloqueado" and "Reenviar p/ revisão" —
+          * the state and the way out, never the reason. Sending it back unchanged was the
+          * only thing they could do with what was on screen.
+          */}
+        {status === "blocked" && workflowNote && (
+          <Alert tone="warning" title="Alterações solicitadas">
+            <p className="kalel-workflow-note__text">{workflowNote.note}</p>
+            <p className="kalel-workflow-note__meta">
+              {workflowNote.actorLabel ? `${workflowNote.actorLabel} · ` : ""}
+              {new Date(workflowNote.createdAt).toLocaleString("pt-BR", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          </Alert>
+        )}
 
         {activeSiteId && article?.qualityFlags?.includes("document_unreadable") && (
           <DocumentRepair

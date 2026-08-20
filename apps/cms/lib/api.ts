@@ -135,6 +135,12 @@ export type ArticleDetail = {
    * would destroy whatever is really in the column.
    */
   qualityFlags?: string[];
+  /**
+   * The editorial note attached to the transition that produced the current status.
+   * Derived by the API from the audit trail; on a blocked article it is the reason the
+   * reviewer asked for changes.
+   */
+  workflowNote?: { action: string; note: string; actorLabel: string | null; createdAt: string } | null;
 };
 
 export type ArticleRevision = { id: string; revisionNumber: number; document: { version: number; nodes: unknown[] }; note: string | null; createdAt: string };

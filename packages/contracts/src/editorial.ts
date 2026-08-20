@@ -157,11 +157,29 @@ export const articleSummarySchema = z.object({
   qualityFlags: z.array(z.string()).default([]),
 });
 
+/**
+ * The editorial note attached to the transition that put the article in the status it is
+ * in now — the "why" behind `blocked`, above all.
+ *
+ * Derived, never stored: it is read back from the audit trail, which has recorded these
+ * notes since the workflow endpoints existed. A second copy on the article would be a
+ * duplicate that can disagree with the log.
+ */
+export const workflowNoteSchema = z.object({
+  /** The audited transition, e.g. `articles.reject`. */
+  action: z.string(),
+  note: z.string(),
+  /** Who wrote it, as their name was at the time. Null for system and worker actors. */
+  actorLabel: z.string().nullable(),
+  createdAt: timestampSchema,
+});
+
 export const articleSchema = articleSummarySchema.extend({
   dek: z.string().max(600).nullable(),
   document: documentV2Schema,
   seo: seoMetadataSchema,
   provenance: provenanceSchema,
+  workflowNote: workflowNoteSchema.nullable().default(null),
 });
 
 export const createArticleBodySchema = z.object({
@@ -437,6 +455,7 @@ export type ArticleDocumentV2 = z.infer<typeof documentV2Schema>;
 export type ArticleDocument = z.infer<typeof documentSchema>;
 export type Provenance = z.infer<typeof provenanceSchema>;
 export type Article = z.infer<typeof articleSchema>;
+export type WorkflowNote = z.infer<typeof workflowNoteSchema>;
 export type ArticleSummary = z.infer<typeof articleSummarySchema>;
 export type CreateArticleBody = z.infer<typeof createArticleBodySchema>;
 export type CreateArticleInput = z.input<typeof createArticleBodySchema>;

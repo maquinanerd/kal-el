@@ -252,6 +252,20 @@ a {
 /* the way back to an automatic slug: an action, not a trick with the empty field */
 .kalel-slug-reset { align-self: flex-start; }
 
+/* ── Workflow note ───────────────────────────────────────────────────────
+   The reviewer's words, quoted, and who wrote them. Set in the reading face:
+   it is editorial copy, not interface chrome. */
+.kalel-workflow-note__text {
+  margin: 0;
+  font: var(--peg-font-body);
+  color: var(--peg-text-primary);
+}
+.kalel-workflow-note__meta {
+  margin: var(--peg-space-2) 0 0;
+  font: var(--peg-font-caption);
+  color: var(--peg-text-secondary);
+}
+
 /* ── QA checklist ───────────────────────────────────────────────────────── */
 .kalel-qa { display: flex; flex-direction: column; gap: var(--peg-space-2); }
 .kalel-qa__count { font: var(--peg-font-label-strong); color: var(--peg-text-primary); }
