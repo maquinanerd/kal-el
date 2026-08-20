@@ -468,3 +468,138 @@ persegui-los é uma campanha mais larga que esta rodada.
 A validação visual criou dois artigos no banco de smoke: `Acceptance Visual Kal El`
 (bloqueado, com a nota de revisão real, útil como evidência clicável) e um `Novo artigo`
 residual. **A API não expõe rota de exclusão de artigo**, então não foram removidos.
+
+---
+
+# Revisão adversarial dos commits de fechamento
+
+Os cinco commits de fechamento acima (`04a2867`, `1b53ebd`, `5ce0295`, `52cdffa`,
+`1624214`) passaram por uma revisão em que cada achado teve de sobreviver a um verificador
+cuja instrução era **refutá-lo**. Oito achados sobreviveram; um foi refutado e descartado.
+
+O motivo de revisar correções: `04a2867` fez as listas funcionarem pela primeira vez, e
+código que nunca tinha executado passou a executar. Dois dos defeitos abaixo só existiam
+porque a funcionalidade agora funciona.
+
+| Sev | Defeito | Origem | Situação |
+|---|---|---|---|
+| alta | `applyLink` gravava o rótulo alargado sobre uma seleção menor — duplicava ou destruía texto | `1b53ebd` | corrigido em `c14bdff` |
+| média | Caret **encostado** num link era tratado como dentro dele | `1b53ebd` | corrigido em `c14bdff` |
+| baixa | Limpar o campo de texto partia um link em dois com hrefs diferentes | `1b53ebd` | corrigido em `c14bdff` |
+| alta | `Tab` numa lista lançava `TransformError` e derrubava o editor | `04a2867` | **`ae8321a`** |
+| média | Trocar o tipo da lista com o caret fragmentava uma lista em três | `04a2867` | **`ae8321a`** |
+| alta | Publicar sem sair do editor não travava o slug — a URL pública mudava ao editar o título | `5ce0295` | **`83ba840`** |
+| média | Slug deliberado terminado em dígitos (`copa-do-mundo-2026`) lido como forma de colisão do servidor | `5ce0295` | **`5bab479`** |
+| média | Artigo bloqueado pelo worker exibia uma nota de revisão antiga como o motivo | `1624214` | **`1eeb2fc`** |
+
+Um nono defeito apareceu na varredura, não na revisão: a lista de revisões imprimia
+`published` / `updated` — as palavras que a própria API grava como nota. Corrigido em
+`71b710e`.
+
+## Como cada correção foi verificada
+
+Nenhuma foi dada como pronta por leitura de código.
+
+**`Tab` e troca de tipo de lista** — reproduzidos em Node contra o schema real
+(`buildTiptapSchema`), não contra uma réplica:
+
+```
+sinkListItem (o binding ANTIGO do Tab): THREW -> Invalid content for node listItem
+listItem content spec: paragraph+
+
+before:               bulletList[um,dois,tres]
+ANTES (lift + wrap):  bulletList[um] / orderedList[dois] / bulletList[tres]
+DEPOIS (setNodeMarkup): orderedList[um,dois,tres]
+```
+
+`Tab` e `Shift-Tab` deixaram de ser vinculados. Recusar aninhamento tem de significar que
+o comando declina, não que ele estoura — e sem vínculo essas teclas voltam a mover o foco,
+que é como alguém navegando por teclado sai do editor.
+
+**Trava do slug ao publicar** — ponta a ponta no CMS rodando:
+
+```
+rascunho    editar título -> slug acompanha    (antes-de-publicar)
+publicar    dica vira "Definido manualmente"
+publicado   editar título -> slug INALTERADO
+```
+
+A trava é de mão única: só adiciona, nunca remove. Reavaliar a cada transição devolveria
+ao título um slug que o redator já tinha reivindicado.
+
+**Sufixo numérico** — 8 casos, incluindo a preservação do P1 original:
+
+```
+novo-artigo          rascunho   -> automático
+novo-artigo-2        rascunho   -> automático   (o P1 original continua fechado)
+novo-artigo-17       rascunho   -> automático
+copa-do-mundo-2026   rascunho   -> TRAVADO      (antes destravava sozinho)
+copa-do-mundo-1      rascunho   -> TRAVADO
+copa-do-mundo-02     rascunho   -> TRAVADO
+minha-url            rascunho   -> TRAVADO
+qualquer             publicado  -> TRAVADO
+```
+
+Acima de 99 o slug simplesmente fica travado. É a direção segura: o custo é um slug que
+para de seguir o título, não um endereço público que muda sozinho.
+
+**Nota de workflow** — contra a API rodando, na sequência que ressuscitava a nota antiga:
+
+```
+submit COM nota    -> articles.submit: "PRIMEIRA revisao - nota antiga"
+reject COM nota    -> articles.reject: "Corrigir o lead"
+submit SEM nota    -> null            (antes: a nota do primeiro submit)
+```
+
+## Verificação final
+
+```
+pnpm -r typecheck   limpo (13 pacotes)
+pnpm -r lint        limpo (13 pacotes)
+API                 162 testes, 22 arquivos — verde
+```
+
+```
+captured 78 combinations
+actually measured     : 78
+nav errors            : 0
+shell did NOT render  : 0
+invisible CTAs        : 0
+unreachable content   : 0
+double scrollbars     : 0
+raw enums in UI       : 0
+SWEEP OK
+```
+
+52 capturas em claro e 26 em escuro, em 390 / 768 / 1440 / 1526, 13 telas cada — e as 78
+confirmaram que o shell do CMS realmente renderizou, então os zeros descrevem o produto e
+não uma tela de erro.
+
+A varredura mede invariantes de shell e layout. Ela **não** exercita as correções de
+comportamento acima; essas têm as suas próprias evidências, listadas antes.
+
+## Armadilhas de ambiente que custaram tempo
+
+Duas, registradas porque nenhuma é óbvia e as duas produzem sintomas que parecem defeito de
+produto.
+
+**`.next` é de um dono só.** `next dev`, `next build` e `next start` compartilham
+`apps/cms/.next`. Rodar qualquer build enquanto um dev server está no ar apaga o
+`BUILD_ID` e `server/pages` debaixo dele, e o servidor passa a responder 500 ou a tela de
+erro do Next. Uma varredura inteira foi perdida assim e voltou "zero defeitos" sobre
+capturas que eram todas a tela de erro — o que é o resultado mais perigoso possível, porque
+é indistinguível de aprovação. Daí o `shellRendered` por combinação e o
+`SWEEP INCONCLUSIVE`.
+
+**Porta ocupada não é porta reservada.** `next dev` cai silenciosamente para a próxima
+porta livre. Com a 3000 tomada, ele pegou a 3001 e ficou em `[::]:3001` enquanto a API
+estava em `0.0.0.0:3001` — o Windows permite as duas. Como `localhost` resolve `::1`
+primeiro, o CMS passou a responder às chamadas destinadas à API, exatamente na URL que o
+cliente do navegador usa. O sintoma era 404 em HTML vindo de `/v1/...`. Suba a API antes do
+CMS e confirme que `localhost:3001` devolve JSON, não HTML.
+
+## Dados locais
+
+Os artigos criados pelas verificações desta rodada (`Trava slug …`, `Stale note check`,
+`Antes de publicar`) foram **arquivados** — a API não expõe rota de exclusão de artigo, e
+arquivar é o mais próximo de remover que o domínio oferece.
