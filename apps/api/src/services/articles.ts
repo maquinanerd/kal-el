@@ -17,7 +17,7 @@ import {
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody, WorkflowNote } from "@kal-el/contracts";
 import { migrateDocumentToV2, QUALITY_FLAGS } from "@kal-el/contracts";
 
-import { badRequest, conflict, forbidden, invalidTransition, notFound, versionConflict } from "../plugins/errors.js";
+import { badRequest, conflict, forbidden, invalidTransition, isUniqueViolation, notFound, pgConstraint, versionConflict } from "../plugins/errors.js";
 import { auditActorFields, writeAudit } from "../plugins/audit.js";
 import { upsertSlugRedirect } from "./redirects.js";
 import { assertMediaInSite, collectDocumentMediaIds } from "./media.js";
@@ -97,23 +97,73 @@ export function slugify(input: string): string {
   );
 }
 
+const SLUG_UNIQUE_INDEX = "articles_site_slug_unique";
+
 /**
+ * How many times a writer may lose the slug race before giving up. Each retry means
+ * another writer claimed the candidate in the microseconds between the probe and the
+ * write, so a handful is already generous.
+ */
+const MAX_SLUG_RETRIES = 5;
+
+/**
+ * First of `base`, `base-2`, `base-3`, ... not currently taken in this site, resuming the
+ * search at suffix `from` so a writer that already lost a race does not re-probe the
+ * candidates it burned through.
+ *
  * @param excludeArticleId the article being updated, which must not count as a collision
  * with itself. Without it a repeated sync of the same source slug oscillated: the article
  * at `foo-2` asked for `foo`, found `foo` taken and `foo-2` taken (by itself), moved to
  * `foo-3`; the next run found `foo-2` free and moved back - leaving redirects in both
  * directions, i.e. a permanent 301 loop on the public site.
  */
-async function uniqueSlug(db: Db, siteId: string, base: string, excludeArticleId?: string): Promise<string> {
-  let slug = base;
-  let i = 2;
+async function nextFreeSlug(
+  db: Db,
+  siteId: string,
+  base: string,
+  from: number,
+  excludeArticleId?: string,
+): Promise<{ slug: string; next: number }> {
+  let i = from;
   for (;;) {
+    const slug = i < 2 ? base : `${base}-${i}`;
     const exists = await db.query.articles.findFirst({
       where: and(eq(articles.siteId, siteId), eq(articles.slug, slug)),
     });
-    if (!exists || exists.id === excludeArticleId) return slug;
-    slug = `${base}-${i++}`;
+    i += 1;
+    if (!exists || exists.id === excludeArticleId) return { slug, next: i };
   }
+}
+
+/**
+ * Run `attempt` with a slug derived from `base`, moving to the next suffix when it loses
+ * a race. Probing for a free slug is a TOCTOU: two concurrent writers both read the same
+ * candidate as free and one of them hits `articles_site_slug_unique`. The probe stays,
+ * but only as a hint that skips taken suffixes - the index is the authority.
+ *
+ * The caller never chose this slug, so the loser takes the next suffix instead of
+ * surfacing a 409 it cannot act on. A slug the client chose explicitly on create must NOT
+ * be routed through here: that collision is a real conflict, not something to silently
+ * de-duplicate.
+ */
+async function withUniqueSlug<T>(
+  db: Db,
+  siteId: string,
+  base: string,
+  attempt: (slug: string) => Promise<T>,
+  excludeArticleId?: string,
+): Promise<T> {
+  let from = 1;
+  for (let retries = 0; retries < MAX_SLUG_RETRIES; retries += 1) {
+    const { slug, next } = await nextFreeSlug(db, siteId, base, from, excludeArticleId);
+    from = next;
+    try {
+      return await attempt(slug);
+    } catch (err) {
+      if (!isUniqueViolation(err) || pgConstraint(err) !== SLUG_UNIQUE_INDEX) throw err;
+    }
+  }
+  throw conflict(`could not allocate a unique slug for "${base}"`, { field: "slug" });
 }
 
 type ArticleRow = typeof articles.$inferSelect;
@@ -341,7 +391,6 @@ export async function createArticle(
     }
   }
 
-  const slug = body.slug ?? (await uniqueSlug(db, siteId, slugify(body.title)));
   const document = body.document ? migrateDocumentToV2(body.document) : DEFAULT_DOCUMENT;
   const seo: SeoMetadata = {
     seoTitle: null,
@@ -375,7 +424,7 @@ export async function createArticle(
   await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : []), ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : [])]);
   await assertPrimaryCategoryInSite(db, siteId, seo.primaryCategoryId);
 
-  const row = await db.transaction(async (tx) => {
+  const attemptCreate = (slug: string) => db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(articles)
       .values({
@@ -440,7 +489,29 @@ export async function createArticle(
     return inserted;
   });
 
-  return { article: await articleDto(db, row), created: true };
+  const create = async (slug: string): Promise<{ article: Article; created: boolean }> => {
+    try {
+      return { article: await articleDto(db, await attemptCreate(slug)), created: true };
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // The externalKey probe above is a TOCTOU of its own: a concurrent importer can
+      // claim the key between that read and this insert. Re-read before deciding - if the
+      // key is taken, that row IS the idempotent answer, and it wins over the slug retry
+      // so a re-import never creates a suffixed duplicate of itself.
+      const replay = body.externalKey
+        ? await db.query.articles.findFirst({
+            where: and(eq(articles.siteId, siteId), eq(articles.externalKey, body.externalKey)),
+          })
+        : undefined;
+      // Not an externalKey replay: let withUniqueSlug retry a lost slug race.
+      if (!replay) throw err;
+      return { article: await articleDto(db, replay), created: false };
+    }
+  };
+
+  // A slug the client chose explicitly is not ours to de-duplicate: let that collision
+  // surface as a 409. A slug we derived from the title is.
+  return body.slug ? create(body.slug) : withUniqueSlug(db, siteId, slugify(body.title), create);
 }
 
 export async function getArticle(db: Db, siteId: string, articleId: string) {
@@ -508,16 +579,8 @@ export async function updateArticle(
   await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : []), ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : [])]);
   await assertPrimaryCategoryInSite(db, siteId, seo.primaryCategoryId);
 
-  const updated = await db.transaction(async (tx) => {
+  const attemptUpdate = (slug: typeof row.slug) => db.transaction(async (tx) => {
     const inner = tx as unknown as Db;
-
-    let slug = row.slug;
-    if (body.slug && body.slug !== row.slug) {
-      slug = await uniqueSlug(inner, siteId, body.slug, articleId);
-      if (row.slug && slug !== row.slug) {
-        await upsertSlugRedirect(inner, siteId, row.slug, slug);
-      }
-    }
 
     const [result] = await tx
       .update(articles)
@@ -538,6 +601,12 @@ export async function updateArticle(
       .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId), eq(articles.version, row.version)))
       .returning();
     if (!result) throw await concurrentChange(tx, siteId, articleId, row.version);
+
+    // Written inside the transaction, and only once the update has committed to this
+    // slug: a discarded attempt must not leave behind a 301 to a slug it never got.
+    if (row.slug && slug && slug !== row.slug) {
+      await upsertSlugRedirect(inner, siteId, row.slug, slug);
+    }
 
     // The stored body could not be read, and this update is about to replace it. Keep the
     // raw bytes as a revision of their own: after the write there is no other copy, and a
@@ -586,6 +655,13 @@ export async function updateArticle(
 
     return result;
   });
+
+  // Unlike create, an explicit new slug IS de-duplicated with a suffix here, so it goes
+  // through withUniqueSlug; a slug the request did not touch does not.
+  const updated =
+    body.slug != null && body.slug !== row.slug
+      ? await withUniqueSlug(db, siteId, body.slug, attemptUpdate, articleId)
+      : await attemptUpdate(row.slug);
 
   return articleDto(db, updated);
 }

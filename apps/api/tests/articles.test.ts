@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { articleRevisions, articles, outboxEvents } from "@kal-el/db/schema";
 import { bootstrap, createTestApp, login, type Session, type TestContext } from "./helpers.js";
@@ -40,6 +40,84 @@ describe("articles", () => {
     expect(data.document).toEqual({ version: 2, nodes: [] });
     expect(data.status).toBe("draft");
     expect(data.seo.robotsIndex).toBe("index");
+  });
+
+  it("stays idempotent when concurrent creates share an externalKey", async () => {
+    // Regression: importers reprocessing the same item fire N POSTs at once.
+    // All of them clear the externalKey pre-check, so the losers hit the unique
+    // index and must re-read the winner's row instead of returning 409.
+    const externalKey = "mn26:concurrent-import";
+    const payload = { type: "article", title: "Importação concorrente MN26", externalKey };
+
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        ctx.app.inject({
+          method: "POST",
+          url: `/v1/sites/${siteId}/articles`,
+          headers: articleHeaders(),
+          payload,
+        }),
+      ),
+    );
+
+    for (const res of responses) {
+      expect([200, 201]).toContain(res.statusCode);
+    }
+    expect(responses.filter((r) => r.statusCode === 201).length).toBe(1);
+
+    const ids = new Set(responses.map((r) => r.json().data.id as string));
+    expect(ids.size).toBe(1);
+
+    const rows = await ctx.db
+      .select()
+      .from(articles)
+      .where(and(eq(articles.siteId, siteId), eq(articles.externalKey, externalKey)));
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.id).toBe([...ids][0]);
+  });
+
+  it("retries a derived slug when it loses the race to a concurrent writer", async () => {
+    // Regression for the uniqueSlug TOCTOU: probe for a free slug, then write.
+    // A writer that grabs the candidate in between used to turn into a 409 for
+    // a slug the client never chose. Reproduced deterministically by holding an
+    // uncommitted INSERT on the candidate: it is invisible to the probe, so the
+    // request gets past it and then blocks on articles_site_slug_unique.
+    const base = "corrida-de-slug-derivado";
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const blocker = ctx.db.transaction(async (tx) => {
+      await tx.insert(articles).values({ siteId, title: "Bloqueador do slug", slug: base });
+      await gate;
+    });
+
+    let settled = false;
+    const pending = ctx.app
+      .inject({
+        method: "POST",
+        url: `/v1/sites/${siteId}/articles`,
+        headers: articleHeaders(),
+        payload: { type: "article", title: "Corrida de slug derivado" },
+      })
+      .then((res) => {
+        settled = true;
+        return res;
+      });
+
+    // The request must still be blocked on the unique index; if it had already
+    // finished, the probe would simply have seen the row and this would prove
+    // nothing about the retry.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(settled).toBe(false);
+
+    release();
+    await blocker;
+
+    const res = await pending;
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.slug).toBe(`${base}-2`);
   });
 
   it("rejects duplicate slug within a site", async () => {
