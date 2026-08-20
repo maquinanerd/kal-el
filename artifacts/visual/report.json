@@ -1,0 +1,1924 @@
+[
+  {
+    "surface": "dashboard",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1294,
+      "overflows": true,
+      "maxScroll": 446,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Dashboard",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "articles",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 950,
+      "overflows": true,
+      "maxScroll": 102,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Anterior",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Próxima",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Artigos",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "editor",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1233,
+      "overflows": true,
+      "maxScroll": 385,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 58,
+    "rawEnums": [
+      "published"
+    ],
+    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "media",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Mídia",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "workflow",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Workflow",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "calendar",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 896,
+      "overflows": true,
+      "maxScroll": 48,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Calendário",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "sites",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Criar site",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Em uso",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Administração Sites",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "users",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 3,
+    "rawEnums": [],
+    "breadcrumb": "Administração Usuários",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "roles",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Administração Papéis",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "audit",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 5073,
+      "overflows": true,
+      "maxScroll": 4225,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Administração Audit log",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "webhooks",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Registrar webhook",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Administração Webhooks",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "settings",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Adicionar 301",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Administração Configurações",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "notfound",
+    "viewport": "1440",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Novo artigo",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "dashboard",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1315,
+      "overflows": true,
+      "maxScroll": 467,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Dashboard",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "articles",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 950,
+      "overflows": true,
+      "maxScroll": 102,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Anterior",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Próxima",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Artigos",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "editor",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1233,
+      "overflows": true,
+      "maxScroll": 385,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 58,
+    "rawEnums": [
+      "published"
+    ],
+    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "media",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Mídia",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "workflow",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Workflow",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "calendar",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 896,
+      "overflows": true,
+      "maxScroll": 48,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Calendário",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "sites",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Criar site",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Em uso",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Administração Sites",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "users",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 3,
+    "rawEnums": [],
+    "breadcrumb": "Administração Usuários",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "roles",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Administração Papéis",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "audit",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 5073,
+      "overflows": true,
+      "maxScroll": 4225,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Administração Audit log",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "webhooks",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Registrar webhook",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Administração Webhooks",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "settings",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Adicionar 301",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Administração Configurações",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "notfound",
+    "viewport": "1526",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Novo artigo",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "dashboard",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 1793,
+      "overflows": true,
+      "maxScroll": 821,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Dashboard",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "articles",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 1106,
+      "overflows": true,
+      "maxScroll": 134,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Anterior",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Próxima",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Artigos",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "editor",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 1218,
+      "overflows": true,
+      "maxScroll": 246,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 59,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "media",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Mídia",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "workflow",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Workflow",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "calendar",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Calendário",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "sites",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Criar site",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Em uso",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Administração Sites",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "users",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 3,
+    "rawEnums": [],
+    "breadcrumb": "Administração Usuários",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "roles",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Administração Papéis",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "audit",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 5081,
+      "overflows": true,
+      "maxScroll": 4109,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Administração Audit log",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "webhooks",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Registrar webhook",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Administração Webhooks",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "settings",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Adicionar 301",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Administração Configurações",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "notfound",
+    "viewport": "768",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 1024,
+    "innerHeight": 1024,
+    "scroll": {
+      "client": 972,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Novo artigo",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "dashboard",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 2154,
+      "overflows": true,
+      "maxScroll": 1362,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Dashboard",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "articles",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 1150,
+      "overflows": true,
+      "maxScroll": 358,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Anterior",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Próxima",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Artigos",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "editor",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 1795,
+      "overflows": true,
+      "maxScroll": 1003,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 59,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "media",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Mídia",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "workflow",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Workflow",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "calendar",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 948,
+      "overflows": true,
+      "maxScroll": 156,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Calendário",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "sites",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Criar site",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      },
+      {
+        "label": "Em uso",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Administração Sites",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "users",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 3,
+    "rawEnums": [],
+    "breadcrumb": "Administração Usuários",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "roles",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Administração Papéis",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "audit",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 7171,
+      "overflows": true,
+      "maxScroll": 6379,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Administração Audit log",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "webhooks",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Registrar webhook",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Administração Webhooks",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "settings",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 852,
+      "overflows": true,
+      "maxScroll": 60,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Adicionar 301",
+        "fg": "rgb(179, 181, 175)",
+        "bg": "rgb(247, 247, 246)",
+        "ratio": 1.93,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Administração Configurações",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "notfound",
+    "viewport": "390",
+    "theme": "light",
+    "shellRendered": true,
+    "frameHeight": 844,
+    "innerHeight": 844,
+    "scroll": {
+      "client": 792,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Novo artigo",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "dashboard",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1294,
+      "overflows": true,
+      "maxScroll": 446,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Dashboard",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "articles",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 950,
+      "overflows": true,
+      "maxScroll": 102,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Anterior",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      },
+      {
+        "label": "Próxima",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Artigos",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "editor",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1233,
+      "overflows": true,
+      "maxScroll": 385,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 58,
+    "rawEnums": [
+      "published"
+    ],
+    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "media",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Mídia",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "workflow",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Workflow",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "calendar",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 896,
+      "overflows": true,
+      "maxScroll": 48,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Calendário",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "sites",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Criar site",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      },
+      {
+        "label": "Em uso",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Administração Sites",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "users",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 3,
+    "rawEnums": [],
+    "breadcrumb": "Administração Usuários",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "roles",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Administração Papéis",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "audit",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 5073,
+      "overflows": true,
+      "maxScroll": 4225,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Administração Audit log",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "webhooks",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Registrar webhook",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Administração Webhooks",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "settings",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Adicionar 301",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Administração Configurações",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "notfound",
+    "viewport": "1440",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Novo artigo",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "dashboard",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1315,
+      "overflows": true,
+      "maxScroll": 467,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Dashboard",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "articles",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 950,
+      "overflows": true,
+      "maxScroll": 102,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Anterior",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      },
+      {
+        "label": "Próxima",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Artigos",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "editor",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 1233,
+      "overflows": true,
+      "maxScroll": 385,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 58,
+    "rawEnums": [
+      "published"
+    ],
+    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "media",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Mídia",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "workflow",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Workflow",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "calendar",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 896,
+      "overflows": true,
+      "maxScroll": 48,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Calendário",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "sites",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Criar site",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      },
+      {
+        "label": "Em uso",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 4,
+    "rawEnums": [],
+    "breadcrumb": "Administração Sites",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "users",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 3,
+    "rawEnums": [],
+    "breadcrumb": "Administração Usuários",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "roles",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 7,
+    "rawEnums": [],
+    "breadcrumb": "Administração Papéis",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "audit",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 5073,
+      "overflows": true,
+      "maxScroll": 4225,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Administração Audit log",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "webhooks",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Registrar webhook",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 2,
+    "rawEnums": [],
+    "breadcrumb": "Administração Webhooks",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "settings",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [
+      {
+        "label": "Adicionar 301",
+        "fg": "rgb(93, 96, 88)",
+        "bg": "rgb(30, 33, 29)",
+        "ratio": 2.54,
+        "disabled": true
+      }
+    ],
+    "buttonCount": 6,
+    "rawEnums": [],
+    "breadcrumb": "Administração Configurações",
+    "hasSaveSlot": true
+  },
+  {
+    "surface": "notfound",
+    "viewport": "1526",
+    "theme": "dark",
+    "shellRendered": true,
+    "frameHeight": 900,
+    "innerHeight": 900,
+    "scroll": {
+      "client": 848,
+      "scrollHeight": 848,
+      "overflows": false,
+      "maxScroll": 0,
+      "reachesEnd": true
+    },
+    "bodyScrolls": false,
+    "invisibleButtons": [],
+    "buttonCount": 1,
+    "rawEnums": [],
+    "breadcrumb": "Artigos Novo artigo",
+    "hasSaveSlot": true
+  }
+]

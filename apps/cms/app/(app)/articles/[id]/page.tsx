@@ -1017,6 +1017,31 @@ export default function ArticlePage() {
  * still restorable through it, so nothing becomes unrecoverable in exchange for the
  * tidier list.
  */
+/**
+ * Notes the API writes for itself: `created` on the first revision, `updated` on every
+ * autosave, `published` when an article goes live. They are markers, not editorial names.
+ *
+ * Treating them as names had two consequences. Every autosave counted as "named", so the
+ * grouping below never grouped anything and the panel listed eleven consecutive rows
+ * labelled `updated`. And those rows printed a raw system token on screen, which the
+ * visual sweep flags: no surface in this product prints an enum.
+ *
+ * Returning null means "this revision has no name of its own" — the caller then describes
+ * it by what it is. Every revision stays listed and stays restorable; only the label
+ * changes.
+ */
+const SYSTEM_REVISION_NOTES: Record<string, string | null> = {
+  created: "Criação",
+  updated: null,
+  published: "Publicação",
+};
+
+function revisionName(note: string | null): string | null {
+  const trimmed = note?.trim();
+  if (!trimmed) return null;
+  return trimmed in SYSTEM_REVISION_NOTES ? SYSTEM_REVISION_NOTES[trimmed] ?? null : trimmed;
+}
+
 function RevisionList({
   revisions,
   onCompare,
@@ -1029,17 +1054,18 @@ function RevisionList({
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const groups = useMemo(() => {
-    const out: { lead: ArticleRevision; items: ArticleRevision[]; named: boolean }[] = [];
+    const out: { lead: ArticleRevision; items: ArticleRevision[]; name: string | null }[] = [];
     for (const r of revisions) {
-      const named = Boolean(r.note && r.note.trim());
+      const name = revisionName(r.note);
+      const named = name !== null;
       const prev = out[out.length - 1];
       const sameHour =
         prev &&
         !named &&
-        !prev.named &&
+        prev.name === null &&
         Math.abs(new Date(prev.lead.createdAt).getTime() - new Date(r.createdAt).getTime()) < 60 * 60 * 1000;
       if (sameHour && prev) prev.items.push(r);
-      else out.push({ lead: r, items: [r], named });
+      else out.push({ lead: r, items: [r], name });
     }
     return out;
   }, [revisions]);
@@ -1055,7 +1081,7 @@ function RevisionList({
             <div className="kalel-revisions__row">
               <div className="kalel-revisions__meta">
                 <span className="kalel-revisions__label">
-                  {g.named ? g.lead.note : g.items.length > 1 ? `${g.items.length} salvamentos automáticos` : "Salvamento automático"}
+                  {g.name ?? (g.items.length > 1 ? `${g.items.length} salvamentos automáticos` : "Salvamento automático")}
                 </span>
                 <span className="kalel-revisions__time">
                   r{g.lead.revisionNumber} · {new Date(g.lead.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
