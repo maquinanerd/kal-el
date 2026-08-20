@@ -11,12 +11,25 @@
 
 /* --- lado da arte --- */
 
+/* A arte e um quadro de HQ: proporcao ~0.95 num campo que pode ficar bem mais largo.
+   Por isso ela e contida (nunca recortada) sobre o proprio papel do desenho, com um
+   teto de tamanho para nao inchar em monitor grande. */
 .peg-login__hero {
-  background-color: #f4f2ee;
-  background-image: url("/login-hero.webp");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f6f6f4;
+  padding: clamp(var(--peg-space-4), 3vw, var(--peg-space-12));
+}
+
+.peg-login__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 760px;
+  max-height: 820px;
+  object-fit: contain;
+  object-position: center;
 }
 
 /* --- painel do formulário --- */
@@ -216,11 +229,25 @@
 @media (max-width: 900px) {
   .peg-login {
     grid-template-columns: 1fr;
-    grid-template-rows: 30dvh auto;
+    grid-template-rows: 28dvh auto;
   }
 
+  /* Na faixa horizontal do mobile a arte preenche: ai recortar e o certo.
+     Posicao absoluta porque height:100% nao resolve contra um item de grid
+     que so tem altura por estiramento. */
   .peg-login__hero {
-    background-position: center 25%;
+    display: block;
+    position: relative;
+    padding: 0;
+  }
+
+  .peg-login__art {
+    position: absolute;
+    inset: 0;
+    max-width: none;
+    max-height: none;
+    object-fit: cover;
+    object-position: center 30%;
   }
 
   .peg-login__panel {

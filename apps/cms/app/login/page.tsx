@@ -44,7 +44,9 @@ export default function LoginPage() {
 
   return (
     <main className="peg-login">
-      <div className="peg-login__hero" aria-hidden="true" />
+      <div className="peg-login__hero">
+        <img className="peg-login__art" src="/login-hero.webp" alt="" fetchPriority="high" />
+      </div>
 
       <section className="peg-login__panel">
         <div className="peg-login__content">

@@ -1,6 +1,7 @@
 /* PEG / Kal El design system — implementation styles (prose-first, dense, border-led). */
 
 .peg-body {
+  margin: 0;
   font: var(--peg-font-body);
   color: var(--peg-text-primary);
   background: var(--peg-canvas);
