@@ -69,14 +69,43 @@ function setParagraph(view: EditorView) {
   run(view, setBlockType(view.state.schema.nodes.paragraph));
 }
 
+/** Whether the selection sits anywhere inside a node of this type. */
+function selectionInside(state: EditorState, type: NodeType): boolean {
+  const { $from } = state.selection;
+  for (let d = $from.depth; d > 0; d -= 1) {
+    if ($from.node(d).type === type) return true;
+  }
+  return false;
+}
+
+/**
+ * Bullet <-> ordered <-> no list.
+ *
+ * Un-listing used the generic `lift`, which lifts the list ITEM out by one level and
+ * leaves the list around it; `liftListItem` is the command that knows how to take the
+ * paragraph out of the list entirely. Switching between the two list types lifts first:
+ * wrapping a bullet item in an ordered list would nest one list inside the other, which
+ * the document contract has no way to store.
+ */
 function toggleListType(view: EditorView, listType: NodeType) {
-  const { state } = view;
-  let inThisList = false;
-  state.doc.nodesBetween(state.selection.from, state.selection.to, (node) => {
-    if (node.type === listType) inThisList = true;
-  });
-  if (inThisList) run(view, lift);
-  else run(view, wrapInList(listType));
+  const listItem = view.state.schema.nodes.listItem as NodeType;
+  const other = listType === view.state.schema.nodes.bulletList ? view.state.schema.nodes.orderedList : view.state.schema.nodes.bulletList;
+
+  if (selectionInside(view.state, listType)) {
+    run(view, liftListItem(listItem));
+    return;
+  }
+  if (selectionInside(view.state, other)) {
+    liftListItem(listItem)(view.state, view.dispatch, view);
+  }
+  run(view, wrapInList(listType));
+}
+
+/** Quote on/off. `wrapIn` alone could only ever add one. */
+function toggleBlockquote(view: EditorView) {
+  const type = view.state.schema.nodes.blockquote as NodeType;
+  if (selectionInside(view.state, type)) run(view, lift);
+  else run(view, wrapIn(type));
 }
 
 function insertAtom(view: EditorView, typeName: string, attrs: Record<string, unknown>) {
@@ -193,7 +222,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
       case "h4": setHeading(view, 4); break;
       case "bullet": toggleListType(view, view.state.schema.nodes.bulletList); break;
       case "ordered": toggleListType(view, view.state.schema.nodes.orderedList); break;
-      case "quote": run(view, wrapIn(view.state.schema.nodes.blockquote)); break;
+      case "quote": toggleBlockquote(view); break;
       case "table": insertTableNode(view); break;
       case "image": onRequestImage?.(); break;
       case "gallery": onRequestGallery?.(); break;
@@ -250,7 +279,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     const listItem = schema.nodes.listItem as NodeType;
     const state = EditorState.create({
       schema,
-      doc: documentToProseMirror(document),
+      // same schema instance as the state: see documentToProseMirror's note
+      doc: documentToProseMirror(document, schema),
       plugins: [
         history(),
         // ahead of every other binding: while the slash menu is open it owns
@@ -528,7 +558,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         <span className="peg-editor__sep" />
         <ToolbarButton label="Lista com marcadores" onClick={() => view && toggleListType(view, view.state.schema.nodes.bulletList)}>•≡</ToolbarButton>
         <ToolbarButton label="Lista numerada" onClick={() => view && toggleListType(view, view.state.schema.nodes.orderedList)}>1≡</ToolbarButton>
-        <ToolbarButton label="Citação" onClick={() => view && run(view, wrapIn(view.state.schema.nodes.blockquote))}>”</ToolbarButton>
+        <ToolbarButton label="Citação" onClick={() => view && toggleBlockquote(view)}>”</ToolbarButton>
         <span className="peg-editor__sep" />
         <ToolbarButton
           label={focusMode ? "Sair do modo sem distrações" : "Modo sem distrações"}
@@ -552,7 +582,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
                   { label: "H4", onClick: () => { if (view) setHeading(view, 4); setMenuOpen(false); } },
                   { label: "Lista", onClick: () => { if (view) toggleListType(view, view.state.schema.nodes.bulletList); setMenuOpen(false); } },
                   { label: "Lista numerada", onClick: () => { if (view) toggleListType(view, view.state.schema.nodes.orderedList); setMenuOpen(false); } },
-                  { label: "Quote", onClick: () => { if (view) run(view, wrapIn(view.state.schema.nodes.blockquote)); setMenuOpen(false); } },
+                  { label: "Quote", onClick: () => { if (view) toggleBlockquote(view); setMenuOpen(false); } },
                   { type: "separator" },
                   { label: "Imagem", onClick: () => { setMenuOpen(false); onRequestImage?.(); } },
                   { label: "Galeria", onClick: () => { setMenuOpen(false); onRequestGallery?.(); } },

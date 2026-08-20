@@ -63,13 +63,28 @@ a {
 .peg-editor__surface .ProseMirror h2 { margin: 1.2em 0 0.4em; font-size: 1.5em; }
 .peg-editor__surface .ProseMirror h3 { margin: 1em 0 0.3em; font-size: 1.25em; }
 .peg-editor__surface .ProseMirror h4 { margin: 1em 0 0.3em; font-size: 1.1em; }
+/* Lists and quotes are structure a reader has to SEE. These rules existed before and
+   styled nothing, because the editor schema could not build either node - the buttons
+   were silent no-ops (see packages/editor/src/tiptap.ts). Now that the nodes exist, the
+   marker, the indent and the rail are what separate them from a run of paragraphs. */
 .peg-editor__surface .ProseMirror blockquote {
-  margin: 0.8em 0;
-  padding-left: 12px;
+  margin: var(--peg-space-4) 0;
+  padding-left: var(--peg-space-4);
   border-left: 3px solid var(--peg-accent);
   color: var(--peg-text-secondary);
+  font-style: italic;
 }
-.peg-editor__surface .ProseMirror ul, .peg-editor__surface .ProseMirror ol { margin: 0.6em 0; padding-left: 1.5em; }
+.peg-editor__surface .ProseMirror ul,
+.peg-editor__surface .ProseMirror ol { margin: var(--peg-space-4) 0; padding-left: 1.6em; }
+.peg-editor__surface .ProseMirror ul { list-style: disc outside; }
+.peg-editor__surface .ProseMirror ol { list-style: decimal outside; }
+.peg-editor__surface .ProseMirror li { margin: 0.25em 0; }
+.peg-editor__surface .ProseMirror li::marker { color: var(--peg-text-secondary); }
+/* the paragraph inside a list item or a quote is structural: it carries the inline
+   content the contract stores, and must not add a second block gap */
+.peg-editor__surface .ProseMirror li > p { margin: 0; }
+.peg-editor__surface .ProseMirror blockquote > p { margin: 0 0 0.4em; }
+.peg-editor__surface .ProseMirror blockquote > p:last-child { margin-bottom: 0; }
 .peg-editor__surface .ProseMirror code {
   font-family: var(--peg-font-mono);
   background: var(--peg-surface-muted);

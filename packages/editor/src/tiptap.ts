@@ -18,10 +18,28 @@ export function buildTiptapSchema(): Schema {
     parseDOM: [{ tag: "h2", attrs: { level: 2 } }, { tag: "h3", attrs: { level: 3 } }, { tag: "h4", attrs: { level: 4 } }],
     toDOM: (node) => [`h${node.attrs.level as number}`, 0],
   };
-  const blockquote: NodeSpec = { group: "block", content: "inline*", parseDOM: [{ tag: "blockquote" }], toDOM: () => ["blockquote", 0] };
+  /**
+   * `blockquote` and `listItem` hold PARAGRAPHS, not bare inline content.
+   *
+   * They were declared `content: "inline*"`, which is a shape ProseMirror cannot wrap a
+   * paragraph into: `findWrapping` looks for a path from the wrapper's content match to
+   * the selected block, and `inline*` admits no block at all. So `wrapInList` and
+   * `wrapIn(blockquote)` both returned FALSE and dispatched nothing - the list and quote
+   * buttons, the slash commands and the shortcuts were all silent no-ops, and the
+   * paragraph the writer had selected stayed a paragraph. The product review read that as
+   * "the semantics are applied but not styled"; nothing was applied.
+   *
+   * The wire contract is unchanged: `quote` still carries one inline run and `list` one
+   * run per item (packages/contracts/src/editorial.ts). The paragraph exists only inside
+   * the editor, and the converters below add and remove it.
+   */
+  const blockquote: NodeSpec = { group: "block", content: "paragraph+", parseDOM: [{ tag: "blockquote" }], toDOM: () => ["blockquote", 0] };
   const bulletList: NodeSpec = { group: "block", content: "listItem+", parseDOM: [{ tag: "ul" }], toDOM: () => ["ul", 0] };
   const orderedList: NodeSpec = { group: "block", content: "listItem+", parseDOM: [{ tag: "ol" }], toDOM: () => ["ol", 0] };
-  const listItem: NodeSpec = { content: "inline*", parseDOM: [{ tag: "li" }], toDOM: () => ["li", 0] };
+  // `paragraph+` and not `paragraph block*`: the contract's list item is a single inline
+  // run, so a nested list would have nowhere to be stored and would vanish on save.
+  // Refusing to create one is honest; accepting and dropping it is not.
+  const listItem: NodeSpec = { content: "paragraph+", parseDOM: [{ tag: "li" }], toDOM: () => ["li", 0] };
   const image: NodeSpec = {
     group: "block",
     atom: true,
@@ -130,11 +148,11 @@ function proseJson(node: DocumentNodeV2): Record<string, unknown> {
     case "heading":
       return { type: "heading", attrs: { level: node.attrs.level }, content: inlineToPmJson(node.content) };
     case "quote":
-      return { type: "blockquote", content: inlineToPmJson(node.content) };
+      return { type: "blockquote", content: [{ type: "paragraph", content: inlineToPmJson(node.content) }] };
     case "list":
       return {
         type: node.attrs.ordered ? "orderedList" : "bulletList",
-        content: node.content.map((item) => ({ type: "listItem", content: inlineToPmJson(item) })),
+        content: node.content.map((item) => ({ type: "listItem", content: [{ type: "paragraph", content: inlineToPmJson(item) }] })),
       };
     case "table":
       return {
@@ -159,9 +177,19 @@ function proseJson(node: DocumentNodeV2): Record<string, unknown> {
   }
 }
 
-/** Validate + convert a Kal El v2 document into a ProseMirror doc node. Throws on unknown/invalid nodes. */
-export function documentToProseMirror(document: ArticleDocumentV2): Node {
-  const schema = buildTiptapSchema();
+/**
+ * Validate + convert a Kal El v2 document into a ProseMirror doc node. Throws on
+ * unknown/invalid nodes.
+ *
+ * `schema` MUST be the same instance the EditorState was created with. This function used
+ * to call `buildTiptapSchema()` itself and ignore the caller's, so the editor ran with a
+ * state whose schema and whose document came from two different `Schema` objects.
+ * ProseMirror compares node and mark types by object identity - content matching, every
+ * `findWrapping`, and every `node.type === someType` test - so with two schemas in play
+ * none of them could ever agree: `wrapInList`, `wrapIn` and the list/quote toggles were
+ * asking type A whether it accepted type B and always being told no.
+ */
+export function documentToProseMirror(document: ArticleDocumentV2, schema: Schema = buildTiptapSchema()): Node {
   const json = { type: "doc", content: document.nodes.map(proseJson) };
   return Node.fromJSON(schema, json);
 }
@@ -193,6 +221,21 @@ function inlineFromPm(node: Node): InlineContent {
   return normalizeInlineContent(out);
 }
 
+/**
+ * Flatten the paragraphs of a quote or a list item back into the single inline run the
+ * contract stores. One paragraph - the normal case - round-trips byte for byte. If a
+ * writer pressed Enter inside a quote and produced two, they are joined by a hard break
+ * rather than silently losing the second one.
+ */
+function blocksToInline(node: Node): InlineContent {
+  const out: InlineContent = [];
+  node.forEach((child) => {
+    if (out.length > 0) out.push({ type: "hardBreak" });
+    for (const piece of inlineFromPm(child)) out.push(piece);
+  });
+  return normalizeInlineContent(out);
+}
+
 /** Convert a ProseMirror doc node back into a Kal El v2 document (round-trip). */
 export function proseMirrorToDocument(node: Node): ArticleDocumentV2 {
   const nodes: DocumentNodeV2[] = [];
@@ -205,12 +248,12 @@ export function proseMirrorToDocument(node: Node): ArticleDocumentV2 {
         nodes.push({ type: "heading", attrs: { level: child.attrs.level as 2 | 3 | 4 }, content: inlineFromPm(child) });
         break;
       case "blockquote":
-        nodes.push({ type: "quote", attrs: {}, content: inlineFromPm(child) });
+        nodes.push({ type: "quote", attrs: {}, content: blocksToInline(child) });
         break;
       case "bulletList":
       case "orderedList": {
         const items: InlineContent[] = [];
-        child.forEach((li) => items.push(inlineFromPm(li)));
+        child.forEach((li) => items.push(blocksToInline(li)));
         nodes.push({ type: "list", attrs: { ordered: child.type.name === "orderedList" }, content: items });
         break;
       }

@@ -31,7 +31,16 @@ export default async function PreviewPage({ params }: { params: { token: string 
       <article dangerouslySetInnerHTML={{ __html: html }} />
       <style>{`
         article p { margin: 0 0 1em; }
-        article blockquote { border-left: 3px solid #ccc; margin: 1em 0; padding-left: 12px; color: #555; }
+        /* the preview has to show the SAME structure the editor does: a list that reads
+           as a run of paragraphs here would make the editor's markers a lie */
+        article blockquote { border-left: 3px solid #b7b7b0; margin: 1em 0; padding-left: 16px; color: #555; font-style: italic; }
+        article blockquote > p { margin: 0 0 0.4em; }
+        article blockquote > p:last-child { margin-bottom: 0; }
+        article ul, article ol { margin: 1em 0; padding-left: 1.6em; }
+        article ul { list-style: disc outside; }
+        article ol { list-style: decimal outside; }
+        article li { margin: 0.25em 0; }
+        article li > p { margin: 0; }
         article table { border-collapse: collapse; width: 100%; }
         article th, article td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
         article figure { margin: 1em 0; }
