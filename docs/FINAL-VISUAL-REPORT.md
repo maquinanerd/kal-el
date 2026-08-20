@@ -603,3 +603,48 @@ CMS e confirme que `localhost:3001` devolve JSON, não HTML.
 Os artigos criados pelas verificações desta rodada (`Trava slug …`, `Stale note check`,
 `Antes de publicar`) foram **arquivados** — a API não expõe rota de exclusão de artigo, e
 arquivar é o mais próximo de remover que o domínio oferece.
+
+## O botão que não podia falhar
+
+O gate do axe reprovou `Roles / 1440 / light` com uma violação `serious` de
+`color-contrast`, e o nó que ele reportou era um primário **habilitado**:
+
+```html
+<button type="button" class="peg-btn peg-btn--primary">Novo papel</button>
+```
+
+Como está escrito, esse nó não pode falhar: primário habilitado é `#FFFFFF` sobre
+`#2F332B`, 12.89:1. E o par que de fato falha — o desabilitado, `#B3B5AF` sobre
+`#F7F7F6`, 1.93:1 — o axe nem mede, porque ignora controle desabilitado. Ou seja: o
+relatório descrevia um estado que não existe em repouso.
+
+Existe em movimento. Amostrando as cores computadas do botão a cada frame:
+
+| t (ms) | `disabled` | frente sobre fundo | razão |
+|---|---|---|---|
+| 911 | `true` | `#B3B5AF` sobre `#F7F7F6` | 1.93 |
+| 980 | `false` | ainda as cores do desabilitado | 1.93 |
+| **1023** | `false` | `#BFC1BC` sobre `#D6D7D5` | **1.26** |
+| 1039 | `false` | — | 1.96 |
+| 1057 | `false` | — | 4.32 |
+| repouso | `false` | `#FFFFFF` sobre `#2F332B` | 12.89 |
+
+`available` começa `[]`, então o botão nasce desabilitado. Quando a requisição de
+permissões responde, ele habilita — e a transição de 120ms de `.peg-btn` leva o fundo
+para o escuro enquanto o rótulo vai para o claro. Os dois se cruzam. Sete frames abaixo
+de AA, quatro deles já habilitados: é essa janela que o axe amostrou, e é por isso que a
+amostra não trazia `disabled`.
+
+O gate não estava instável à toa — estava pegando um flash real, visível: o botão
+aparece cinza e vira ardósia meio segundo depois.
+
+A causa não é a transição nem o token; é a página tratar `available` vazio como "não há
+o que conceder" quando ainda significa "a busca não respondeu". Só um vazio **conhecido**
+pode desabilitar o botão. Corrigido em [roles/page.tsx](apps/cms/app/(app)/roles/page.tsx),
+o mesmo probe dá 183 amostras em 4s, pior razão 12.89:1, zero frames abaixo de 4.5:1, e o
+botão nunca fica desabilitado. Revertendo só aquela linha, os sete frames voltam.
+
+Fica o padrão, que vale para qualquer controle: **um controle que troca de estado depois
+que os dados chegam atravessa as cores dos dois estados.** No primário isso é perigoso
+porque fundo e texto andam em direções opostas e necessariamente se cruzam. Um snapshot
+de acessibilidade tirado durante a troca é um snapshot de um estado que ninguém projetou.
