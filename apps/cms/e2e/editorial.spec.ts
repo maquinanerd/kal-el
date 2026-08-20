@@ -3,8 +3,9 @@ import { expect, test } from "@playwright/test";
 test.describe("editorial lifecycle", () => {
   test("login, create an article, write, save and reopen it", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel("E-mail").fill("owner@kalel.dev");
-    await page.getByLabel("Senha").fill("kalel-dev-password-1");
+    // exact: a tela tem "Lembrar meu e-mail" e o botao "Mostrar senha", que casam por substring
+    await page.getByLabel("E-mail", { exact: true }).fill("owner@kalel.dev");
+    await page.getByLabel("Senha", { exact: true }).fill("kalel-dev-password-1");
     await page.getByRole("button", { name: "Entrar" }).click();
 
     await expect(page).toHaveURL(/\/articles/, { timeout: 15_000 });
@@ -36,7 +37,9 @@ test.describe("editorial lifecycle", () => {
   test("an author cannot publish without permission (API authority)", async ({ request }) => {
     // the backend enforces RBAC even if the UI hides nothing; a draft POST with status=published
     // must be rejected for a user without articles.publish. Verify via the API directly.
-    const res = await request.post("http://localhost:3101/v1/sites/00000000-0000-0000-0000-000000000000/articles", {
+    // 127.0.0.1, nao localhost: a API sobe com HOST=127.0.0.1 e em maquina com IPv6
+    // primeiro o "localhost" resolve para ::1 e a conexao e recusada.
+    const res = await request.post("http://127.0.0.1:3101/v1/sites/00000000-0000-0000-0000-000000000000/articles", {
       data: { title: "x", status: "published" },
     });
     expect(res.status()).toBe(401);

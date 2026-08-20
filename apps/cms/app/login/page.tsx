@@ -144,7 +144,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p className="peg-login__footer">Acesso restrito à equipe editorial do Kal El.</p>
+          <p className="peg-login__footer">Acesso restrito à equipe editorial do Kal-el.</p>
         </div>
       </section>
     </main>
