@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cms",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "C:/Users/pablo/Documents/OpenCode/Kal El/.claude/worktrees/kal-el-visual-ux-final-ade7eb/apps/cms",
+        "dev"
+      ],
+      "port": 3000
+    }
+  ]
+}
