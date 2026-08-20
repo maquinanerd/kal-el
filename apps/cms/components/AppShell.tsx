@@ -14,6 +14,7 @@ import {
   IconImage,
   IconMore,
   IconSettings,
+  IconSignOut,
   IconTag,
   IconUsers,
   IconWorkflow,
@@ -127,11 +128,36 @@ export function AppShell({ children }: { children: ReactNode }) {
         groups={navGroups}
         open={navOpen}
         onClose={() => setNavOpen(false)}
+        /*
+         * Identity and sign-out, separated.
+         *
+         * This was a single `peg-nav-item` button labelled with the user's name whose
+         * action was logout. On desktop the topbar carries an explicit "Sair" so nobody
+         * ever pressed it; at 390px the drawer footer is the only account surface, and
+         * tapping "Owner" — the row that reads as "my profile" — ended the session with
+         * no warning and no label saying it would. The product review lost its session to
+         * it mid-sweep.
+         *
+         * The identity row is now text, not a control. Signing out is a labelled action
+         * with its own icon. No confirmation: logout is reversible and destroys nothing,
+         * so a modal would only add a step.
+         */
         footer={
-          <button type="button" className="peg-nav-item" onClick={signOutAndGo}>
-            <IconMore />
-            <span>{user?.name ?? "Conta"}</span>
-          </button>
+          <div className="peg-account">
+            <div className="peg-account__identity">
+              <span className="peg-account__avatar" aria-hidden="true">
+                {(user?.name ?? "?").trim().charAt(0)}
+              </span>
+              <span className="peg-account__text">
+                <span className="peg-account__name">{user?.name ?? "Conta"}</span>
+                {user?.email && <span className="peg-account__email">{user.email}</span>}
+              </span>
+            </div>
+            <button type="button" className="peg-account__signout" onClick={signOutAndGo}>
+              <IconSignOut />
+              <span>Sair</span>
+            </button>
+          </div>
         }
       />
       {/* minHeight:0 is load-bearing — see the shell scroll note in the design system.

@@ -939,6 +939,66 @@
 .peg-nav-item__badge { margin-left: auto; }
 .peg-sidebar__footer { border-top: 1px solid var(--peg-border); }
 
+/* ── Account block (sidebar footer) ────────────────────────────────────────
+   Identity and sign-out are two different things and must look like two
+   different things. The footer used to be ONE button labelled with the user's
+   name whose action was logout, so on mobile — where the drawer footer is the
+   only account surface — tapping "Owner" ended the session. Nothing on screen
+   said it would. */
+.peg-account { display: flex; flex-direction: column; }
+.peg-account__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  padding: var(--peg-space-3);
+  min-width: 0;
+}
+.peg-account__avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--peg-surface-muted);
+  border: 1px solid var(--peg-border);
+  color: var(--peg-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--peg-font-label-strong);
+  text-transform: uppercase;
+}
+.peg-account__text { display: flex; flex-direction: column; min-width: 0; }
+.peg-account__name {
+  font: var(--peg-font-label-strong);
+  color: var(--peg-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.peg-account__email {
+  font: var(--peg-font-caption);
+  color: var(--peg-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.peg-account__signout {
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  width: 100%;
+  padding: var(--peg-space-2) var(--peg-space-3);
+  border: 0;
+  border-top: 1px solid var(--peg-border);
+  background: transparent;
+  color: var(--peg-text-secondary);
+  font: var(--peg-font-label);
+  text-align: left;
+  cursor: pointer;
+  min-height: 40px;
+}
+.peg-account__signout:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
+
 .peg-rail {
   width: var(--peg-rail-width);
   background: var(--peg-surface);
