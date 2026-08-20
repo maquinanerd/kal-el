@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export const API = "http://localhost:3101";
 
@@ -80,4 +80,26 @@ export async function readArticle(page: Page, siteId: string, articleId: string)
     },
     { api: API, site: siteId, id: articleId },
   );
+}
+
+/**
+ * Create a new article and land in its editor.
+ *
+ * The click is retried rather than asserted once. Against a dev server under load the
+ * button is painted before React has hydrated it, and a click that lands in that window
+ * does nothing at all - the URL stays on /articles and the test then waits thirty seconds
+ * for a navigation that was never going to happen. Every spec that opened an article had
+ * its own copy of this race; retrying the whole click-and-wait is what makes it
+ * deterministic.
+ */
+export async function createArticle(page: Page): Promise<string> {
+  await page.goto("/articles");
+  const button = page.getByRole("button", { name: "Novo artigo" }).first();
+  await expect(button).toBeVisible({ timeout: 30_000 });
+  await expect(async () => {
+    await button.click();
+    await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
+  await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
+  return page.url().split("/articles/")[1] ?? "";
 }

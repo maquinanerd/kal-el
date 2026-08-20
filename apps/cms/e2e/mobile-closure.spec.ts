@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { createArticle } from "./_seed";
+
 /**
  * The 390px pass the previous product review could not finish: it lost its session to the
  * drawer's "Owner" row before reaching the editor.
@@ -35,11 +37,7 @@ async function expectInsideViewport(locator: Locator, where: string) {
 }
 
 async function openNewArticle(page: Page) {
-  await page.goto("/articles");
-  await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Novo artigo" }).first().click();
-  await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
-  await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
+  await createArticle(page);
   return page.locator(".peg-editor__surface .ProseMirror");
 }
 
@@ -208,8 +206,13 @@ test.describe("mobile calendar at 390px", () => {
 
 test.describe("mobile article index at 390px", () => {
   test("title, status, the row action and the search all stay reachable", async ({ page }) => {
+    // guarantee the index has something to render: an empty list has no row to reach, and
+    // the assertions below are about a populated table
+    await createArticle(page);
+
     await page.goto("/articles");
     await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
     await expectNoPageOverflow(page, "article index");
 
     // search and filtering survive the narrow layout
@@ -227,7 +230,7 @@ test.describe("mobile article index at 390px", () => {
 
     // the first row still offers a title to open and a status to read
     const firstRowLink = page.locator("tbody tr").first().getByRole("button").first();
-    await expect(firstRowLink).toBeVisible();
+    await expect(firstRowLink).toBeVisible({ timeout: 30_000 });
     await expectInsideViewport(firstRowLink, "first row action");
   });
 });

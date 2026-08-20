@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { API, PIXEL_GIF, activeSiteId, readArticle } from "./_seed";
+import { API, PIXEL_GIF, activeSiteId, createArticle, readArticle } from "./_seed";
 
 /**
  * Browser coverage for the media surfaces. The staging audit recorded these as covered at
@@ -72,11 +72,7 @@ test.describe("media library", () => {
     const name = `destaque-${Date.now()}.gif`;
     await upload(page, name, PIXEL_GIF);
 
-    await page.goto("/articles");
-    await page.getByRole("button", { name: "Novo artigo" }).first().click();
-    await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
-    const articleId = page.url().split("/articles/")[1] ?? "";
-    await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
+    const articleId = await createArticle(page);
 
     await page.getByRole("button", { name: "Selecionar imagem", exact: true }).click();
     const picker = page.getByRole("dialog");

@@ -1,15 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { API, activeSiteId, readArticle } from "./_seed";
+import { API, activeSiteId, createArticle, readArticle } from "./_seed";
 
-async function newArticle(page: Page): Promise<string> {
-  await page.goto("/articles");
-  await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Novo artigo" }).first().click();
-  await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
-  await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
-  return page.url().split("/articles/")[1] ?? "";
-}
+const newArticle = createArticle;
 
 /** Wait for an autosave the server accepted, rather than for the "Salvo" label. */
 function savedResponse(page: Page) {
@@ -28,10 +21,30 @@ function savedResponse(page: Page) {
  */
 async function workflowAction(page: Page, label: string) {
   await page.locator(".kalel-editor__actions").getByRole("button", { name: label }).click();
+  // The dialog arrives on a React state update, so `isVisible()` on its own reads the DOM
+  // before it exists and silently skips the confirmation - leaving the article exactly
+  // where it was. Wait for it; the actions that carry no comment simply never show one.
   const dialog = page.getByRole("dialog");
+  await dialog.waitFor({ state: "visible", timeout: 3_000 }).catch(() => {});
   if (await dialog.isVisible().catch(() => false)) {
     await dialog.getByRole("button", { name: label }).click();
+    await dialog.waitFor({ state: "hidden", timeout: 30_000 });
   }
+}
+
+/**
+ * Open the review queue and wait for the row to be there.
+ *
+ * The queue fetches after mount, and the list it renders while that is in flight is empty
+ * - so a single assertion could fail against a queue that had simply not loaded yet. The
+ * reload retries the navigation as well as the assertion.
+ */
+async function openQueue(page: Page, title: string) {
+  await expect(async () => {
+    await page.goto("/workflow");
+    await expect(page.getByRole("tab", { name: /Em revisão/ })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(title)).toBeVisible({ timeout: 10_000 });
+  }).toPass({ timeout: 60_000 });
 }
 
 /** The status as the action bar states it. The inspector shows it a second time. */
@@ -240,8 +253,10 @@ test.describe("workflow", () => {
     async function rowAction(title: string, label: string) {
       await page.locator("tr", { hasText: title }).getByRole("button", { name: label }).click();
       const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ state: "visible", timeout: 3_000 }).catch(() => {});
       if (await dialog.isVisible().catch(() => false)) {
         await dialog.getByRole("button", { name: label, exact: true }).click();
+        await dialog.waitFor({ state: "hidden", timeout: 30_000 });
       }
     }
 
@@ -253,8 +268,7 @@ test.describe("workflow", () => {
 
     // --- a version the queue never saw, whose key is already spent ---
     const spentVersion = (await readArticle(page, siteId, spentId)).version as number;
-    await page.goto("/workflow");
-    await expect(page.getByText(spentTitle)).toBeVisible({ timeout: 30_000 });
+    await openQueue(page, spentTitle);
 
     // another tab approves it with exactly the key this queue would have sent, and the
     // writer resubmits, so it is in review again at a version this list does not hold
@@ -270,8 +284,7 @@ test.describe("workflow", () => {
       .toBe("draft");
 
     // --- a row whose state has moved on entirely ---
-    await page.goto("/workflow");
-    await expect(page.getByText(movedTitle)).toBeVisible({ timeout: 30_000 });
+    await openQueue(page, movedTitle);
     expect(await transition(movedId, "publish")).toBe(200);
 
     await rowAction(movedTitle, "Aprovar");

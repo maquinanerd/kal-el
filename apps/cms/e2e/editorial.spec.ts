@@ -1,14 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+import { createArticle } from "./_seed";
+
 test.describe("editorial lifecycle", () => {
   test("login, create an article, write, save and reopen it", async ({ page }) => {
-    await page.goto("/articles");
-    await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Novo artigo" }).first().click();
-    await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 15_000 });
-
-    // wait for the article to finish loading before editing (avoid overwriting user input)
-    await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 15_000 });
+    // creates the article and waits for it to finish loading, so the first keystroke is
+    // not overwritten by the load effect
+    await createArticle(page);
 
     const unique = `E2E ${Date.now()}`;
     await page.getByLabel("Título do artigo").fill(unique);

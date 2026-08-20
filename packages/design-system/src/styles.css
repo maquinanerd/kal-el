@@ -1151,6 +1151,18 @@
   background: rgba(23, 23, 25, 0.45);
 }
 
+/* A dense table scrolls inside this box - but the box was `position: static`, so it was
+   not a containing block, and an absolutely positioned descendant escaped it. The
+   `.peg-sr-only` label on the actions column is exactly that: a 1x1 box whose static
+   position sits at the far right of a 779px table, positioned against the INITIAL
+   containing block instead of against this one. Its overflow therefore landed on the
+   page, and at 390px the whole document scrolled 365px sideways - topbar, sidebar and
+   all - while the table itself sat neatly clipped inside here.
+
+   `position: relative` makes this the containing block, so anything absolutely positioned
+   in the table scrolls and clips with the table. */
+.peg-table-wrap { position: relative; }
+
 /* Responsive: sidebar → drawer, inspector → sheet (mobile < 1024px) */
 @media (max-width: 1023px) {
   .peg-menu-button,

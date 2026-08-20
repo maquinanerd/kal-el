@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { createArticle } from "./_seed";
 import { CREDENTIALS } from "./_surfaces";
 
 /**
@@ -11,12 +12,7 @@ import { CREDENTIALS } from "./_surfaces";
  */
 
 async function openNewArticle(page: Page) {
-  await page.goto("/articles");
-  await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Novo artigo" }).first().click();
-  await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
-  await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
-
+  await createArticle(page);
   const editor = page.locator(".peg-editor__surface .ProseMirror");
   await editor.click();
   return editor;
