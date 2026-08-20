@@ -34,8 +34,23 @@ function slugFollowsTitle(title: string, slug: string): boolean {
   if (!base) return true; // an untitled draft cannot have diverged from its title
   if (slug === base) return true;
   if (!slug.startsWith(base + "-")) return false;
+
+  /*
+   * Only the shape the SERVER writes counts as "not touched by a human".
+   *
+   * Any run of digits used to qualify, so "copa-do-mundo-2026" — appending the year or
+   * the edition is an everyday editorial habit — was read as `uniqueSlug`'s collision
+   * form and silently unlocked. The next title edit then rewrote a URL the writer had
+   * chosen on purpose.
+   *
+   * `uniqueSlug` starts at 2 and increments, so the collision form is a small integer
+   * with no leading zero. A four-digit year cannot match. Past 99 this returns false and
+   * the slug simply stays locked, which is the safe direction: the cost is a slug that
+   * stops following its title, not a public address that changes underneath someone.
+   */
   const suffix = slug.slice(base.length + 1);
-  return suffix.length > 0 && /^[0-9]+$/.test(suffix);
+  if (!/^[1-9][0-9]?$/.test(suffix)) return false;
+  return Number(suffix) >= 2;
 }
 
 /**
