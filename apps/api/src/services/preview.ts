@@ -1,9 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
-import { articles, sites } from "@kal-el/db/schema";
+import { articles, media, sites } from "@kal-el/db/schema";
 import { notFound } from "../plugins/errors.js";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
+import { collectDocumentMediaIds } from "./media.js";
 
 const PREVIEW_TTL_SECONDS = 15 * 60;
 
@@ -55,4 +56,31 @@ export async function resolvePreview(db: Db, payload: PreviewPayload) {
     },
     site: site ? { slug: site.slug, name: site.name } : null,
   };
+}
+
+/**
+ * Resolve one media binary reachable from a preview token.
+ *
+ * The token carries no session, so the only authority it grants is over the single
+ * article it was minted for: a media id is served only when that article actually
+ * references it (body image/gallery node or featured image). Anything else in the
+ * site's library stays behind the session-guarded `media.read` route.
+ */
+export async function resolvePreviewMedia(db: Db, payload: PreviewPayload, mediaId: string) {
+  const article = await db.query.articles.findFirst({
+    where: and(eq(articles.id, payload.a), eq(articles.siteId, payload.s)),
+    columns: { document: true, featuredMediaId: true },
+  });
+  if (!article) throw notFound("preview not found");
+
+  const document = article.document ? migrateDocumentToV2(article.document) : { version: 2 as const, nodes: [] };
+  const referenced = new Set(collectDocumentMediaIds(document));
+  if (article.featuredMediaId) referenced.add(article.featuredMediaId);
+  if (!referenced.has(mediaId)) throw notFound("media not found");
+
+  const row = await db.query.media.findFirst({
+    where: and(eq(media.id, mediaId), eq(media.siteId, payload.s)),
+  });
+  if (!row) throw notFound("media not found");
+  return row;
 }

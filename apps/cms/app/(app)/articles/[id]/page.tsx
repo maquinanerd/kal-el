@@ -244,7 +244,9 @@ export default function ArticlePage() {
     setActionError(null);
     try {
       const { url } = await getPreviewUrl(activeSiteId, params.id);
-      window.open(url, "_blank", "noopener");
+      // The API hands back its own JSON endpoint; the reader-facing page lives in the CMS.
+      const token = url.split("/v1/preview/")[1] ?? "";
+      window.open(token ? `/preview/${token}` : url, "_blank", "noopener");
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Falha ao abrir preview");
     }

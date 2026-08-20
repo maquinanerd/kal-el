@@ -30,7 +30,26 @@ function safeHref(url: unknown): string {
   return /^https?:\/\//i.test(s) || s.startsWith("/") ? s : "#";
 }
 
-export function renderDocumentToHtml(document: { version: number; nodes: unknown[] }): string {
+export type RenderDocumentOptions = {
+  /**
+   * Resolves a media id to a URL the reader's browser can fetch. Without it the
+   * renderer has no way to source `<img>`, so image and gallery nodes degrade to
+   * their caption/credit instead of emitting a broken image.
+   */
+  mediaUrl?: (mediaId: string) => string;
+};
+
+export function renderDocumentToHtml(
+  document: { version: number; nodes: unknown[] },
+  options: RenderDocumentOptions = {},
+): string {
+  const resolveMedia = options.mediaUrl;
+
+  function renderImage(mediaId: string, alt: string): string {
+    if (!mediaId || !resolveMedia) return "";
+    return `<img src="${escapeHtml(resolveMedia(mediaId))}" alt="${alt}" loading="lazy" data-media-id="${escapeHtml(mediaId)}"/>`;
+  }
+
   const blocks = (document.nodes ?? []).map((raw) => {
     const n = raw as DocNode;
     switch (n.type) {
@@ -58,11 +77,15 @@ export function renderDocumentToHtml(document: { version: number; nodes: unknown
         const caption = n.attrs?.caption ? escapeHtml(String(n.attrs.caption)) : "";
         const alt = n.attrs?.altText ? escapeHtml(String(n.attrs.altText)) : "";
         const credit = n.attrs?.credit ? `<small>${escapeHtml(String(n.attrs.credit))}</small>` : "";
-        return `<figure><img src="" alt="${alt}" data-media-id="${escapeHtml(String(n.attrs?.mediaId ?? ""))}"/><figcaption>${caption} ${credit}</figcaption></figure>`;
+        const img = renderImage(String(n.attrs?.mediaId ?? ""), alt);
+        const legend = caption || credit ? `<figcaption>${[caption, credit].filter(Boolean).join(" ")}</figcaption>` : "";
+        return `<figure>${img}${legend}</figure>`;
       }
       case "gallery": {
-        const count = (n.attrs?.mediaIds as unknown[] ?? []).length;
-        return `<figure><em>Galeria (${count} imagens)</em></figure>`;
+        const ids = (n.attrs?.mediaIds as unknown[] ?? []).map((id) => String(id ?? "")).filter(Boolean);
+        const images = ids.map((id, i) => renderImage(id, `Imagem ${i + 1} da galeria`)).join("");
+        if (!images) return `<figure><em>Galeria (${ids.length} imagens)</em></figure>`;
+        return `<figure class="gallery">${images}</figure>`;
       }
       case "embed": {
         const url = safeHref(n.attrs?.url);
