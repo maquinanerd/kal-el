@@ -46,12 +46,30 @@ export function buildTiptapSchema(): Schema {
     group: "block",
     atom: true,
     attrs: { mediaId: {}, caption: { default: null }, credit: { default: null }, altText: { default: null } },
-    parseDOM: [{ tag: "img[src]" }],
-    toDOM: () => ["img"],
+    parseDOM: [{ tag: "img[data-media-id]", getAttrs: (dom) => {
+      const el = dom as { getAttribute(name: string): string | null };
+      return { mediaId: el.getAttribute("data-media-id") ?? "", altText: el.getAttribute("alt") || null };
+    } }],
+    toDOM: (node) => ["img", { "data-media-id": node.attrs.mediaId as string, alt: (node.attrs.altText as string | null) ?? "" }],
   };
-  const gallery: NodeSpec = { group: "block", atom: true, attrs: { mediaIds: { default: [] } }, toDOM: () => ["div", 0] };
-  const embed: NodeSpec = { group: "block", atom: true, attrs: { url: {}, provider: {}, id: { default: null } }, toDOM: () => ["div", 0] };
-  const source: NodeSpec = { group: "block", atom: true, attrs: { label: {}, url: {}, kind: { default: null } }, toDOM: () => ["div", 0] };
+  const gallery: NodeSpec = {
+    group: "block",
+    atom: true,
+    attrs: { mediaIds: { default: [] } },
+    toDOM: (node) => ["div", { "data-gallery": (node.attrs.mediaIds as string[]).join(",") }],
+  };
+  const embed: NodeSpec = {
+    group: "block",
+    atom: true,
+    attrs: { url: {}, provider: {}, id: { default: null } },
+    toDOM: (node) => ["div", { "data-embed": node.attrs.url as string, "data-provider": node.attrs.provider as string }],
+  };
+  const source: NodeSpec = {
+    group: "block",
+    atom: true,
+    attrs: { label: {}, url: {}, kind: { default: null } },
+    toDOM: (node) => ["div", { "data-source": node.attrs.label as string, "data-url": node.attrs.url as string }],
+  };
   const table: NodeSpec = { group: "block", content: "tableRow+", toDOM: () => ["table", 0] };
   const tableRow: NodeSpec = { content: "tableCell+", toDOM: () => ["tr", 0] };
   const tableCell: NodeSpec = { content: "inline*", attrs: { header: { default: false } }, toDOM: (n) => [n.attrs.header ? "th" : "td", 0] };
