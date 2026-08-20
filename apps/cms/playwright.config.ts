@@ -61,6 +61,14 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         NEXT_PUBLIC_API_BASE_URL: "http://localhost:3101",
+        /*
+         * Its own build directory. `next dev`, `next build` and `next start` all own
+         * `.next` exclusively, so a suite run started while the app is built or served
+         * from the same worktree deletes the chunks under the running server: it answers
+         * "Cannot find module" and then stops answering at all, which reads as a product
+         * regression rather than two processes sharing a directory. See next.config.mjs.
+         */
+        NEXT_DIST_DIR: ".next-e2e",
       },
     },
   ],
