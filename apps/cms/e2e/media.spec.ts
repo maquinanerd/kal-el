@@ -56,7 +56,7 @@ test.describe("media library", () => {
     await page.getByRole("button", { name: "Novo artigo" }).first().click();
     await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
     const articleId = page.url().split("/articles/")[1] ?? "";
-    await expect(page.getByLabel("Título", { exact: true })).toHaveValue("Novo artigo", { timeout: 30_000 });
+    await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
 
     await page.getByRole("button", { name: "Selecionar imagem de destaque" }).click();
     const picker = page.getByRole("dialog");

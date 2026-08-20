@@ -167,7 +167,7 @@ test.describe("accessibility", () => {
     await page.waitForURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
     await page.waitForTimeout(2000);
 
-    const trigger = page.getByRole("button", { name: "Selecionar imagem de destaque" });
+    const trigger = page.getByRole("button", { name: "Selecionar imagem", exact: true });
     await expect(trigger).toHaveCount(1);
     await trigger.click();
     await page.waitForTimeout(600);

@@ -7,7 +7,7 @@ async function newArticle(page: Page): Promise<string> {
   await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Novo artigo" }).first().click();
   await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
-  await expect(page.getByLabel("Título", { exact: true })).toHaveValue("Novo artigo", { timeout: 30_000 });
+  await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
   return page.url().split("/articles/")[1] ?? "";
 }
 
@@ -17,6 +17,26 @@ function savedResponse(page: Page) {
     (r) => r.request().method() === "PATCH" && /\/articles\//.test(r.url()) && r.status() < 300,
     { timeout: 30_000 },
   );
+}
+
+/**
+ * Run a workflow action from the editor.
+ *
+ * These transitions ask for an editorial comment before they fire, and the dialog's
+ * confirm button carries the same label as the action that opened it — so clicking the
+ * action alone leaves the article exactly where it was.
+ */
+async function workflowAction(page: Page, label: string) {
+  await page.locator(".kalel-editor__actions").getByRole("button", { name: label }).click();
+  const dialog = page.getByRole("dialog");
+  if (await dialog.isVisible().catch(() => false)) {
+    await dialog.getByRole("button", { name: label }).click();
+  }
+}
+
+/** The status as the action bar states it. The inspector shows it a second time. */
+function statusBadge(page: Page, label: string) {
+  return page.locator(".kalel-editor__actions").getByText(label, { exact: true });
 }
 
 test.describe("SEO", () => {
@@ -78,7 +98,7 @@ test.describe("preview", () => {
     const articleId = await newArticle(page);
     const siteId = await activeSiteId(page);
 
-    await page.getByLabel("Título", { exact: true }).fill("Rascunho com preview");
+    await page.getByLabel("Título do artigo").fill("Rascunho com preview");
     const editor = page.locator(".peg-editor__surface .ProseMirror");
     await editor.click();
     await page.keyboard.type("Conteúdo que só existe no rascunho.");
@@ -127,14 +147,14 @@ test.describe("workflow", () => {
     const articleId = await newArticle(page);
     const siteId = await activeSiteId(page);
 
-    await page.getByLabel("Título", { exact: true }).fill(`Fluxo editorial ${Date.now()}`);
+    await page.getByLabel("Título do artigo").fill(`Fluxo editorial ${Date.now()}`);
     await savedResponse(page);
 
     // the editor shows the current state and the actions legal from it
-    await expect(page.getByText("draft", { exact: true })).toBeVisible();
+    await expect(statusBadge(page, "Rascunho")).toBeVisible();
 
-    await page.getByRole("button", { name: "Enviar p/ revisão" }).click();
-    await expect(page.getByText("in_review", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await workflowAction(page, "Enviar p/ revisão");
+    await expect(statusBadge(page, "Em revisão")).toBeVisible({ timeout: 30_000 });
     expect((await readArticle(page, siteId, articleId)).status).toBe("in_review");
 
     // the workflow queue lists it under "Em revisão"
@@ -143,14 +163,14 @@ test.describe("workflow", () => {
     await expect(page.getByText(/Fluxo editorial/).first()).toBeVisible({ timeout: 30_000 });
 
     await page.goto(`/articles/${articleId}`);
-    await expect(page.getByText("in_review", { exact: true })).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Aprovar" }).click();
+    await expect(statusBadge(page, "Em revisão")).toBeVisible({ timeout: 30_000 });
+    await workflowAction(page, "Aprovar");
     // approve deliberately returns the article to draft - there is no `approved` status
-    await expect(page.getByText("draft", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(statusBadge(page, "Rascunho")).toBeVisible({ timeout: 30_000 });
     expect((await readArticle(page, siteId, articleId)).status).toBe("draft");
 
-    await page.getByRole("button", { name: "Publicar" }).click();
-    await expect(page.getByText("published", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await workflowAction(page, "Publicar");
+    await expect(statusBadge(page, "Publicado")).toBeVisible({ timeout: 30_000 });
 
     const published = await readArticle(page, siteId, articleId);
     expect(published.status).toBe("published");
@@ -188,10 +208,10 @@ test.describe("workflow", () => {
 
     async function inReview(title: string): Promise<string> {
       const id = await newArticle(page);
-      await page.getByLabel("Título", { exact: true }).fill(title);
+      await page.getByLabel("Título do artigo").fill(title);
       await savedResponse(page);
-      await page.getByRole("button", { name: "Enviar p/ revisão" }).click();
-      await expect(page.getByText("in_review", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await workflowAction(page, "Enviar p/ revisão");
+      await expect(statusBadge(page, "Em revisão")).toBeVisible({ timeout: 30_000 });
       return id;
     }
 
@@ -236,8 +256,8 @@ test.describe("workflow", () => {
     const articleId = await newArticle(page);
     const siteId = await activeSiteId(page);
 
-    await page.getByRole("button", { name: "Publicar" }).click();
-    await expect(page.getByText("published", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await workflowAction(page, "Publicar");
+    await expect(statusBadge(page, "Publicado")).toBeVisible({ timeout: 30_000 });
 
     // publishing again from the UI must not double-emit; the transition is a no-op
     const second = await page.evaluate(

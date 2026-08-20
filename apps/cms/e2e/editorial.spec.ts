@@ -8,10 +8,10 @@ test.describe("editorial lifecycle", () => {
     await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 15_000 });
 
     // wait for the article to finish loading before editing (avoid overwriting user input)
-    await expect(page.getByLabel("Título", { exact: true })).toHaveValue("Novo artigo", { timeout: 15_000 });
+    await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 15_000 });
 
     const unique = `E2E ${Date.now()}`;
-    await page.getByLabel("Título", { exact: true }).fill(unique);
+    await page.getByLabel("Título do artigo").fill(unique);
 
     // write into the editor (ProseMirror contenteditable)
     const editor = page.locator(".peg-editor__surface .ProseMirror");
@@ -30,7 +30,7 @@ test.describe("editorial lifecycle", () => {
 
     // reload and confirm persistence
     await page.reload();
-    await expect(page.getByLabel("Título", { exact: true })).toHaveValue(unique, { timeout: 15_000 });
+    await expect(page.getByLabel("Título do artigo")).toHaveValue(unique, { timeout: 15_000 });
     await expect(editor).toContainText("Texto real escrito pelo E2E.");
   });
 

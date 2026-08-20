@@ -10,7 +10,7 @@ async function openNewArticle(page: Page) {
   await expect(page.getByRole("button", { name: "Novo artigo" }).first()).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Novo artigo" }).first().click();
   await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 30_000 });
-  await expect(page.getByLabel("Título", { exact: true })).toHaveValue("Novo artigo", { timeout: 30_000 });
+  await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
 
   const editor = page.locator(".peg-editor__surface .ProseMirror");
   await editor.click();

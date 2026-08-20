@@ -393,8 +393,12 @@
   font-weight: 600;
   border-bottom-color: var(--peg-accent-strong);
 }
-.peg-tab__count { color: var(--peg-text-disabled); font-variant-numeric: tabular-nums; }
-.peg-tab--active .peg-tab__count { color: var(--peg-text-tertiary); }
+/* A count is information, not a disabled control. `--peg-text-disabled` (#B3B5AF) is
+   ~2.1:1 on the tab strip and axe flagged it as a serious contrast failure on Articles
+   and Workflow. Tertiary clears AA at 4.56:1 and secondary keeps the active tab ahead of
+   the others — the hierarchy survives, the text becomes readable. */
+.peg-tab__count { color: var(--peg-text-tertiary); font-variant-numeric: tabular-nums; }
+.peg-tab--active .peg-tab__count { color: var(--peg-text-secondary); }
 
 .peg-segmented {
   display: inline-flex;
@@ -1399,7 +1403,9 @@
 }
 .peg-cal__cell:nth-child(7n) { border-right: none; }
 .peg-cal__cell--outside { background: var(--peg-canvas); }
-.peg-cal__cell--outside .peg-cal__daynum { color: var(--peg-text-disabled); }
+/* Same defect on the month grid: the days either side of the month are still dates a
+   reader has to read, and the cell's own background already says they are outside it. */
+.peg-cal__cell--outside .peg-cal__daynum { color: var(--peg-text-tertiary); }
 .peg-cal__cell--today { background: var(--peg-accent-wash); }
 .peg-cal__daynum {
   font: var(--peg-font-caption);
