@@ -21,7 +21,7 @@ type Command = (state: EditorState, dispatch?: (tr: Transaction) => void, view?:
 const MENU_WIDTH = 240;
 const MENU_MAX_HEIGHT = 280;
 
-const CLOSED_LINK = { open: false, href: "", text: "", canRemove: false };
+const CLOSED_LINK = { open: false, href: "", text: "", canRemove: false, from: 0, to: 0 };
 
 export type RichTextEditorHandle = {
   insertImage: (mediaId: string, attrs?: { caption?: string; credit?: string; altText?: string }) => void;
@@ -140,6 +140,31 @@ function linkRangeAt(state: EditorState, pos: number): { href: string; from: num
     endIndex += 1;
   }
   return { href: String(mark.attrs.href ?? ""), from, to };
+}
+
+/**
+ * The range the caret or selection actually covers, read back from the DOM.
+ *
+ * ProseMirror learns about a keyboard selection through its DOM observer, which flushes
+ * asynchronously. `Shift+End` immediately followed by Ctrl+K therefore arrived with
+ * `state.selection` still collapsed at the caret: the link dialog saw no selection and
+ * inserted the URL as fresh text next to the words it should have linked. Reading the DOM
+ * selection through `posAtDOM` - public API, and the same source the observer will use -
+ * closes that window. Falls back to the state selection whenever the DOM one is missing
+ * or lives outside the writing surface.
+ */
+function domSelectionRange(view: EditorView): { from: number; to: number } {
+  const state = { from: view.state.selection.from, to: view.state.selection.to };
+  const sel = typeof window === "undefined" ? null : window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.anchorNode || !sel.focusNode) return state;
+  if (!view.dom.contains(sel.anchorNode) || !view.dom.contains(sel.focusNode)) return state;
+  try {
+    const a = view.posAtDOM(sel.anchorNode, sel.anchorOffset);
+    const b = view.posAtDOM(sel.focusNode, sel.focusOffset);
+    return { from: Math.min(a, b), to: Math.max(a, b) };
+  } catch {
+    return state;
+  }
 }
 
 function insertAtom(view: EditorView, typeName: string, attrs: Record<string, unknown>) {
@@ -491,20 +516,33 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   function currentLink(): { href: string; text: string; from: number; to: number } | null {
     const v = viewRef.current;
     if (!v) return null;
-    const { state } = v;
-    const { from, to, empty } = state.selection;
-    const range = linkRangeAt(state, from) ?? (empty ? null : linkRangeAt(state, to));
+    const { from, to } = domSelectionRange(v);
+    const range = linkRangeAt(v.state, from) ?? (from === to ? null : linkRangeAt(v.state, to));
     if (!range) return null;
-    return { ...range, text: state.doc.textBetween(range.from, range.to) };
+    return { ...range, text: v.state.doc.textBetween(range.from, range.to) };
   }
 
+  /**
+   * The dialog remembers the range it was opened on.
+   *
+   * It cannot re-read it on apply: opening the modal moves focus out of the writing
+   * surface, which collapses the DOM selection, so by the time anyone presses "Aplicar"
+   * the words the writer had selected are no longer selected anywhere.
+   */
   function openLinkDialog() {
+    const v = viewRef.current;
+    if (!v) return;
     const existing = currentLink();
+    const selected = domSelectionRange(v);
+    const from = existing ? existing.from : selected.from;
+    const to = existing ? existing.to : selected.to;
     setLinkDialog({
       open: true,
       href: existing?.href ?? "",
-      text: existing?.text ?? (view ? view.state.doc.textBetween(view.state.selection.from, view.state.selection.to) : ""),
+      text: existing?.text ?? v.state.doc.textBetween(from, to),
       canRemove: existing !== null,
+      from,
+      to,
     });
   }
   openLinkDialogRef.current = openLinkDialog;
@@ -514,10 +552,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     if (!v) return;
     const { state } = v;
     const markType = state.schema.marks.link;
-    const existing = currentLink();
-    // an explicit selection wins; a bare caret inside a link edits that whole link
-    const from = state.selection.empty ? existing?.from ?? state.selection.from : state.selection.from;
-    const to = state.selection.empty ? existing?.to ?? state.selection.to : state.selection.to;
+    // the range captured when the dialog opened, not the live selection
+    const { from, to } = linkDialog;
     const mark = markType.create({ href, internal: href.startsWith("/") ? true : null });
 
     if (from === to) {
@@ -537,14 +573,24 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     v.focus();
   }
 
-  function removeLink() {
+  /** Only the mark goes; `removeMark` never touches the text it covered. */
+  function removeLinkRange(from: number, to: number) {
     const v = viewRef.current;
-    const existing = currentLink();
-    if (!v || !existing) return;
-    // only the mark goes; `removeMark` never touches the text it covered
-    v.dispatch(v.state.tr.removeMark(existing.from, existing.to, v.state.schema.marks.link));
+    if (!v || from === to) return;
+    v.dispatch(v.state.tr.removeMark(from, to, v.state.schema.marks.link));
     setLinkDialog(CLOSED_LINK);
     v.focus();
+  }
+
+  /** From the dialog, which acts on the range it was opened on. */
+  function removeLink() {
+    removeLinkRange(linkDialog.from, linkDialog.to);
+  }
+
+  /** From the bubble toolbar, where the selection is still live. */
+  function removeLinkAtSelection() {
+    const existing = currentLink();
+    if (existing) removeLinkRange(existing.from, existing.to);
   }
 
   // stable refs so the slash applier (defined above the view) can reach these
@@ -671,7 +717,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
                 className="peg-inline-toolbar__btn"
                 aria-label="Remover link"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={removeLink}
+                onClick={removeLinkAtSelection}
               >
                 ⛔
               </button>
