@@ -418,8 +418,7 @@ pnpm -r typecheck   limpo (13 pacotes)
 pnpm -r lint        limpo (13 pacotes)
 pnpm -r build       limpo (13 pacotes)
 API                 162 testes, 22 arquivos — verde
-p1-closure.spec     10/10
-mobile-closure.spec  7/7
+e2e (suíte inteira) 41 testes — verde
 ```
 
 Varredura visual contra o build de produção, 13 telas × 4 viewports × 2 temas:
@@ -453,15 +452,64 @@ uma aba e os dias fora do mês no calendário. Ambos passaram para `--peg-text-t
 cumpre AA em 4.56:1, e a contagem da aba ativa para `secondary`, preservando a hierarquia.
 Nenhuma cor nova. O gate está verde.
 
-### Testes e2e que continuam vermelhos (7)
+### Suíte e2e — 41/41
 
-Não são defeitos de produto: são expectativas desatualizadas desde a rodada visual, em
-superfícies que o review já aprovou. O `aria-label` do título virou "Título do artigo", os
-status deixaram de imprimir enum cru, o gatilho de imagem destacada foi renomeado, e as
-transições de workflow passaram a pedir comentário antes de disparar. Os que eram troca de
-seletor foram corrigidos; restam **7** — nomes de item na grade de mídia, rótulos de campo
-de SEO e a aba de status na fila do workflow. Deixados como estão de propósito:
-persegui-los é uma campanha mais larga que esta rodada.
+Os sete que restavam foram corrigidos, e dois deles apontavam para **defeitos reais de
+produto**, não para testes desatualizados.
+
+**Mídia não renderizava em lugar nenhum.** O helmet aplica
+`Cross-Origin-Resource-Policy: same-origin` por padrão, e isso valia também para o binário
+da mídia — mas o CMS é uma origem diferente da API em toda implantação, e localmente
+também (3000 contra 3001). A requisição voltava 200 com os bytes certos e o navegador se
+recusava a decodificá-los: `naturalWidth: 0`. Toda miniatura da biblioteca, todo item do
+seletor e a ferramenta de ponto focal eram imagem quebrada de altura zero — e o seletor de
+ponto focal, que é dimensionado por essa imagem, colapsava e não podia ser clicado. Só a
+rota do arquivo relaxa a regra de *embedding*; ela continua exigindo `media.read` num
+cookie de sessão, e uma requisição cross-site não carrega credencial nenhuma.
+
+O fixture escondia isso: 13 bytes de cabeçalho GIF que passavam na checagem de magic bytes
+do upload e gravavam dimensões 1×1, então as asserções no nível da API ficavam satisfeitas
+enquanto navegador nenhum conseguia decodificar. Trocado pelo pixel canônico de 43 bytes.
+
+**A página rolava lateralmente a 390px.** Não era o overflow que o container de scroll da
+tabela já resolvia: o que escapava era o rótulo `.peg-sr-only` da coluna de ações. Ele é
+`position: absolute`, e `.peg-table-wrap` era `position: static` — portanto não era bloco
+contentor. A caixa de 1×1 se posicionava contra o *initial containing block*, com a posição
+estática na ponta direita de uma tabela de 779px, e o overflow caía na página. Medido pelo
+deslocamento real da topbar: `left: 8` → `left: -357`, 365px. `position: relative` no wrap
+mantém qualquer coisa posicionada absolutamente dentro da tabela rolando e recortando com
+ela.
+
+Os outros cinco eram expectativas que envelheceram na rodada visual: a biblioteca de mídia
+virou grade ao lado de um trilho de detalhes em vez de link para uma página; os campos de
+SEO mudaram para a própria aba do inspector; o filtro de status da fila é `tab`, não
+`button`, e as ações de linha pedem comentário antes de disparar; e a URL de preview aponta
+para o renderer, não para o endpoint JSON da API — agora afirmado nos dois sentidos, para
+não regredir.
+
+**A causa da instabilidade era o rate limit.** Com os sete corrigidos, a suíte ainda
+falhava — um teste diferente a cada execução, sempre esperando uma navegação que nunca
+vinha. A suíte dispara centenas de navegações de um único endereço em poucos minutos e
+estourava o teto global de 600/min; um POST recusado com 429 chega ao navegador como um
+botão que não faz nada, e "Novo artigo" parava de criar artigos no meio da execução. O
+comentário na configuração já previa exatamente isso para `/v1/auth/me`.
+
+O teto virou `RATE_LIMIT_MAX`, com o mesmo default de 600 — o controle de produção não
+mudou. A stack do Playwright o eleva para si mesma, o que é honesto: um harness de browser
+não é o tráfego que aquele limite existe para conter, e as superfícies de adivinhação de
+credencial mantêm seus limites de rota, bem mais estritos, de qualquer forma.
+
+Três correções de robustez acompanham: criar um artigo é um helper único que repete o
+clique (num dev server sob carga o botão é pintado antes do React hidratar, e um clique que
+cai nessa janela não faz nada); a checagem do diálogo de workflow espera o diálogo em vez
+de ler o DOM antes de ele existir; e a fila de revisão é afirmada depois de carregada, não
+enquanto ainda está vazia.
+
+```
+Suíte e2e completa: 41 passed, 0 failed
+axe:                AXE_TOTAL_VIOLATION_INSTANCES=0
+API:                162 testes, 22 arquivos
+```
 
 ### Dados locais
 

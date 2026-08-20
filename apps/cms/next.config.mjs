@@ -21,6 +21,19 @@ const nextConfig = {
         outputFileTracingRoot: new URL("../../", import.meta.url).pathname,
       }
     : {}),
+  /**
+   * `.next` has exactly one owner. `next dev`, `next build` and `next start` all read and
+   * write the same directory, so a build started while a dev server is up deletes the
+   * chunks under it: the server first answers `Cannot find module './594.js'`, then stops
+   * answering at all. Every request after that point fails with ERR_CONNECTION_REFUSED,
+   * which in a test run looks exactly like a product regression rather than two processes
+   * sharing a directory.
+   *
+   * Set NEXT_DIST_DIR to give a run its own build directory. The e2e suite is the case
+   * that needs it - it starts a dev server while someone may well be building or serving
+   * the same app - but nothing here is specific to tests.
+   */
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
 };
 
 export default nextConfig;

@@ -8,9 +8,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1294,
+      "scrollHeight": 1427,
       "overflows": true,
-      "maxScroll": 446,
+      "maxScroll": 579,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -29,9 +29,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 950,
+      "scrollHeight": 1258,
       "overflows": true,
-      "maxScroll": 102,
+      "maxScroll": 410,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -65,16 +65,16 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1233,
+      "scrollHeight": 892,
       "overflows": true,
-      "maxScroll": 385,
+      "maxScroll": 44,
       "reachesEnd": true
     },
     "bodyScrolls": false,
     "invisibleButtons": [],
-    "buttonCount": 10,
+    "buttonCount": 5,
     "rawEnums": [],
-    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "breadcrumb": "Artigos Stale note check",
     "hasSaveSlot": true
   },
   {
@@ -227,9 +227,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 5073,
+      "scrollHeight": 6525,
       "overflows": true,
-      "maxScroll": 4225,
+      "maxScroll": 5677,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -292,7 +292,7 @@
         "disabled": true
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 8,
     "rawEnums": [],
     "breadcrumb": "Administração Configurações",
     "hasSaveSlot": true
@@ -327,9 +327,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1315,
+      "scrollHeight": 1448,
       "overflows": true,
-      "maxScroll": 467,
+      "maxScroll": 600,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -348,9 +348,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 950,
+      "scrollHeight": 1258,
       "overflows": true,
-      "maxScroll": 102,
+      "maxScroll": 410,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -384,16 +384,16 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1233,
+      "scrollHeight": 892,
       "overflows": true,
-      "maxScroll": 385,
+      "maxScroll": 44,
       "reachesEnd": true
     },
     "bodyScrolls": false,
     "invisibleButtons": [],
-    "buttonCount": 10,
+    "buttonCount": 5,
     "rawEnums": [],
-    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "breadcrumb": "Artigos Stale note check",
     "hasSaveSlot": true
   },
   {
@@ -546,9 +546,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 5073,
+      "scrollHeight": 6525,
       "overflows": true,
-      "maxScroll": 4225,
+      "maxScroll": 5677,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -611,7 +611,7 @@
         "disabled": true
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 8,
     "rawEnums": [],
     "breadcrumb": "Administração Configurações",
     "hasSaveSlot": true
@@ -646,9 +646,9 @@
     "innerHeight": 1024,
     "scroll": {
       "client": 972,
-      "scrollHeight": 1793,
+      "scrollHeight": 1973,
       "overflows": true,
-      "maxScroll": 821,
+      "maxScroll": 1001,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -667,9 +667,9 @@
     "innerHeight": 1024,
     "scroll": {
       "client": 972,
-      "scrollHeight": 1106,
+      "scrollHeight": 1414,
       "overflows": true,
-      "maxScroll": 134,
+      "maxScroll": 442,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -703,16 +703,16 @@
     "innerHeight": 1024,
     "scroll": {
       "client": 972,
-      "scrollHeight": 1218,
-      "overflows": true,
-      "maxScroll": 246,
+      "scrollHeight": 972,
+      "overflows": false,
+      "maxScroll": 0,
       "reachesEnd": true
     },
     "bodyScrolls": false,
     "invisibleButtons": [],
-    "buttonCount": 11,
+    "buttonCount": 6,
     "rawEnums": [],
-    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "breadcrumb": "Artigos Stale note check",
     "hasSaveSlot": true
   },
   {
@@ -865,9 +865,9 @@
     "innerHeight": 1024,
     "scroll": {
       "client": 972,
-      "scrollHeight": 5081,
+      "scrollHeight": 6533,
       "overflows": true,
-      "maxScroll": 4109,
+      "maxScroll": 5561,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -930,7 +930,7 @@
         "disabled": true
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 8,
     "rawEnums": [],
     "breadcrumb": "Administração Configurações",
     "hasSaveSlot": true
@@ -965,9 +965,9 @@
     "innerHeight": 844,
     "scroll": {
       "client": 792,
-      "scrollHeight": 2154,
+      "scrollHeight": 2353,
       "overflows": true,
-      "maxScroll": 1362,
+      "maxScroll": 1561,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -986,9 +986,9 @@
     "innerHeight": 844,
     "scroll": {
       "client": 792,
-      "scrollHeight": 1150,
+      "scrollHeight": 1458,
       "overflows": true,
-      "maxScroll": 358,
+      "maxScroll": 666,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1022,16 +1022,16 @@
     "innerHeight": 844,
     "scroll": {
       "client": 792,
-      "scrollHeight": 1795,
-      "overflows": true,
-      "maxScroll": 1003,
+      "scrollHeight": 792,
+      "overflows": false,
+      "maxScroll": 0,
       "reachesEnd": true
     },
     "bodyScrolls": false,
     "invisibleButtons": [],
-    "buttonCount": 11,
+    "buttonCount": 6,
     "rawEnums": [],
-    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "breadcrumb": "Artigos Stale note check",
     "hasSaveSlot": true
   },
   {
@@ -1184,9 +1184,9 @@
     "innerHeight": 844,
     "scroll": {
       "client": 792,
-      "scrollHeight": 7171,
+      "scrollHeight": 9250,
       "overflows": true,
-      "maxScroll": 6379,
+      "maxScroll": 8458,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1234,9 +1234,9 @@
     "innerHeight": 844,
     "scroll": {
       "client": 792,
-      "scrollHeight": 852,
+      "scrollHeight": 940,
       "overflows": true,
-      "maxScroll": 60,
+      "maxScroll": 148,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1249,7 +1249,7 @@
         "disabled": true
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 8,
     "rawEnums": [],
     "breadcrumb": "Administração Configurações",
     "hasSaveSlot": true
@@ -1284,9 +1284,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1294,
+      "scrollHeight": 1427,
       "overflows": true,
-      "maxScroll": 446,
+      "maxScroll": 579,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1305,9 +1305,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 950,
+      "scrollHeight": 1258,
       "overflows": true,
-      "maxScroll": 102,
+      "maxScroll": 410,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1341,16 +1341,16 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1233,
+      "scrollHeight": 892,
       "overflows": true,
-      "maxScroll": 385,
+      "maxScroll": 44,
       "reachesEnd": true
     },
     "bodyScrolls": false,
     "invisibleButtons": [],
-    "buttonCount": 10,
+    "buttonCount": 5,
     "rawEnums": [],
-    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "breadcrumb": "Artigos Stale note check",
     "hasSaveSlot": true
   },
   {
@@ -1503,9 +1503,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 5073,
+      "scrollHeight": 6525,
       "overflows": true,
-      "maxScroll": 4225,
+      "maxScroll": 5677,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1568,7 +1568,7 @@
         "disabled": true
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 8,
     "rawEnums": [],
     "breadcrumb": "Administração Configurações",
     "hasSaveSlot": true
@@ -1603,9 +1603,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1315,
+      "scrollHeight": 1448,
       "overflows": true,
-      "maxScroll": 467,
+      "maxScroll": 600,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1624,9 +1624,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 950,
+      "scrollHeight": 1258,
       "overflows": true,
-      "maxScroll": 102,
+      "maxScroll": 410,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1660,16 +1660,16 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 1233,
+      "scrollHeight": 892,
       "overflows": true,
-      "maxScroll": 385,
+      "maxScroll": 44,
       "reachesEnd": true
     },
     "bodyScrolls": false,
     "invisibleButtons": [],
-    "buttonCount": 10,
+    "buttonCount": 5,
     "rawEnums": [],
-    "breadcrumb": "Artigos Acceptance Visual Kal El 2026",
+    "breadcrumb": "Artigos Stale note check",
     "hasSaveSlot": true
   },
   {
@@ -1822,9 +1822,9 @@
     "innerHeight": 900,
     "scroll": {
       "client": 848,
-      "scrollHeight": 5073,
+      "scrollHeight": 6525,
       "overflows": true,
-      "maxScroll": 4225,
+      "maxScroll": 5677,
       "reachesEnd": true
     },
     "bodyScrolls": false,
@@ -1887,7 +1887,7 @@
         "disabled": true
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 8,
     "rawEnums": [],
     "breadcrumb": "Administração Configurações",
     "hasSaveSlot": true
