@@ -40,6 +40,8 @@ export function buildTiptapSchema(): Schema {
   // run, so a nested list would have nowhere to be stored and would vanish on save.
   // Refusing to create one is honest; accepting and dropping it is not.
   const listItem: NodeSpec = { content: "paragraph+", parseDOM: [{ tag: "li" }], toDOM: () => ["li", 0] };
+  // Atoms are leaf nodes: their `toDOM` must never contain a content hole (`0`),
+  // otherwise DOMSerializer throws when the node is rendered.
   const image: NodeSpec = {
     group: "block",
     atom: true,

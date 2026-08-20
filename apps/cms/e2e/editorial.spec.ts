@@ -34,6 +34,38 @@ test.describe("editorial lifecycle", () => {
 
   // no storageState: the whole point is that the caller has no session. With the shared
   // session applied this returned 403 (CSRF) instead of 401, which is a different control.
+  test("keeps text typed the moment the article opens, even on a slow load", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("E-mail").fill("owner@kalel.dev");
+    await page.getByLabel("Senha").fill("kalel-dev-password-1");
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page).toHaveURL(/\/articles/, { timeout: 15_000 });
+
+    await page.getByRole("button", { name: "Novo artigo" }).first().click();
+    await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 15_000 });
+    await expect(page.getByLabel("Título", { exact: true })).toHaveValue("Novo artigo", { timeout: 15_000 });
+
+    // Hold the article back so the editor is unmistakably still loading while we type.
+    await page.route("**/v1/sites/*/articles/*", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      return route.continue();
+    });
+
+    await page.reload();
+
+    // Editing has to wait for the real document: an editor shown before the response
+    // holds an empty doc that is not the article, and the response would overwrite it.
+    const editor = page.locator(".peg-editor__surface .ProseMirror");
+    await editor.click({ timeout: 15_000 });
+    await page.keyboard.type("Escrito assim que o artigo abriu.");
+
+    await expect(page.getByText("Salvo")).toBeVisible({ timeout: 15_000 });
+    await page.unroute("**/v1/sites/*/articles/*");
+    await page.reload();
+    await expect(editor).toContainText("Escrito assim que o artigo abriu.", { timeout: 15_000 });
+  });
+
   test.describe("without a session", () => {
     test.use({ storageState: { cookies: [], origins: [] } });
 

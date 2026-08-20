@@ -17,7 +17,7 @@ import {
   type FilterChip,
 } from "@kal-el/design-system";
 import { useAuth } from "../../../lib/auth";
-import { ApiError, deleteMedia, listMedia, updateMedia, uploadMedia, type MediaItem } from "../../../lib/api";
+import { ApiError, MEDIA_ACCEPT, deleteMedia, listMedia, updateMedia, uploadMedia, type MediaItem } from "../../../lib/api";
 
 const LIMIT = 60;
 
@@ -151,10 +151,15 @@ export default function MediaPage() {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept={MEDIA_ACCEPT}
               multiple
               hidden
-              onChange={(e) => e.target.files?.length && void doUpload(e.target.files)}
+              onChange={(e) => {
+                const files = [...(e.target.files ?? [])];
+                // reset first: without it, picking the same file again fires no change event
+                e.target.value = "";
+                if (files.length > 0) void doUpload(files);
+              }}
             />
             <Button variant="primary" icon={<IconPlus />} onClick={() => fileRef.current?.click()} disabled={uploading || !activeSiteId}>
               {uploading ? "Enviando…" : "Enviar"}

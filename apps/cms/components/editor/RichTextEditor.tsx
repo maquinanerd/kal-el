@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { EditorView } from "@tiptap/pm/view";
+import type { NodeView } from "@tiptap/pm/view";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import type { Transaction } from "@tiptap/pm/state";
 import { history, redo, undo } from "@tiptap/pm/history";
@@ -50,6 +51,8 @@ type Props = {
    * page, which owns the API client and the active site.
    */
   renderLinkBrowser?: (select: (href: string) => void) => ReactNode;
+  /** Resolves a mediaId to a displayable URL, so inserted images render in place. */
+  resolveMediaUrl?: (mediaId: string) => string | null;
 };
 
 function run(view: EditorView, command: Command) {
@@ -193,12 +196,28 @@ function domSelectionRange(view: EditorView): { from: number; to: number } {
   }
 }
 
-function insertAtom(view: EditorView, typeName: string, attrs: Record<string, unknown>) {
-  const nodeType = view.state.schema.nodes[typeName] as NodeType;
+/**
+ * Inserts a block atom at `at` (default: the caret) and leaves the caret in a text block
+ * right after it.
+ *
+ * Two things this must never do, both of which cost the author their work. It must not
+ * insert over a live range selection - after a file dialog or a drag the selection can
+ * cover the whole document, and replacing it would wipe the article - so the selection is
+ * always collapsed to a cursor first. And it must not leave the new atom node-selected,
+ * where the next keystroke would replace the image that was just added.
+ */
+function insertAtom(view: EditorView, typeName: string, attrs: Record<string, unknown>, at?: number) {
+  const { state } = view;
+  const nodeType = state.schema.nodes[typeName] as NodeType;
   // drop empty attrs: the document schema types these as optional strings, not nullable
   const clean = Object.fromEntries(Object.entries(attrs).filter(([, v]) => v !== null && v !== undefined));
-  const node = nodeType.create(clean);
-  const tr = view.state.tr.replaceSelectionWith(node);
+  const target = Math.max(0, Math.min(at ?? state.selection.to, state.doc.content.size));
+  let tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(target)));
+  tr = tr.replaceSelectionWith(nodeType.create(clean));
+  const after = tr.selection.to;
+  const next = tr.doc.resolve(after).nodeAfter;
+  if (!next?.isTextblock) tr = tr.insert(after, state.schema.nodes.paragraph.create());
+  tr = tr.setSelection(TextSelection.near(tr.doc.resolve(after))).scrollIntoView();
   view.dispatch(tr);
   view.focus();
 }
@@ -219,7 +238,188 @@ function insertTableNode(view: EditorView) {
   view.focus();
 }
 
-export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile, statusSlot, renderLinkBrowser }, ref) {
+// ---- node views -------------------------------------------------------------
+// Block atoms carry only ids in the document schema, so without node views the
+// editor would show an empty box where the author just inserted an image.
+
+type MediaUrlResolver = (mediaId: string) => string | null;
+
+function control(label: string, onClick: () => void): HTMLButtonElement {
+  const btn = window.document.createElement("button");
+  btn.type = "button";
+  btn.className = "peg-editor__atom-btn";
+  btn.textContent = label;
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    onClick();
+  });
+  return btn;
+}
+
+function atomShell(modifier: string): { dom: HTMLElement; body: HTMLElement; bar: HTMLElement } {
+  const dom = window.document.createElement("div");
+  dom.className = `peg-editor__atom peg-editor__atom--${modifier}`;
+  const body = window.document.createElement("div");
+  body.className = "peg-editor__atom-body";
+  const bar = window.document.createElement("div");
+  bar.className = "peg-editor__atom-bar";
+  bar.contentEditable = "false";
+  dom.append(body, bar);
+  return { dom, body, bar };
+}
+
+/** Shared plumbing: controls must not steal editing events, and our own DOM is not editable content. */
+function atomViewBase(dom: HTMLElement, bar: HTMLElement) {
+  return {
+    dom,
+    stopEvent: (event: Event) => bar.contains(event.target as globalThis.Node),
+    ignoreMutation: () => true,
+    selectNode: () => dom.classList.add("peg-editor__atom--selected"),
+    deselectNode: () => dom.classList.remove("peg-editor__atom--selected"),
+  };
+}
+
+function removeNodeAt(view: EditorView, getPos: () => number | undefined) {
+  const pos = getPos();
+  if (pos == null) return;
+  const node = view.state.doc.nodeAt(pos);
+  if (!node) return;
+  view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
+  view.focus();
+}
+
+function patchAttrsAt(view: EditorView, getPos: () => number | undefined, patch: Record<string, unknown>) {
+  const pos = getPos();
+  if (pos == null) return;
+  const node = view.state.doc.nodeAt(pos);
+  if (!node) return;
+  view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...patch }));
+}
+
+function imageView(node: ProseNode, view: EditorView, getPos: () => number | undefined, resolve: MediaUrlResolver): NodeView {
+  const { dom, body, bar } = atomShell("image");
+  const figure = window.document.createElement("figure");
+  const img = window.document.createElement("img");
+  const caption = window.document.createElement("figcaption");
+  figure.append(img, caption);
+  body.append(figure);
+
+  function render(n: ProseNode) {
+    const mediaId = n.attrs.mediaId as string;
+    const url = resolve(mediaId);
+    img.src = url ?? "";
+    img.alt = (n.attrs.altText as string | null) ?? "";
+    img.hidden = !url;
+    const parts = [n.attrs.caption as string | null, n.attrs.credit as string | null].filter(Boolean);
+    caption.textContent = parts.join(" · ") || (url ? "" : `Imagem ${mediaId.slice(0, 8)}…`);
+    caption.hidden = caption.textContent === "";
+  }
+
+  bar.append(
+    control("Legenda", () => {
+      const value = window.prompt("Legenda da imagem", (view.state.doc.nodeAt(getPos() ?? 0)?.attrs.caption as string | null) ?? "");
+      if (value != null) patchAttrsAt(view, getPos, { caption: value || null });
+    }),
+    control("Crédito", () => {
+      const value = window.prompt("Crédito da imagem", (view.state.doc.nodeAt(getPos() ?? 0)?.attrs.credit as string | null) ?? "");
+      if (value != null) patchAttrsAt(view, getPos, { credit: value || null });
+    }),
+    control("Alt", () => {
+      const value = window.prompt("Texto alternativo (acessibilidade e SEO)", (view.state.doc.nodeAt(getPos() ?? 0)?.attrs.altText as string | null) ?? "");
+      if (value != null) patchAttrsAt(view, getPos, { altText: value || null });
+    }),
+    control("Remover", () => removeNodeAt(view, getPos)),
+  );
+
+  render(node);
+  return {
+    ...atomViewBase(dom, bar),
+    update(updated) {
+      if (updated.type.name !== "image") return false;
+      render(updated);
+      return true;
+    },
+  };
+}
+
+function galleryView(node: ProseNode, view: EditorView, getPos: () => number | undefined, resolve: MediaUrlResolver): NodeView {
+  const { dom, body, bar } = atomShell("gallery");
+  const strip = window.document.createElement("div");
+  strip.className = "peg-editor__atom-strip";
+  body.append(strip);
+
+  function render(n: ProseNode) {
+    const ids = (n.attrs.mediaIds as string[]) ?? [];
+    strip.replaceChildren();
+    for (const id of ids) {
+      const url = resolve(id);
+      const thumb = window.document.createElement("img");
+      thumb.src = url ?? "";
+      thumb.alt = "";
+      strip.append(thumb);
+    }
+    if (ids.length === 0) strip.textContent = "Galeria vazia";
+  }
+
+  bar.append(control("Remover", () => removeNodeAt(view, getPos)));
+  render(node);
+  return {
+    ...atomViewBase(dom, bar),
+    update(updated) {
+      if (updated.type.name !== "gallery") return false;
+      render(updated);
+      return true;
+    },
+  };
+}
+
+function embedView(node: ProseNode, view: EditorView, getPos: () => number | undefined): NodeView {
+  const { dom, body, bar } = atomShell("embed");
+  function render(n: ProseNode) {
+    const url = n.attrs.url as string;
+    const id = n.attrs.id as string | null;
+    body.replaceChildren();
+    if (id) {
+      const thumb = window.document.createElement("img");
+      thumb.src = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+      thumb.alt = "";
+      body.append(thumb);
+    }
+    const label = window.document.createElement("span");
+    label.className = "peg-editor__atom-label";
+    label.textContent = `▶ ${url}`;
+    body.append(label);
+  }
+  bar.append(control("Remover", () => removeNodeAt(view, getPos)));
+  render(node);
+  return {
+    ...atomViewBase(dom, bar),
+    update(updated) {
+      if (updated.type.name !== "embed") return false;
+      render(updated);
+      return true;
+    },
+  };
+}
+
+function sourceView(node: ProseNode, view: EditorView, getPos: () => number | undefined): NodeView {
+  const { dom, body, bar } = atomShell("source");
+  function render(n: ProseNode) {
+    body.textContent = `Fonte: ${n.attrs.label as string}${n.attrs.url ? ` — ${n.attrs.url as string}` : ""}`;
+  }
+  bar.append(control("Remover", () => removeNodeAt(view, getPos)));
+  render(node);
+  return {
+    ...atomViewBase(dom, bar),
+    update(updated) {
+      if (updated.type.name !== "source") return false;
+      render(updated);
+      return true;
+    },
+  };
+}
+
+export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile, statusSlot, renderLinkBrowser, resolveMediaUrl }, ref) {
   const [focusMode, setFocusMode] = useState(false);
   /** `link` drives the bubble toolbar state: inside a link it offers editing and removal. */
   const [inline, setInline] = useState<{ top: number; left: number; link: boolean } | null>(null);
@@ -236,6 +436,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   const slashRef = useRef<{ q: SlashQuery | null; index: number }>({ q: null, index: 0 });
   const uploadRef = useRef(onUploadFile);
   uploadRef.current = onUploadFile;
+  const resolveMediaUrlRef = useRef(resolveMediaUrl);
+  resolveMediaUrlRef.current = resolveMediaUrl;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -439,8 +641,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
 
     const dismissInline = () => setInline(null);
 
+    const resolveMedia: MediaUrlResolver = (mediaId) => resolveMediaUrlRef.current?.(mediaId) ?? null;
+
     const view = new EditorView(hostRef.current, {
       state,
+      nodeViews: {
+        image: (node, editorView, getPos) => imageView(node, editorView, getPos as () => number | undefined, resolveMedia),
+        gallery: (node, editorView, getPos) => galleryView(node, editorView, getPos as () => number | undefined, resolveMedia),
+        embed: (node, editorView, getPos) => embedView(node, editorView, getPos as () => number | undefined),
+        source: (node, editorView, getPos) => sourceView(node, editorView, getPos as () => number | undefined),
+      },
       handleDOMEvents: {
         blur: () => {
           dismissInline();

@@ -30,7 +30,12 @@ function safeHref(url: unknown): string {
   return /^https?:\/\//i.test(s) || s.startsWith("/") ? s : "#";
 }
 
-export function renderDocumentToHtml(document: { version: number; nodes: unknown[] }): string {
+export type RenderOptions = {
+  /** Resolves a mediaId to a URL the reader's browser can load. Images are omitted without it. */
+  mediaUrl?: (mediaId: string) => string;
+};
+
+export function renderDocumentToHtml(document: { version: number; nodes: unknown[] }, options: RenderOptions = {}): string {
   const blocks = (document.nodes ?? []).map((raw) => {
     const n = raw as DocNode;
     switch (n.type) {
@@ -55,14 +60,20 @@ export function renderDocumentToHtml(document: { version: number; nodes: unknown
         return `<table><tbody>${rows}</tbody></table>`;
       }
       case "image": {
+        const mediaId = String(n.attrs?.mediaId ?? "");
         const caption = n.attrs?.caption ? escapeHtml(String(n.attrs.caption)) : "";
         const alt = n.attrs?.altText ? escapeHtml(String(n.attrs.altText)) : "";
         const credit = n.attrs?.credit ? `<small>${escapeHtml(String(n.attrs.credit))}</small>` : "";
-        return `<figure><img src="" alt="${alt}" data-media-id="${escapeHtml(String(n.attrs?.mediaId ?? ""))}"/><figcaption>${caption} ${credit}</figcaption></figure>`;
+        const src = options.mediaUrl ? escapeHtml(options.mediaUrl(mediaId)) : "";
+        const img = src ? `<img src="${src}" alt="${alt}"/>` : "";
+        const legend = caption || credit ? `<figcaption>${caption} ${credit}</figcaption>` : "";
+        return `<figure data-media-id="${escapeHtml(mediaId)}">${img}${legend}</figure>`;
       }
       case "gallery": {
-        const count = (n.attrs?.mediaIds as unknown[] ?? []).length;
-        return `<figure><em>Galeria (${count} imagens)</em></figure>`;
+        const ids = (n.attrs?.mediaIds as string[] ?? []).map(String);
+        if (!options.mediaUrl) return `<figure><em>Galeria (${ids.length} imagens)</em></figure>`;
+        const images = ids.map((id) => `<img src="${escapeHtml(options.mediaUrl!(id))}" alt=""/>`).join("");
+        return `<figure class="gallery">${images}</figure>`;
       }
       case "embed": {
         const url = safeHref(n.attrs?.url);

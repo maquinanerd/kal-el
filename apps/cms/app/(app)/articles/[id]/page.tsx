@@ -36,6 +36,7 @@ import {
   listRevisions,
   listTags,
   scheduleArticle,
+  mediaFileUrl,
   updateArticle,
   uploadMedia,
   type ArticleDetail,
@@ -622,7 +623,7 @@ export default function ArticlePage() {
           />
 
           <RichTextEditor
-            key={`${article?.id ?? "loading"}-${editorKey}`}
+            key={`${article.id}-${editorKey}`}
             ref={editorRef}
             document={doc}
             onChange={(next) => {
@@ -634,6 +635,7 @@ export default function ArticlePage() {
             renderLinkBrowser={(select) => <InternalLinkBrowser onSelect={select} />}
             onRequestImage={() => setMediaPicker("image")}
             onRequestGallery={() => setMediaPicker("gallery")}
+            resolveMediaUrl={(mediaId) => (activeSiteId ? mediaFileUrl(activeSiteId, mediaId) : null)}
             onUploadFile={async (file) => {
               if (!activeSiteId) return null;
               try {
