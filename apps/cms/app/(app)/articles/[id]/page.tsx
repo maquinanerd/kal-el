@@ -199,8 +199,15 @@ export default function ArticlePage() {
   /**
    * Whether the slug has stopped following the title. Seeded from the loaded article, so
    * a deliberate slug set in an earlier session survives; set on the first manual edit.
+   *
+   * State, not a ref: the field's hint and its reset action describe this, and a ref
+   * changes nothing on screen — the inspector kept saying "Definido manualmente" (or the
+   * opposite) until some unrelated render happened to correct it. The ref mirrors it for
+   * the save callback, which must not re-run when it flips.
    */
-  const slugLockedRef = useRef(false);
+  const [slugLocked, setSlugLocked] = useState(false);
+  const slugLockedRef = useRef(slugLocked);
+  slugLockedRef.current = slugLocked;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef({ title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version });
   draftRef.current = { title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version };
@@ -223,7 +230,7 @@ export default function ArticlePage() {
         setTitle(a.title);
         setDek(a.dek ?? "");
         setSlug(a.slug ?? "");
-        slugLockedRef.current = slugIsLocked(a.title, a.slug, a.status);
+        setSlugLocked(slugIsLocked(a.title, a.slug, a.status));
         setSeoTitle(a.seo?.seoTitle ?? "");
         setSeoDesc(a.seo?.metaDescription ?? "");
         setCanonical(a.seo?.canonicalUrl ?? "");
@@ -287,6 +294,16 @@ export default function ArticlePage() {
         // or refreshes the route, so the caret, the selection and the scroll position all
         // survive an autosave - the product review watched saves throw it back to the top.
         setVersion(updated.version);
+        /*
+         * The server appends `-2`, `-3`… when the slug is taken (`uniqueSlug`). That is
+         * the server disambiguating, not the writer choosing, so an automatic slug follows
+         * it and STAYS automatic — otherwise the field would keep showing a URL the
+         * article does not have. Skipped once the slug is the writer's, and skipped if
+         * they typed again while the request was in flight; the next save settles it.
+         */
+        if (!slugLockedRef.current && updated.slug && updated.slug !== s.slug && draftRef.current.slug === s.slug) {
+          setSlug(updated.slug);
+        }
         setSaveState("saved");
         setSaveError(null);
       } catch (err) {
@@ -315,8 +332,19 @@ export default function ArticlePage() {
   }
 
   function onSlugChange(next: string) {
-    slugLockedRef.current = true;
+    setSlugLocked(true);
     setSlug(next);
+    scheduleSave();
+  }
+
+  /**
+   * Back to automatic, explicitly. Clearing the field was the only way back before, which
+   * is not a mechanism anyone can discover — and it read as "delete the URL", not "let the
+   * title drive it again".
+   */
+  function resetSlugToTitle() {
+    setSlugLocked(false);
+    setSlug(slugify(title));
     scheduleSave();
   }
 
@@ -616,12 +644,17 @@ export default function ArticlePage() {
                   label="Slug"
                   value={slug}
                   hint={
-                    slugLockedRef.current
+                    slugLocked
                       ? "Definido manualmente — o título não altera mais este endereço."
                       : "Gerado a partir do título. Editar aqui congela o valor."
                   }
                   onChange={(e) => onSlugChange(e.target.value)}
                 />
+                {slugLocked && status !== "published" && status !== "scheduled" && status !== "archived" && (
+                  <button type="button" className="peg-btn peg-btn--sm peg-btn--secondary kalel-slug-reset" onClick={resetSlugToTitle}>
+                    Gerar a partir do título
+                  </button>
+                )}
                 {domain && (
                   <p className="peg-field__hint kalel-url-preview">
                     {domain}/{slug || "…"}

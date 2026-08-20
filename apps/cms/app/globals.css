@@ -249,6 +249,8 @@ a {
   font-size: 11px;
   word-break: break-all;
 }
+/* the way back to an automatic slug: an action, not a trick with the empty field */
+.kalel-slug-reset { align-self: flex-start; }
 
 /* ── QA checklist ───────────────────────────────────────────────────────── */
 .kalel-qa { display: flex; flex-direction: column; gap: var(--peg-space-2); }
