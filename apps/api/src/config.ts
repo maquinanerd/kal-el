@@ -32,6 +32,17 @@ const envSchema = z.object({
   MEDIA_LOCAL_PATH: z.string().min(1).default("./uploads"),
   MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
   /**
+   * Global per-IP request ceiling per minute. The default is the production control and
+   * is deliberately generous for a human and tight for a scraper.
+   *
+   * It is configurable for one reason: a browser test suite drives hundreds of
+   * navigations from a single address in a few minutes and trips it, and a request
+   * refused with 429 looks exactly like a button that does nothing. Raising it for a test
+   * harness is honest; the credential-guessing surfaces keep their own much stricter
+   * route-level limits either way (see routes/auth.ts) and are not affected by this.
+   */
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(600),
+  /**
    * Log verbosity. `silent` is what the test suite uses; every other value produces
    * output. There is deliberately no way to express "no logger at all" other than this,
    * so a production deployment cannot end up silent by omission.

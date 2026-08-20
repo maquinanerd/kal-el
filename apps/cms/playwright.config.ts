@@ -48,6 +48,10 @@ export default defineConfig({
         API_BASE_URL: "http://localhost:3101",
         CORS_ORIGINS: "http://localhost:3100",
         ENABLE_DOCS: "true",
+        // One egress address drives the whole suite: hundreds of navigations in a few
+        // minutes trip the production ceiling, and a 429 reaches the browser as a button
+        // that does nothing. The limit itself is not what these tests are about.
+        RATE_LIMIT_MAX: "100000",
       },
     },
     {

@@ -67,7 +67,7 @@ export async function buildApp(opts: { connectionString: string; config: AppConf
   // integration behind a shared egress address cannot exhaust the budget of another.
   await app.register(rateLimit, {
     global: true,
-    max: 600,
+    max: opts.config.RATE_LIMIT_MAX,
     timeWindow: "1 minute",
     keyGenerator: (req) => {
       const auth = req.headers.authorization;
