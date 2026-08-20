@@ -177,15 +177,31 @@ async function workflowNoteFor(db: Db, row: ArticleRow): Promise<WorkflowNote | 
       and(
         eq(auditLog.objectType, "article"),
         eq(auditLog.objectId, row.id),
-        // the transition INTO the current status, whatever wrote it
-        sql`${auditLog.details}->>'to' = ${row.status}`,
+        /*
+         * The LAST transition, whatever it moved to - not the last one that happened to
+         * land on the current status.
+         *
+         * Filtering on `to = row.status` and taking the newest match reaches back past
+         * more recent transitions. An article rejected with "Rever a introdução", fixed,
+         * approved, scheduled, and then moved back to `blocked` by the worker (a failed
+         * publish writes no note) matched that older reject row and presented a
+         * long-resolved editorial comment as the reason it is blocked right now. The
+         * author reads it and re-edits something that was already accepted.
+         *
+         * Taking the newest transition and then checking it against the current status
+         * means a state nobody commented on shows no comment, which is correct.
+         */
+        sql`${auditLog.details}->>'to' IS NOT NULL`,
       ),
     )
     .orderBy(desc(auditLog.createdAt))
     .limit(1);
 
-  const note = typeof entry?.details?.note === "string" ? entry.details.note.trim() : "";
-  if (!entry || !note) return null;
+  if (!entry) return null;
+  // the newest transition must be the one that produced the state being displayed
+  if (entry.details?.to !== row.status) return null;
+  const note = typeof entry.details?.note === "string" ? entry.details.note.trim() : "";
+  if (!note) return null;
   return { action: entry.action, note, actorLabel: entry.actorLabel ?? null, createdAt: entry.createdAt.toISOString() };
 }
 
