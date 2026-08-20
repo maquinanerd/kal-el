@@ -208,7 +208,14 @@ export default function WebhooksPage() {
               ))}
             </div>
           </div>
-          <Button variant="primary" onClick={() => void onCreate()} disabled={creating || !url || events.size === 0 || !activeSiteId}>
+          {/* the column is `align-items: stretch`, so the action spanned the whole card
+              and a disabled control the width of the form reads as a broken banner */}
+          <Button
+            variant="primary"
+            className="kalel-webhook__submit"
+            onClick={() => void onCreate()}
+            disabled={creating || !url || events.size === 0 || !activeSiteId}
+          >
             {creating ? "Registrando…" : "Registrar webhook"}
           </Button>
         </div>

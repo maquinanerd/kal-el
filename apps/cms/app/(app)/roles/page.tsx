@@ -12,6 +12,8 @@ import {
   RolePermissionSummary,
   Search,
   groupPermissions,
+  permissionGroupLabel,
+  permissionLabel,
 } from "@kal-el/design-system";
 import { ApiError, createRole, listPermissions, listRoles, type PermissionInfo, type Role } from "../../../lib/api";
 
@@ -170,7 +172,7 @@ export default function RolesPage() {
               {grouped.map((g) => (
                 <section key={g.group} className="kalel-perm-picker__group">
                   <div className="kalel-perm-picker__head">
-                    <h4 className="peg-inspector-section__title">{g.group}</h4>
+                    <h4 className="peg-inspector-section__title">{permissionGroupLabel(g.group)}</h4>
                     <Button
                       size="xs"
                       variant="tertiary"
@@ -198,7 +200,12 @@ export default function RolesPage() {
                             <path d="m5 13 4 4L19 7" />
                           </svg>
                         </span>
-                        <span className="kalel-perm-picker__key">{p}</span>
+                        {/* the human name is what the choice is about; the key stays
+                            visible underneath because it is what the API contract uses */}
+                        <span className="kalel-perm-picker__text">
+                          <span className="kalel-perm-picker__label">{permissionLabel(p)}</span>
+                          <span className="kalel-perm-picker__key">{p}</span>
+                        </span>
                       </label>
                     ))}
                   </div>

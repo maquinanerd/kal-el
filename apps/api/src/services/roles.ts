@@ -261,13 +261,13 @@ export const PRESET_ROLES: Array<{ key: string; name: string; description: strin
   {
     key: "owner",
     name: "Owner",
-    description: "Full platform control",
+    description: "Controle total da plataforma",
     permissions: Object.values(PERMISSIONS),
   },
   {
     key: "admin",
     name: "Admin",
-    description: "Full site control (no platform/system, user or role management)",
+    description: "Controle total do site (sem plataforma, usuários ou papéis)",
     permissions: [
       ...EDITORIAL_BASE,
       PERMISSIONS.articlePublish,
@@ -287,7 +287,7 @@ export const PRESET_ROLES: Array<{ key: string; name: string; description: strin
   {
     key: "editor-chefe",
     name: "Editor chefe",
-    description: "Approves, publishes and schedules content",
+    description: "Aprova, publica e agenda conteúdo",
     permissions: [
       ...EDITORIAL_BASE,
       PERMISSIONS.articlePublish,
@@ -306,7 +306,7 @@ export const PRESET_ROLES: Array<{ key: string; name: string; description: strin
   {
     key: "editor",
     name: "Editor",
-    description: "Edits and reviews content",
+    description: "Edita e revisa conteúdo",
     permissions: [
       ...EDITORIAL_BASE,
       PERMISSIONS.articleSubmit,
@@ -319,16 +319,36 @@ export const PRESET_ROLES: Array<{ key: string; name: string; description: strin
   {
     key: "autor",
     name: "Autor",
-    description: "Writes and submits drafts (cannot publish)",
+    description: "Escreve e envia rascunhos (não publica)",
     permissions: [...EDITORIAL_BASE, PERMISSIONS.articleSubmit, PERMISSIONS.mediaRead],
   },
 ];
+
+/**
+ * The English descriptions these presets shipped with, so an install seeded before they
+ * were translated can be migrated without touching anything an operator has since edited.
+ * A blind overwrite would silently revert a renamed or re-described role.
+ */
+const LEGACY_PRESET_DESCRIPTIONS: Record<string, string> = {
+  owner: "Full platform control",
+  admin: "Full site control (no platform/system, user or role management)",
+  "editor-chefe": "Approves, publishes and schedules content",
+  editor: "Edits and reviews content",
+  autor: "Writes and submits drafts (cannot publish)",
+};
 
 /** Create the preset roles if they do not already exist (idempotent). */
 export async function ensurePresetRoles(db: Db): Promise<void> {
   for (const preset of PRESET_ROLES) {
     const existing = await db.query.roles.findFirst({ where: eq(roles.key, preset.key) });
-    if (existing) continue;
+    if (existing) {
+      // Only our own untouched default is replaced, matched exactly. Permissions are never
+      // rewritten here: revoking a grant an operator added is not a copy change.
+      if (existing.description === LEGACY_PRESET_DESCRIPTIONS[preset.key]) {
+        await db.update(roles).set({ description: preset.description }).where(eq(roles.id, existing.id));
+      }
+      continue;
+    }
     const permRows = await db
       .select({ id: permissions.id, key: permissions.key })
       .from(permissions)

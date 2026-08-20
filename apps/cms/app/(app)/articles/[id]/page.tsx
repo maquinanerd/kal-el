@@ -317,7 +317,10 @@ export default function ArticlePage() {
   );
 
   const scheduleSave = useCallback(() => {
-    setSaveState("idle");
+    // "Salvando…" from the first keystroke, not once the request leaves. `idle` renders an
+    // empty slot, so every edit blanked the indicator for the whole debounce window and
+    // the writer's only evidence of an autosave was that it had already finished.
+    setSaveState("saving");
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => void save(), 1200);
   }, [save]);

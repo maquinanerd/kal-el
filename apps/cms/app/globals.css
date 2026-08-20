@@ -249,6 +249,9 @@ a {
   font-size: 11px;
   word-break: break-all;
 }
+/* a disabled action should look like a button, not like a disabled banner */
+.kalel-webhook__submit { align-self: flex-start; }
+
 /* the way back to an automatic slug: an action, not a trick with the empty field */
 .kalel-slug-reset { align-self: flex-start; }
 
@@ -611,14 +614,18 @@ a {
 .kalel-perm-picker__head h4 { margin: 0; }
 .kalel-perm-picker__items { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--peg-space-1); }
 .kalel-perm-picker__item { font: var(--peg-font-body-sm); }
-.kalel-perm-picker__key { font-family: var(--peg-font-mono); font-size: 11px; color: var(--peg-text-secondary); }
+.kalel-perm-picker__text { display: flex; flex-direction: column; min-width: 0; }
+.kalel-perm-picker__label { color: var(--peg-text-primary); }
+.kalel-perm-picker__key { font-family: var(--peg-font-mono); font-size: 11px; color: var(--peg-text-tertiary); }
 
 /* --- Users --------------------------------------------------------------- */
 .kalel-user__id { display: flex; flex-direction: column; min-width: 0; }
 .kalel-user__name { font-weight: 500; color: var(--peg-text-primary); }
 .kalel-user__email { font: var(--peg-font-caption); color: var(--peg-text-tertiary); }
 .kalel-user__memberships { display: flex; flex-wrap: wrap; gap: var(--peg-space-1); }
-.kalel-user__site { color: var(--peg-text-tertiary); }
+/* `.peg-chip` is a flex container, so leading whitespace inside this item is stripped
+   and the chip read "Owner· Portal A". The gap has to come from the box. */
+.kalel-user__site { color: var(--peg-text-tertiary); margin-left: 0.35em; }
 .kalel-membership-list { list-style: none; margin: var(--peg-space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--peg-space-1); }
 .kalel-membership-list li { display: flex; align-items: center; gap: var(--peg-space-2); font: var(--peg-font-body-sm); }
 

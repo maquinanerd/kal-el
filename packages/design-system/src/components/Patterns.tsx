@@ -561,7 +561,13 @@ export function calendarTitle(view: CalendarView, cursor: Date): string {
     const fmt = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
     return `${fmt(from)} – ${fmt(to)}`;
   }
-  if (view === "agenda") return "Próximos 30 dias";
+  if (view === "agenda") {
+    const { from, to } = calendarRange("agenda", cursor);
+    const fmt = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+    // "Próximos 30 dias" was a constant, so stepping the agenda changed the list under a
+    // header that never moved - which reads as arrows that do nothing.
+    return `${fmt(from)} – ${fmt(addDays(to, -1))}`;
+  }
   return cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 }
 
@@ -612,7 +618,13 @@ export function CalendarGrid({
   }, [entries]);
 
   if (view === "agenda") {
-    const sorted = [...entries].sort((a, b) => a.when.getTime() - b.when.getTime());
+    // Month and week slice the entries by `calendarRange`; the agenda listed ALL of them
+    // and ignored the cursor entirely, so the previous/next arrows moved a window nothing
+    // was reading.
+    const { from, to } = calendarRange("agenda", cursor);
+    const sorted = entries
+      .filter((e) => e.when >= from && e.when < to)
+      .sort((a, b) => a.when.getTime() - b.when.getTime());
     if (sorted.length === 0) return <p className="peg-cal-empty">{emptyLabel}</p>;
     let lastKey = "";
     return (
@@ -823,6 +835,64 @@ export type PermissionGroup = { group: string; permissions: string[] };
  * A role screen that lists fifty flat chips is not readable; the group is the unit an
  * administrator actually reasons about.
  */
+/**
+ * Human names for the permission catalogue (apps/api/src/auth-context.ts).
+ *
+ * The screens showed the raw key — `taxonomy.authors.manage` — to people whose job is
+ * deciding who may do what. The key is the stable identifier and stays available as the
+ * tooltip; the label is what the sentence "this role can…" needs. An unknown key falls
+ * back to itself rather than being hidden, so a permission added to the API is visibly
+ * unlabelled instead of silently missing.
+ */
+const PERMISSION_LABELS: Record<string, string> = {
+  "system.manage": "Administrar a plataforma",
+  "sites.create": "Criar sites",
+  "sites.read": "Ver sites",
+  "users.create": "Criar usuários",
+  "users.read": "Ver usuários",
+  "roles.manage": "Gerenciar papéis",
+  "tokens.manage": "Gerenciar service tokens",
+  "articles.create": "Criar artigos",
+  "articles.read": "Ler artigos",
+  "articles.update": "Editar artigos",
+  "articles.publish": "Publicar artigos",
+  "articles.schedule": "Agendar artigos",
+  "articles.submit": "Enviar para revisão",
+  "articles.approve": "Aprovar e devolver artigos",
+  "articles.delete": "Excluir artigos",
+  "articles.recover": "Recuperar documento ilegível",
+  "taxonomy.categories.manage": "Gerenciar categorias",
+  "taxonomy.tags.manage": "Gerenciar tags",
+  "taxonomy.entities.manage": "Gerenciar entidades",
+  "taxonomy.authors.manage": "Gerenciar autores",
+  "taxonomy.sources.manage": "Gerenciar fontes",
+  "media.manage": "Gerenciar mídia",
+  "media.read": "Ver mídia",
+  "seo.manage": "Gerenciar SEO",
+  "audit.read": "Ler o audit log",
+};
+
+const PERMISSION_GROUP_LABELS: Record<string, string> = {
+  system: "Plataforma",
+  sites: "Sites",
+  users: "Usuários",
+  roles: "Papéis",
+  tokens: "Service tokens",
+  articles: "Artigos",
+  taxonomy: "Taxonomia",
+  media: "Mídia",
+  seo: "SEO",
+  audit: "Audit log",
+};
+
+export function permissionLabel(key: string): string {
+  return PERMISSION_LABELS[key] ?? key;
+}
+
+export function permissionGroupLabel(group: string): string {
+  return PERMISSION_GROUP_LABELS[group] ?? group;
+}
+
 export function groupPermissions(permissions: string[]): PermissionGroup[] {
   const map = new Map<string, string[]>();
   for (const p of permissions) {
@@ -848,8 +918,8 @@ export function RolePermissionSummary({ permissions, maxGroups = 3 }: { permissi
       <strong className="peg-perm-summary__count">{permissions.length}</strong>
       <span className="peg-perm-summary__groups">
         {shown.map((g) => (
-          <span key={g.group} className="peg-chip">
-            {g.group}
+          <span key={g.group} className="peg-chip" title={g.group}>
+            {permissionGroupLabel(g.group)}
           </span>
         ))}
         {rest > 0 && <span className="peg-table__muted">+{rest}</span>}
@@ -867,13 +937,14 @@ export function PermissionMatrix({ permissions }: { permissions: string[] }) {
       {groups.map((g) => (
         <section key={g.group} className="peg-perm-matrix__group">
           <h4 className="peg-perm-matrix__title">
-            {g.group}
-            <span className="peg-table__muted"> · {g.permissions.length}</span>
+            {permissionGroupLabel(g.group)}
+            <span className="peg-table__muted">{" "}· {g.permissions.length}</span>
           </h4>
           <div className="peg-perm-matrix__items">
+            {/* the key stays reachable as the tooltip: it is what an API caller sends */}
             {g.permissions.map((p) => (
-              <span key={p} className="peg-chip peg-chip--mono">
-                {p}
+              <span key={p} className="peg-chip" title={p}>
+                {permissionLabel(p)}
               </span>
             ))}
           </div>

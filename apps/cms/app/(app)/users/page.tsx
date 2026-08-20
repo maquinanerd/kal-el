@@ -141,7 +141,7 @@ export default function UsersPage() {
                         {u.memberships.map((m) => (
                           <span key={`${m.siteId}-${m.roleId}`} className="peg-chip">
                             {m.roleName}
-                            <span className="kalel-user__site"> · {siteName.get(m.siteId) ?? "site"}</span>
+                            <span className="kalel-user__site">· {siteName.get(m.siteId) ?? "site"}</span>
                           </span>
                         ))}
                       </div>
