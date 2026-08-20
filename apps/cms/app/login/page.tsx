@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input } from "@kal-el/design-system";
+import { BrandLogo } from "../../components/BrandLogo";
 import { useAuth } from "../../lib/auth";
 
 export default function LoginPage() {
@@ -34,8 +35,7 @@ export default function LoginPage() {
         style={{ width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 16 }}
       >
         <div className="peg-sidebar__brand">
-          <span className="peg-sidebar__brand-dot">K</span>
-          <span>Kal El</span>
+          <BrandLogo size="lg" />
         </div>
         <h1 className="peg-page-title">Entrar</h1>
         <Input label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />

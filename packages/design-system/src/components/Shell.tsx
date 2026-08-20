@@ -36,7 +36,7 @@ export function Sidebar({
   onClose,
   id = "peg-sidebar",
 }: {
-  brand: string;
+  brand: ReactNode;
   groups: { label?: string; items: NavItemDef[] }[];
   footer?: ReactNode;
   open?: boolean;
@@ -76,8 +76,7 @@ export function Sidebar({
         aria-label="Navegação principal"
       >
         <div className="peg-sidebar__brand">
-          <span className="peg-sidebar__brand-dot">K</span>
-          <span>{brand}</span>
+          {brand}
           {onClose && (
             <button
               type="button"

@@ -8,7 +8,7 @@ import { AuthProvider } from "../lib/auth";
 import { ChromeProvider } from "../lib/chrome";
 
 export const metadata: Metadata = {
-  title: "Kal El CMS",
+  title: "CMS Kal-El",
   description: "CMS editorial Kal El",
 };
 

@@ -134,7 +134,12 @@ function Lab() {
     <div className="peg-body">
       <AppLayout>
         <Sidebar
-          brand="Kal El"
+          brand={
+            <>
+              <span className="peg-sidebar__brand-dot">K</span>
+              <span>Kal El</span>
+            </>
+          }
           groups={[
             {
               items: [{ id: "dash", label: "Dashboard", icon: <IconHome />, active: true }],

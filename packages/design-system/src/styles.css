@@ -907,6 +907,42 @@
   font-weight: 600;
   flex-shrink: 0;
 }
+/*
+ * Brand lockup: a square mark plus a wordmark, for the sidebar header and the login card.
+ *
+ * The wordmark is painted through a mask instead of being dropped in as an <img>. The
+ * source asset is a single black-on-transparent PNG; masking makes it take currentColor,
+ * so the same file stays legible when the theme flips to dark - which a black <img>
+ * would not. The asset URL is a variable the consuming app sets, so the design system
+ * itself carries no brand.
+ */
+.peg-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  min-width: 0;
+  color: var(--peg-text-primary);
+}
+.peg-logo__mark {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--peg-radius-sm);
+  object-fit: contain;
+}
+.peg-logo__wordmark {
+  display: block;
+  flex-shrink: 0;
+  height: 15px;
+  /* the source is 1037x145; hold that ratio so the glyphs never stretch */
+  width: calc(15px * 7.152);
+  background-color: currentColor;
+  -webkit-mask: var(--peg-logo-wordmark) no-repeat center / contain;
+  mask: var(--peg-logo-wordmark) no-repeat center / contain;
+}
+.peg-logo--lg .peg-logo__mark { width: 40px; height: 40px; border-radius: var(--peg-radius-md); }
+.peg-logo--lg .peg-logo__wordmark { height: 22px; width: calc(22px * 7.152); }
+
 /* third scroll container: the nav itself, so a long nav scrolls without moving the
    brand header or the account row pinned at the bottom */
 .peg-sidebar__nav { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--peg-space-3); display: flex; flex-direction: column; gap: 1px; }

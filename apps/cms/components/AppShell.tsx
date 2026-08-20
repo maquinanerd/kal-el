@@ -25,6 +25,7 @@ import {
   type NavItemDef,
 } from "@kal-el/design-system";
 
+import { BrandLogo } from "./BrandLogo";
 import { useAuth } from "../lib/auth";
 import { ShellStatus, useChrome, type Crumb } from "../lib/chrome";
 import { ThemeToggle } from "./ThemeToggle";
@@ -124,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <AppLayout>
       <Sidebar
-        brand="Kal El"
+        brand={<BrandLogo />}
         groups={navGroups}
         open={navOpen}
         onClose={() => setNavOpen(false)}
