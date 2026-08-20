@@ -108,6 +108,40 @@ function toggleBlockquote(view: EditorView) {
   else run(view, wrapIn(type));
 }
 
+/**
+ * The full extent of the link mark covering `pos`, or null when there is none.
+ *
+ * Widening matters because a link is not always one text node: bolding a word inside a
+ * link splits it in two, and editing only the half under the caret would leave two
+ * adjacent links with different targets.
+ */
+function linkRangeAt(state: EditorState, pos: number): { href: string; from: number; to: number } | null {
+  const markType = state.schema.marks.link;
+  const $pos = state.doc.resolve(pos);
+  const parent = $pos.parent;
+  if (!parent.isTextblock) return null;
+
+  let found = parent.childAfter($pos.parentOffset);
+  if (!found.node || !markType.isInSet(found.node.marks)) found = parent.childBefore($pos.parentOffset);
+  if (!found.node) return null;
+  const mark = markType.isInSet(found.node.marks);
+  if (!mark) return null;
+
+  let startIndex = found.index;
+  let from = $pos.start() + found.offset;
+  let endIndex = found.index + 1;
+  let to = from + found.node.nodeSize;
+  while (startIndex > 0 && mark.isInSet(parent.child(startIndex - 1).marks)) {
+    startIndex -= 1;
+    from -= parent.child(startIndex).nodeSize;
+  }
+  while (endIndex < parent.childCount && mark.isInSet(parent.child(endIndex).marks)) {
+    to += parent.child(endIndex).nodeSize;
+    endIndex += 1;
+  }
+  return { href: String(mark.attrs.href ?? ""), from, to };
+}
+
 function insertAtom(view: EditorView, typeName: string, attrs: Record<string, unknown>) {
   const nodeType = view.state.schema.nodes[typeName] as NodeType;
   // drop empty attrs: the document schema types these as optional strings, not nullable
@@ -136,7 +170,8 @@ function insertTableNode(view: EditorView) {
 
 export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor({ document, onChange, onRequestImage, onRequestGallery, onUploadFile, statusSlot, renderLinkBrowser }, ref) {
   const [focusMode, setFocusMode] = useState(false);
-  const [inline, setInline] = useState<{ top: number; left: number } | null>(null);
+  /** `link` drives the bubble toolbar state: inside a link it offers editing and removal. */
+  const [inline, setInline] = useState<{ top: number; left: number; link: boolean } | null>(null);
   const [slash, setSlash] = useState<SlashQuery | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   /** Where the slash menu is drawn — the caret, not the top of the block. */
@@ -390,6 +425,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
             setInline({
               top: Math.min(start.top, end.top) - host.top - 44,
               left: Math.max(0, (start.left + end.left) / 2 - host.left - 90),
+              link: linkRangeAt(next, next.selection.from) !== null,
             });
           }
         }
@@ -444,34 +480,22 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   /**
    * Reads the link mark the caret currently sits in, so the dialog can open pre-filled
    * and offer "remove" instead of silently creating a second overlapping link.
+   *
+   * This used to ask `$from.marks()`, which reports the marks of the character BEFORE the
+   * position - so a caret at the first character of a link, and every selection made by
+   * double-clicking the linked word (whose `from` is exactly that position), came back
+   * "not a link". The dialog then opened empty with no remove action, which is what the
+   * product review hit. Resolving the child node at the position and falling back to the
+   * one before it covers both edges.
    */
   function currentLink(): { href: string; text: string; from: number; to: number } | null {
     const v = viewRef.current;
     if (!v) return null;
     const { state } = v;
-    const markType = state.schema.marks.link;
-    const { from, to, $from } = state.selection;
-    const mark = markType.isInSet(state.storedMarks ?? $from.marks());
-    if (!mark) return null;
-    // widen to the full extent of the mark, so editing it replaces the whole link
-    let start = from;
-    let end = to;
-    const parent = $from.parent;
-    const startIndex = $from.index();
-    if (parent.child(startIndex)) {
-      let pos = $from.start();
-      for (let i = 0; i < parent.childCount; i += 1) {
-        const child = parent.child(i);
-        const childEnd = pos + child.nodeSize;
-        if (pos <= from && from <= childEnd && markType.isInSet(child.marks)) {
-          start = pos;
-          end = childEnd;
-          break;
-        }
-        pos = childEnd;
-      }
-    }
-    return { href: String(mark.attrs.href ?? ""), text: state.doc.textBetween(start, end), from: start, to: end };
+    const { from, to, empty } = state.selection;
+    const range = linkRangeAt(state, from) ?? (empty ? null : linkRangeAt(state, to));
+    if (!range) return null;
+    return { ...range, text: state.doc.textBetween(range.from, range.to) };
   }
 
   function openLinkDialog() {
@@ -485,21 +509,28 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
   }
   openLinkDialogRef.current = openLinkDialog;
 
-  function applyLink(href: string) {
+  function applyLink(href: string, text?: string) {
     const v = viewRef.current;
     if (!v) return;
     const { state } = v;
     const markType = state.schema.marks.link;
     const existing = currentLink();
-    const from = existing ? existing.from : state.selection.from;
-    const to = existing ? existing.to : state.selection.to;
+    // an explicit selection wins; a bare caret inside a link edits that whole link
+    const from = state.selection.empty ? existing?.from ?? state.selection.from : state.selection.from;
+    const to = state.selection.empty ? existing?.to ?? state.selection.to : state.selection.to;
+    const mark = markType.create({ href, internal: href.startsWith("/") ? true : null });
+
     if (from === to) {
-      // no selection and not inside a link: insert the URL as its own linked text
-      const node = state.schema.text(href, [markType.create({ href })]);
+      // no selection and not inside a link: insert the URL (or the typed label) as its own
+      // linked text
+      const node = state.schema.text(text?.trim() || href, [mark]);
       v.dispatch(state.tr.replaceSelectionWith(node, false));
+    } else if (text !== undefined && text.trim() !== "" && text !== state.doc.textBetween(from, to)) {
+      // the label was edited in the dialog: replace the text, keep it linked
+      v.dispatch(state.tr.replaceWith(from, to, state.schema.text(text.trim(), [mark])));
     } else {
       let tr = state.tr.removeMark(from, to, markType);
-      tr = tr.addMark(from, to, markType.create({ href }));
+      tr = tr.addMark(from, to, mark);
       v.dispatch(tr);
     }
     setLinkDialog(CLOSED_LINK);
@@ -510,6 +541,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
     const v = viewRef.current;
     const existing = currentLink();
     if (!v || !existing) return;
+    // only the mark goes; `removeMark` never touches the text it covered
     v.dispatch(v.state.tr.removeMark(existing.from, existing.to, v.state.schema.marks.link));
     setLinkDialog(CLOSED_LINK);
     v.focus();
@@ -624,13 +656,26 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
             <span className="peg-inline-toolbar__sep" />
             <button
               type="button"
-              className="peg-inline-toolbar__btn"
-              aria-label="Link"
+              className={`peg-inline-toolbar__btn ${inline.link ? "peg-inline-toolbar__btn--active" : ""}`}
+              aria-label={inline.link ? "Editar link" : "Link"}
+              aria-pressed={inline.link}
               onMouseDown={(e) => e.preventDefault()}
               onClick={openLinkDialog}
             >
               🔗
             </button>
+            {/* removal reachable without opening the dialog, which is the common case */}
+            {inline.link && (
+              <button
+                type="button"
+                className="peg-inline-toolbar__btn"
+                aria-label="Remover link"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={removeLink}
+              >
+                ⛔
+              </button>
+            )}
           </div>
         )}
         <div ref={hostRef} className="peg-editor__surface" />
@@ -679,7 +724,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
         initialText={linkDialog.text}
         canRemove={linkDialog.canRemove}
         browse={renderLinkBrowser}
-        onApply={(href) => applyLink(href)}
+        onApply={(href, text) => applyLink(href, text)}
         onRemove={removeLink}
         onClose={() => {
           setLinkDialog(CLOSED_LINK);
