@@ -26,7 +26,7 @@ import {
 } from "@kal-el/design-system";
 
 import { useAuth } from "../lib/auth";
-import { useChrome, type Crumb } from "../lib/chrome";
+import { ShellStatus, useChrome, type Crumb } from "../lib/chrome";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -176,7 +176,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <>
               {/* Fixed-height slot. The autosave indicator lives HERE, not under the
                   article H1 where it grew and collapsed the page on every cycle. */}
-              <div className="peg-topbar__status">{chrome.status}</div>
+              <div className="peg-topbar__status">
+                <ShellStatus />
+              </div>
               <select
                 className="peg-select peg-topbar__site"
                 value={activeSiteId ?? ""}

@@ -2,8 +2,30 @@ import type { Page } from "@playwright/test";
 
 export const API = "http://localhost:3101";
 
-/** A minimal but genuinely valid GIF - the upload path verifies magic bytes. */
-export const PIXEL_GIF = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0];
+/**
+ * A 1x1 GIF that browsers can actually decode.
+ *
+ * The previous fixture was 13 bytes: a GIF header and nothing else. It passed the upload
+ * path's magic-byte check and stored 1x1 dimensions, so API-level assertions were happy -
+ * but no browser could decode it, every <img> pointing at it was a broken image with no
+ * intrinsic size, and any element sized by that image collapsed to zero height and
+ * counted as invisible. The focal-point picker in the media rail is exactly such an
+ * element, and could not be clicked.
+ *
+ * This is the canonical 43-byte transparent pixel: header, logical screen descriptor,
+ * global colour table, graphic control extension, image descriptor, one byte of LZW data,
+ * trailer.
+ */
+export const PIXEL_GIF = [
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // GIF89a
+  0x01, 0x00, 0x01, 0x00, // 1 x 1
+  0x80, 0x00, 0x00, // global colour table, 2 entries
+  0x00, 0x00, 0x00, 0xff, 0xff, 0xff, // black, white
+  0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, // graphic control extension
+  0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, // image descriptor
+  0x02, 0x02, 0x44, 0x01, 0x00, // LZW-encoded image data
+  0x3b, // trailer
+];
 
 /** The CSRF token is deliberately not httpOnly so the app can echo it back. */
 async function csrf(page: Page): Promise<string> {

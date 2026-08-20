@@ -39,6 +39,15 @@ function statusBadge(page: Page, label: string) {
   return page.locator(".kalel-editor__actions").getByText(label, { exact: true });
 }
 
+/**
+ * The inspector is tabbed: Documento holds the slug and the taxonomy, SEO holds the search
+ * fields, QA the checklist. A reload lands on Documento, so anything on another tab has to
+ * be asked for.
+ */
+async function inspectorTab(page: Page, label: "Documento" | "SEO" | "QA") {
+  await page.getByLabel("Inspector do artigo").getByRole("button", { name: label, exact: true }).click();
+}
+
 test.describe("SEO", () => {
   test("editorial SEO fields persist, and changing the slug leaves a 301 behind", async ({ page }) => {
     const articleId = await newArticle(page);
@@ -47,9 +56,10 @@ test.describe("SEO", () => {
     const stamp = Date.now();
     const firstSlug = `slug-original-${stamp}`;
     await page.getByRole("textbox", { name: /^Slug/ }).fill(firstSlug);
-    await page.getByRole("textbox", { name: /SEO — título/ }).fill("Título para o Google");
-    await page.getByRole("textbox", { name: /SEO — meta descrição/ }).fill("Descrição que aparece no resultado de busca.");
-    await page.getByRole("textbox", { name: /Canonical/ }).fill("https://exemplo.com/canonico");
+    await inspectorTab(page, "SEO");
+    await page.getByRole("textbox", { name: /^Título SEO/ }).fill("Título para o Google");
+    await page.getByRole("textbox", { name: /^Meta descrição/ }).fill("Descrição que aparece no resultado de busca.");
+    await page.getByRole("textbox", { name: /^Canonical/ }).fill("https://exemplo.com/canonico");
     await savedResponse(page);
 
     // the SERP preview reflects what was typed (the input holds it too, hence .last())
@@ -57,11 +67,13 @@ test.describe("SEO", () => {
 
     await page.reload();
     await expect(page.getByRole("textbox", { name: /^Slug/ })).toHaveValue(firstSlug, { timeout: 30_000 });
-    await expect(page.getByRole("textbox", { name: /SEO — título/ })).toHaveValue("Título para o Google");
-    await expect(page.getByRole("textbox", { name: /Canonical/ })).toHaveValue("https://exemplo.com/canonico");
+    await inspectorTab(page, "SEO");
+    await expect(page.getByRole("textbox", { name: /^Título SEO/ })).toHaveValue("Título para o Google");
+    await expect(page.getByRole("textbox", { name: /^Canonical/ })).toHaveValue("https://exemplo.com/canonico");
 
     // change the slug: the old path must keep resolving
     const secondSlug = `slug-novo-${stamp}`;
+    await inspectorTab(page, "Documento");
     await page.getByRole("textbox", { name: /^Slug/ }).fill(secondSlug);
     await savedResponse(page);
 
@@ -85,7 +97,8 @@ test.describe("SEO", () => {
     const articleId = await newArticle(page);
     const siteId = await activeSiteId(page);
 
-    await page.getByRole("combobox", { name: /Robots index/ }).selectOption("noindex");
+    await inspectorTab(page, "SEO");
+    await page.getByRole("combobox", { name: /^Aparecer na busca/ }).selectOption("noindex");
     await savedResponse(page);
 
     const persisted = await readArticle(page, siteId, articleId);
@@ -117,9 +130,13 @@ test.describe("preview", () => {
       },
       { api: API, site: siteId, id: articleId },
     );
-    expect(preview.url).toContain("/v1/preview/");
+    // The minted URL points at the renderer the writer can open, not at the API's JSON
+    // endpoint - opening the latter showed a writer a wall of JSON where the article
+    // should have been.
+    expect(preview.url).toContain("/preview/");
+    expect(preview.url, "the preview URL must not be the API's JSON endpoint").not.toContain("/v1/preview/");
 
-    const token = preview.url.split("/v1/preview/")[1] ?? "";
+    const token = preview.url.split("/preview/")[1] ?? "";
 
     // render it in a context with NO session: a preview must stand on its token alone
     const anon = await context.browser()!.newContext();
@@ -159,7 +176,7 @@ test.describe("workflow", () => {
 
     // the workflow queue lists it under "Em revisão"
     await page.goto("/workflow");
-    await expect(page.getByRole("button", { name: "Em revisão" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("tab", { name: /Em revisão/ })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/Fluxo editorial/).first()).toBeVisible({ timeout: 30_000 });
 
     await page.goto(`/articles/${articleId}`);
@@ -215,8 +232,18 @@ test.describe("workflow", () => {
       return id;
     }
 
-    const rowAction = (title: string, label: string) =>
-      page.locator("tr", { hasText: title }).getByRole("button", { name: label });
+    /**
+     * Run a queue row's action. Like the editor's, these open an editorial-comment dialog
+     * whose confirm button carries the action's own label - so clicking the row alone
+     * leaves the article where it was.
+     */
+    async function rowAction(title: string, label: string) {
+      await page.locator("tr", { hasText: title }).getByRole("button", { name: label }).click();
+      const dialog = page.getByRole("dialog");
+      if (await dialog.isVisible().catch(() => false)) {
+        await dialog.getByRole("button", { name: label, exact: true }).click();
+      }
+    }
 
     const stamp = Date.now();
     const spentTitle = `Chave gasta ${stamp}`;
@@ -237,7 +264,7 @@ test.describe("workflow", () => {
 
     // clicking must actually approve. Keyed off the stale version it replayed the stored
     // response and left the article sitting in review while the UI reported success.
-    await rowAction(spentTitle, "Aprovar").click();
+    await rowAction(spentTitle, "Aprovar");
     await expect
       .poll(async () => (await readArticle(page, siteId, spentId)).status, { timeout: 30_000 })
       .toBe("draft");
@@ -247,7 +274,7 @@ test.describe("workflow", () => {
     await expect(page.getByText(movedTitle)).toBeVisible({ timeout: 30_000 });
     expect(await transition(movedId, "publish")).toBe(200);
 
-    await rowAction(movedTitle, "Aprovar").click();
+    await rowAction(movedTitle, "Aprovar");
     await expect(page.getByText(/mudou desde que a fila foi carregada/)).toBeVisible({ timeout: 30_000 });
     expect((await readArticle(page, siteId, movedId)).status).toBe("published");
   });

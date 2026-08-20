@@ -1,56 +1,76 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { API, PIXEL_GIF, activeSiteId, readArticle } from "./_seed";
 
 /**
  * Browser coverage for the media surfaces. The staging audit recorded these as covered at
  * the API level only.
+ *
+ * The library is a grid of tiles beside a details rail: selecting a tile fills the rail,
+ * which is where metadata is written. It does not navigate to a detail page - that route
+ * still exists and is covered by the accessibility sweep, but nothing in the grid links
+ * to it.
  */
+
+/** The grid tile for a file. The filename is rendered inside it. */
+function tile(page: Page, filename: string) {
+  return page.locator(".kalel-media__tile").filter({ hasText: filename });
+}
+
+/** The details rail, which is where a file's metadata is edited. */
+function details(page: Page) {
+  return page.getByLabel("Detalhes da mídia");
+}
+
+async function upload(page: Page, filename: string, bytes: number[]) {
+  await page.locator("input[type=file]").setInputFiles({
+    name: filename,
+    mimeType: "image/gif",
+    buffer: Buffer.from(bytes),
+  });
+  await expect(tile(page, filename), "the uploaded asset must appear in the library").toBeVisible({
+    timeout: 30_000,
+  });
+}
 test.describe("media library", () => {
   test("uploads through the UI, keeps metadata, and survives a reload", async ({ page }) => {
     await page.goto("/media");
     await expect(page.getByRole("button", { name: /Enviar/ })).toBeVisible({ timeout: 30_000 });
 
     const name = `capa-${Date.now()}.gif`;
-    await page.locator("input[type=file]").setInputFiles({
-      name,
-      mimeType: "image/gif",
-      buffer: Buffer.from(PIXEL_GIF),
-    });
+    await upload(page, name, PIXEL_GIF);
 
-    // the grid renders each asset as a button, not a link
-    const card = page.getByRole("button", { name: `Abrir ${name}` });
-    await expect(card, "the uploaded asset must appear in the library").toBeVisible({ timeout: 30_000 });
+    await tile(page, name).click();
+    const rail = details(page);
+    await expect(rail.getByText(name)).toBeVisible({ timeout: 30_000 });
 
-    // open the detail surface and write metadata
-    await card.click();
-    await expect(page).toHaveURL(/\/media\/[0-9a-f-]+/, { timeout: 30_000 });
+    await rail.getByRole("textbox", { name: /Alt text/ }).fill("Cartaz do filme");
+    await rail.getByRole("textbox", { name: /Legenda/ }).fill("Divulgação");
+    await rail.getByRole("textbox", { name: /Crédito/ }).fill("Estúdio");
 
-    await page.getByRole("textbox", { name: /Alt text/ }).first().fill("Cartaz do filme");
-    await page.getByRole("textbox", { name: /Legenda/ }).first().fill("Divulgação");
-    await page.getByRole("textbox", { name: /Crédito/ }).first().fill("Estúdio");
-    await page.getByRole("spinbutton", { name: /Ponto focal X/ }).fill("0.4");
-    await page.getByRole("spinbutton", { name: /Ponto focal Y/ }).fill("0.25");
-    await page.getByRole("button", { name: /Salvar/ }).first().click();
+    // the focal point is set by pointing at the image, not by typing coordinates
+    await rail.locator(".kalel-focal").click({ position: { x: 20, y: 10 } });
+    await expect(rail.locator(".kalel-focal__dot")).toBeVisible();
 
+    await rail.getByRole("button", { name: "Salvar" }).click();
+    await expect(rail.getByRole("button", { name: "Salvar" })).toBeDisabled({ timeout: 30_000 });
+
+    // a reload clears the selection, so the file has to be reopened to be read back
     await page.reload();
-    await expect(page.getByRole("textbox", { name: /Alt text/ }).first()).toHaveValue("Cartaz do filme", {
+    await tile(page, name).click();
+    const reloaded = details(page);
+    await expect(reloaded.getByRole("textbox", { name: /Alt text/ })).toHaveValue("Cartaz do filme", {
       timeout: 30_000,
     });
-    await expect(page.getByRole("textbox", { name: /Crédito/ }).first()).toHaveValue("Estúdio");
+    await expect(reloaded.getByRole("textbox", { name: /Crédito/ })).toHaveValue("Estúdio");
     // focal point is metadata only - stored, never used to transform the binary
-    await expect(page.getByRole("spinbutton", { name: /Ponto focal X/ })).toHaveValue("0.4");
+    await expect(reloaded.locator(".kalel-focal__dot"), "the focal point must persist").toBeVisible();
   });
 
   test("an uploaded asset can be set as the featured image and persists", async ({ page }) => {
     await page.goto("/media");
     const name = `destaque-${Date.now()}.gif`;
-    await page.locator("input[type=file]").setInputFiles({
-      name,
-      mimeType: "image/gif",
-      buffer: Buffer.from(PIXEL_GIF),
-    });
-    await expect(page.getByRole("button", { name: `Abrir ${name}` })).toBeVisible({ timeout: 30_000 });
+    await upload(page, name, PIXEL_GIF);
 
     await page.goto("/articles");
     await page.getByRole("button", { name: "Novo artigo" }).first().click();
@@ -58,7 +78,7 @@ test.describe("media library", () => {
     const articleId = page.url().split("/articles/")[1] ?? "";
     await expect(page.getByLabel("Título do artigo")).toHaveValue("Novo artigo", { timeout: 30_000 });
 
-    await page.getByRole("button", { name: "Selecionar imagem de destaque" }).click();
+    await page.getByRole("button", { name: "Selecionar imagem", exact: true }).click();
     const picker = page.getByRole("dialog");
     await expect(picker).toBeVisible({ timeout: 10_000 });
     await picker.getByRole("button", { name: new RegExp(`Selecionar ${name.replace(".", "\\.")}`) }).click();

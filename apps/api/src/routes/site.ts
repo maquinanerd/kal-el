@@ -564,6 +564,19 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const mediaRow = await getMedia(app.db, siteId, mediaId, app.config.API_BASE_URL);
         const buf = await app.storage.get(mediaRow.storageKey);
         if (!buf) throw notFound("media not found");
+        /*
+         * This binary exists to be embedded by the CMS, which sits on a different origin
+         * from the API in every real deployment - and locally too (3000 against 3001).
+         * Helmet's default `Cross-Origin-Resource-Policy: same-origin` makes the browser
+         * refuse to decode it there: the request returns 200 with the right bytes and the
+         * <img> still ends up 0x0. Every thumbnail in the library, every entry in the
+         * media picker and the focal-point tool rendered as a broken image of zero height.
+         *
+         * Relaxing the EMBEDDING rule does not make the file public. The route still
+         * requires `media.read` on a session cookie, and a cross-site request carries no
+         * credentials, so it gets a 401 rather than the image.
+         */
+        reply.header("cross-origin-resource-policy", "cross-origin");
         return reply.type(mediaRow.mimeType).send(buf);
       });
 
