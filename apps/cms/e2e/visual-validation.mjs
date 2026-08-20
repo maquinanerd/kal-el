@@ -159,13 +159,18 @@ async function main() {
   const probePage = await probe.newPage();
   await probePage.goto(`${CMS}/articles`);
   await probePage.waitForTimeout(3000);
-  const articleHref = await probePage.evaluate(async () => {
-    const res = await fetch("http://localhost:3001/v1/me/sites", { credentials: "include" });
+  // The API base is passed in: hardcoding :3001 here meant that pointing CMS_URL at a
+  // different stack (say the e2e pair on 3100/3101) fetched across origins with the wrong
+  // cookies, and the editor — the single most important surface — was skipped or the run
+  // died on a bare "Failed to fetch".
+  const articleHref = await probePage.evaluate(async (apiBase) => {
+    const res = await fetch(`${apiBase}/v1/me/sites`, { credentials: "include" });
     const sites = (await res.json()).data;
-    const r2 = await fetch(`http://localhost:3001/v1/sites/${sites[0].id}/articles?limit=1`, { credentials: "include" });
+    if (!sites || sites.length === 0) return null;
+    const r2 = await fetch(`${apiBase}/v1/sites/${sites[0].id}/articles?limit=1`, { credentials: "include" });
     const items = (await r2.json()).data.items;
     return items[0] ? `/articles/${items[0].id}` : null;
-  });
+  }, API);
   await probe.close();
 
   for (const theme of ["light", "dark"]) {
