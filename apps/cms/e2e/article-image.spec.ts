@@ -81,4 +81,32 @@ test.describe("attaching images while writing", () => {
 
     await expect(page.locator(".peg-editor__atom--image img")).toBeVisible({ timeout: 20_000 });
   });
+
+  test("shows the image in the article preview", async ({ page, context }) => {
+    await login(page);
+    await newArticle(page);
+
+    await page.locator(".peg-editor__surface .ProseMirror").click();
+    await page.keyboard.type("Corpo com imagem.");
+
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Inserir imagem do computador" }).click();
+    (await chooser).setFiles([{ name: "preview-e2e.png", mimeType: "image/png", buffer: PNG }]);
+    await expect(page.locator(".peg-editor__atom--image img")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Salvo")).toBeVisible({ timeout: 20_000 });
+
+    // Preview opens the rendered page in a new tab — not the JSON endpoint.
+    const opened = context.waitForEvent("page");
+    await page.getByRole("button", { name: "Preview" }).click();
+    const preview = await opened;
+    await preview.waitForLoadState();
+    await expect(preview).toHaveURL(/\/preview\/kpv\./);
+    await expect(preview.getByText("Corpo com imagem.")).toBeVisible({ timeout: 20_000 });
+
+    // The image is served through the preview token and actually decodes.
+    const img = preview.locator("article figure img");
+    await expect(img).toHaveAttribute("src", /\/v1\/preview\/kpv\.[^/]+\/media\/[0-9a-f-]+\/file$/);
+    await expect(img).toBeVisible();
+    expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+  });
 });

@@ -1,9 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@kal-el/db";
-import { articles, sites } from "@kal-el/db/schema";
+import { articles, media, sites } from "@kal-el/db/schema";
 import { notFound } from "../plugins/errors.js";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
+import { collectDocumentMediaIds } from "./media.js";
 
 const PREVIEW_TTL_SECONDS = 15 * 60;
 
@@ -55,4 +56,32 @@ export async function resolvePreview(db: Db, payload: PreviewPayload) {
     },
     site: site ? { slug: site.slug, name: site.name } : null,
   };
+}
+
+/**
+ * Resolves one media row for a preview token.
+ *
+ * A preview token is a bearer capability — anyone holding the link can use it — so it
+ * only opens the media the article it was minted for actually shows: images and galleries
+ * in the body, plus the featured and social images. It is deliberately not a key to the
+ * site's whole media library.
+ */
+export async function resolvePreviewMedia(db: Db, payload: PreviewPayload, mediaId: string) {
+  const row = await db.query.articles.findFirst({
+    where: and(eq(articles.id, payload.a), eq(articles.siteId, payload.s)),
+  });
+  if (!row) throw notFound("preview not found");
+
+  const document = row.document ? migrateDocumentToV2(row.document) : { version: 2 as const, nodes: [] };
+  const seo = (row.seo ?? {}) as { socialImageMediaId?: string | null };
+  const allowed = new Set([
+    ...collectDocumentMediaIds(document),
+    ...(row.featuredMediaId ? [row.featuredMediaId] : []),
+    ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : []),
+  ]);
+  if (!allowed.has(mediaId)) throw notFound("media not found");
+
+  const mediaRow = await db.query.media.findFirst({ where: and(eq(media.id, mediaId), eq(media.siteId, payload.s)) });
+  if (!mediaRow) throw notFound("media not found");
+  return { storageKey: mediaRow.storageKey, mimeType: mediaRow.mimeType };
 }

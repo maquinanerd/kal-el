@@ -222,7 +222,9 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
       siteApp.post("/articles/:articleId/preview", { preHandler: guard("articles.read") }, async (req) => {
         const { siteId, articleId } = req.params as { siteId: string; articleId: string };
         const token = createPreviewToken(app.config.SESSION_SECRET, siteId, articleId);
-        return { data: { url: `${app.config.API_BASE_URL}/v1/preview/${token}` } };
+        // Point at the rendered preview page, not the JSON endpoint behind it — this URL
+        // is what the editor opens in a new tab.
+        return { data: { url: `${app.config.APP_BASE_URL}/preview/${token}` } };
       });
 
       // ---- Taxonomy ----
