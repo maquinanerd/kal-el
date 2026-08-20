@@ -490,6 +490,27 @@ export default function ArticlePage() {
     );
   }
 
+  /*
+   * Nothing is editable until the article is actually here.
+   *
+   * The canvas used to render immediately, with `title` still "" and the document still
+   * empty, and the load overwrote whatever had been typed in the meantime: type into the
+   * title fast enough - or let a slow GET land late - and the keystrokes were replaced by
+   * the stored value with no sign anything had been lost. The autosave could not rescue
+   * them either, because `save()` returns early while `loadedRef` is false, so the one
+   * debounced attempt was dropped and never rescheduled.
+   *
+   * It also stops the editor mounting under the key "loading" and remounting the moment
+   * the id arrives, which threw away the ProseMirror instance on every open.
+   */
+  if (!article) {
+    return (
+      <div className="kalel-editor-loading" role="status" aria-live="polite">
+        Carregando o artigo…
+      </div>
+    );
+  }
+
   return (
     <div className="kalel-editor">
       <div className="kalel-editor__main">

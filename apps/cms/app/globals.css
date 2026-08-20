@@ -884,3 +884,9 @@ a {
 
 .kalel-taxonomy__extras { display: flex; flex-direction: column; gap: var(--peg-space-3); max-width: 520px; }
 .kalel-author__bio { display: inline-block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--peg-text-secondary); }
+
+.kalel-editor-loading {
+  padding: var(--peg-space-8) var(--peg-space-6);
+  font: var(--peg-font-body-sm);
+  color: var(--peg-text-tertiary);
+}
