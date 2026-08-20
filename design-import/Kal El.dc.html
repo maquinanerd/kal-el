@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   PEG Product Design System · Kal El — CMS editorial
+   Fase 5 · shell B/C calibrado
+
+   Fonte de verdade de tokens: peg-tokens.calibrated.css
+   Todo valor visual abaixo resolve para um token. Nenhum literal de cor,
+   radius ou elevation fora do bloco :root / [data-theme].
+   Escalas normativas (01_FOUNDATIONS): type 11..48 · radius 4/6/8/12/16 ·
+   spacing 4/8/12/16/20/24/32/40/48/64 · control 28/32/36/40.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── 1. TOKENS ─────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --peg-canvas: #fcfcfc;
+  --peg-surface: #ffffff;
+  --peg-surface-subtle: #f7f7f6;
+  --peg-surface-muted: #f0f0f0;
+  --peg-surface-selected: #e8e8e6;
+  --peg-surface-inspector: #fafaf9;
+  --peg-border: #e2e2e0;
+  --peg-border-strong: #c7c7c7;
+  --peg-divider: #d9d9d6;
+
+  /* text ramp — 5 degraus */
+  --peg-text-primary: #2f332b;
+  --peg-text-body: #4e5249;
+  --peg-text-secondary: #5e6159;
+  --peg-text-tertiary: #8b8d86;
+  --peg-text-disabled: #b3b5af;
+  --peg-text-oninverse: #ffffff;
+  --peg-text-oninverse-muted: #e2e2de;
+  --peg-prose: #3c4038;
+
+  /* inverse (botão primário, toolbar flutuante) */
+  --peg-inverse-surface: #2f332b;
+  --peg-inverse-surface-hover: #3c4038;
+  --peg-inverse-surface-active: #262a23;
+  --peg-inverse-raised: #2e322c;
+  --peg-inverse-border: #43483f;
+
+  /* semantic */
+  --peg-success: #15803d;
+  --peg-success-bg: #f0fdf4;
+  --peg-success-border: #bbf7d0;
+  --peg-warning: #b45309;
+  --peg-warning-bg: #fffbeb;
+  --peg-warning-border: #fde68a;
+  --peg-danger: #b91c1c;
+  --peg-danger-bg: #fef2f2;
+  --peg-danger-border: #fecacd;
+  --peg-info: #2563eb;
+  --peg-info-bg: #eef3fd;
+  --peg-info-border: #c7d7f7;
+
+  /* accent do produto — só publicação, links e foco */
+  --peg-accent: #bf5252;
+  --peg-accent-strong: #b51b1b;
+
+  /* avatares (taxonomia, não estado) */
+  --peg-av-blue-bg: #dce7ff;   --peg-av-blue-fg: #1e4fd1;
+  --peg-av-green-bg: #dcfce7;  --peg-av-green-fg: #15803d;
+  --peg-av-neutral-bg: #e2e2e0;--peg-av-neutral-fg: #4e5249;
+  --peg-av-violet-bg: #ede9fe; --peg-av-violet-fg: #6d28d9;
+  --peg-av-red-bg: #fee2e2;    --peg-av-red-fg: #b91c1c;
+
+  /* marca de texto no editor */
+  --peg-mark-bg: #f6e2e2;
+  --peg-on-accent: #ffffff;
+  --peg-focal-ring: 0 0 0 1px rgba(47, 51, 43, .25);
+
+  /* type */
+  --peg-font-sans: Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --peg-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --peg-fs-micro: 11px;   --peg-lh-micro: 16px;
+  --peg-fs-caption: 12px; --peg-lh-caption: 17px;
+  --peg-fs-sm: 13px;      --peg-lh-sm: 19px;
+  --peg-fs-body: 14px;    --peg-lh-body: 21px;
+  --peg-fs-lg: 16px;      --peg-lh-lg: 24px;
+  --peg-fs-h4: 18px;      --peg-lh-h4: 26px;
+  --peg-fs-h3: 24px;      --peg-lh-h3: 32px;
+  --peg-fs-h2: 30px;      --peg-lh-h2: 38px;
+  --peg-fs-h1: 36px;      --peg-lh-h1: 44px;
+
+  /* radius */
+  --peg-radius-xs: 4px;
+  --peg-radius-sm: 6px;
+  --peg-radius-md: 8px;
+  --peg-radius-lg: 12px;
+  --peg-radius-xl: 16px;
+  --peg-radius-pill: 999px;
+
+  /* spacing */
+  --peg-space-1: 4px;  --peg-space-2: 8px;  --peg-space-3: 12px;
+  --peg-space-4: 16px; --peg-space-5: 20px; --peg-space-6: 24px;
+  --peg-space-8: 32px; --peg-space-10: 40px; --peg-space-12: 48px;
+
+  /* controls */
+  --peg-control-xs: 28px;
+  --peg-control-sm: 32px;
+  --peg-control-md: 36px;
+  --peg-control-lg: 40px;
+
+  /* elevation — base de tinta quente, alinhada ao ink #2F332B */
+  --peg-elev-1: 0 1px 2px rgba(47, 51, 43, .05);
+  --peg-elev-2: 0 6px 16px -4px rgba(47, 51, 43, .10), 0 2px 4px rgba(47, 51, 43, .05);
+  --peg-elev-3: 0 20px 40px -12px rgba(47, 51, 43, .18), 0 4px 8px rgba(47, 51, 43, .05);
+  --peg-elev-frame: 0 20px 40px -16px rgba(47, 51, 43, .12);
+  --peg-focus-ring: 0 0 0 3px rgba(47, 51, 43, .12);
+  --peg-focus-ring-accent: 0 0 0 3px rgba(191, 82, 82, .22);
+
+  /* layout */
+  --peg-sidebar-width: 248px;
+  --peg-rail-width: 60px;
+  --peg-topbar-height: 52px;
+  --peg-inspector-width: 336px;
+  --peg-editor-column: 820px;
+  --peg-page-padding: 24px;
+
+  --peg-motion: 120ms cubic-bezier(.2, 0, .38, .9);
+
+  /* Divisor pontilhado — período 6 px (ponto 2 / vão 4), medido no corpus em
+     4 escalas independentes (6.0 / 6.1 / 6.3 / 5.7 px).
+     `border-style: dotted` NÃO serve: renderiza ponto 1 / vão 1 = período 2 px,
+     3× mais denso que a referência. */
+  --peg-divider-dotted: repeating-linear-gradient(to right, var(--peg-divider) 0 2px, transparent 2px 6px);
+}
+
+/* Dark — surfaces e borders próprias, nunca inversão automática. */
+:root[data-theme='dark'],
+:root:not([data-theme='light']) [data-theme='dark'] {
+  color-scheme: dark;
+
+  --peg-canvas: #101210;
+  --peg-surface: #181a17;
+  --peg-surface-subtle: #1e211d;
+  --peg-surface-muted: #262924;
+  --peg-surface-selected: #2e322c;
+  --peg-surface-inspector: #1b1e1a;
+  --peg-border: #333730;
+  --peg-border-strong: #43483f;
+  --peg-divider: #383d34;
+
+  --peg-text-primary: #f2f2f0;
+  --peg-text-body: #cfd2c9;
+  --peg-text-secondary: #a9aca4;
+  --peg-text-tertiary: #8a8d84;
+  --peg-text-disabled: #5d6058;
+  --peg-text-oninverse: #101210;
+  --peg-text-oninverse-muted: #43483f;
+  --peg-prose: #dfe1db;
+
+  --peg-inverse-surface: #eceee8;
+  --peg-inverse-surface-hover: #ffffff;
+  --peg-inverse-surface-active: #d7dad2;
+  --peg-inverse-raised: #d7dad2;
+  --peg-inverse-border: #b7bab2;
+
+  --peg-success: #4ade80;
+  --peg-success-bg: #14261a;
+  --peg-success-border: #1f4a2c;
+  --peg-warning: #fbbf24;
+  --peg-warning-bg: #2a2110;
+  --peg-warning-border: #543f13;
+  --peg-danger: #f87171;
+  --peg-danger-bg: #2c1616;
+  --peg-danger-border: #5d2626;
+  --peg-info: #8fb4f5;
+  --peg-info-bg: #16203a;
+  --peg-info-border: #274070;
+
+  --peg-accent: #e08c8c;
+  --peg-accent-strong: #f0a5a5;
+
+  --peg-av-blue-bg: #1c2b4d;   --peg-av-blue-fg: #a9c4fb;
+  --peg-av-green-bg: #16301f;  --peg-av-green-fg: #7bd99b;
+  --peg-av-neutral-bg: #333730;--peg-av-neutral-fg: #cfd2c9;
+  --peg-av-violet-bg: #2b2350; --peg-av-violet-fg: #c4b5fd;
+  --peg-av-red-bg: #3a1d1d;    --peg-av-red-fg: #f7a8a8;
+
+  --peg-mark-bg: #46302f;
+  --peg-on-accent: #ffffff;
+  --peg-focal-ring: 0 0 0 1px rgba(0, 0, 0, .55);
+
+  --peg-elev-1: none;
+  --peg-elev-2: 0 8px 20px -6px rgba(0, 0, 0, .55);
+  --peg-elev-3: 0 24px 48px -12px rgba(0, 0, 0, .60);
+  --peg-elev-frame: 0 24px 48px -16px rgba(0, 0, 0, .55);
+  --peg-focus-ring: 0 0 0 3px rgba(242, 242, 240, .16);
+  --peg-focus-ring-accent: 0 0 0 3px rgba(224, 140, 140, .26);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --peg-canvas: #101210;
+    --peg-surface: #181a17;
+    --peg-surface-subtle: #1e211d;
+    --peg-surface-muted: #262924;
+    --peg-surface-selected: #2e322c;
+    --peg-surface-inspector: #1b1e1a;
+    --peg-border: #333730;
+    --peg-border-strong: #43483f;
+    --peg-divider: #383d34;
+
+    --peg-text-primary: #f2f2f0;
+    --peg-text-body: #cfd2c9;
+    --peg-text-secondary: #a9aca4;
+    --peg-text-tertiary: #8a8d84;
+    --peg-text-disabled: #5d6058;
+    --peg-text-oninverse: #101210;
+    --peg-text-oninverse-muted: #43483f;
+    --peg-prose: #dfe1db;
+
+    --peg-inverse-surface: #eceee8;
+    --peg-inverse-surface-hover: #ffffff;
+    --peg-inverse-surface-active: #d7dad2;
+    --peg-inverse-raised: #d7dad2;
+    --peg-inverse-border: #b7bab2;
+
+    --peg-success: #4ade80;
+    --peg-success-bg: #14261a;
+    --peg-success-border: #1f4a2c;
+    --peg-warning: #fbbf24;
+    --peg-warning-bg: #2a2110;
+    --peg-warning-border: #543f13;
+    --peg-danger: #f87171;
+    --peg-danger-bg: #2c1616;
+    --peg-danger-border: #5d2626;
+    --peg-info: #8fb4f5;
+    --peg-info-bg: #16203a;
+    --peg-info-border: #274070;
+
+    --peg-accent: #e08c8c;
+    --peg-accent-strong: #f0a5a5;
+
+    --peg-av-blue-bg: #1c2b4d;   --peg-av-blue-fg: #a9c4fb;
+    --peg-av-green-bg: #16301f;  --peg-av-green-fg: #7bd99b;
+    --peg-av-neutral-bg: #333730;--peg-av-neutral-fg: #cfd2c9;
+    --peg-av-violet-bg: #2b2350; --peg-av-violet-fg: #c4b5fd;
+    --peg-av-red-bg: #3a1d1d;    --peg-av-red-fg: #f7a8a8;
+
+    --peg-mark-bg: #46302f;
+  --peg-on-accent: #ffffff;
+  --peg-focal-ring: 0 0 0 1px rgba(0, 0, 0, .55);
+
+    --peg-elev-1: none;
+    --peg-elev-2: 0 8px 20px -6px rgba(0, 0, 0, .55);
+    --peg-elev-3: 0 24px 48px -12px rgba(0, 0, 0, .60);
+    --peg-elev-frame: 0 24px 48px -16px rgba(0, 0, 0, .55);
+    --peg-focus-ring: 0 0 0 3px rgba(242, 242, 240, .16);
+    --peg-focus-ring-accent: 0 0 0 3px rgba(224, 140, 140, .26);
+  }
+}
+
+/* Camada AA opcional. `data-contrast="aa"` no host eleva os degraus fracos
+   da rampa para ≥4.5:1 sem tocar nos tokens compartilhados com os outros
+   produtos. Ver relatório de diagnóstico, seção contraste. */
+[data-contrast='aa'] {
+  --peg-text-tertiary: #71726d;
+  --peg-text-disabled: #85877f;
+}
+
+/* ─── 2. RESET / BASE ───────────────────────────────────────────────────── */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--peg-surface-muted);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+/* O reset inteiro fica em :where() → especificidade 0. Sem isso, um seletor de
+   elemento como `.kx button` (0,1,1) vence qualquer classe de componente
+   (`.kx-btn--primary` = 0,1,0) e zera background, padding e cor dos controles. */
+:where(.kx, .kx *) { box-sizing: border-box; }
+:where(.kx h1, .kx h2, .kx h3, .kx h4, .kx p, .kx figure, .kx blockquote) { margin: 0; }
+:where(.kx ul, .kx ol) { margin: 0; padding: 0; list-style: none; }
+:where(.kx button) {
+  font: inherit; color: inherit; background: none;
+  border: 0; padding: 0; margin: 0; cursor: pointer; text-align: left;
+}
+:where(.kx table) { border-collapse: collapse; border-spacing: 0; width: 100%; }
+:where(.kx th) { font-weight: 500; text-align: left; }
+:where(.kx dl, .kx dd) { margin: 0; }
+/* Accent só em links de prosa; links com classe herdam a cor do componente. */
+:where(.kx a:not([class])) { color: var(--peg-accent); text-decoration: none; }
+:where(.kx a:not([class])):hover { color: var(--peg-accent-strong); text-decoration: underline; }
+:where(.kx a[class]) { color: inherit; text-decoration: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kx *, .kx *::before, .kx *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
+
+/* ─── 3. BOARD (chrome de calibração) ───────────────────────────────────── */
+.kx {
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: 44px var(--peg-space-10) 96px;
+  font-family: var(--peg-font-sans);
+  font-size: var(--peg-fs-body);
+  line-height: var(--peg-lh-body);
+  color: var(--peg-text-primary);
+}
+.kx-board-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: var(--peg-space-8);
+  padding-bottom: var(--peg-space-5);
+  border-bottom: 1px solid var(--peg-divider);
+  margin-bottom: var(--peg-space-8);
+}
+.kx-eyebrow {
+  font-size: var(--peg-fs-micro); line-height: var(--peg-lh-micro);
+  font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--peg-text-secondary);
+}
+.kx-board-title {
+  font-size: var(--peg-fs-h2); line-height: var(--peg-lh-h2);
+  font-weight: 600; letter-spacing: -.02em;
+}
+.kx-board-sub {
+  font-size: var(--peg-fs-body); line-height: var(--peg-lh-body);
+  color: var(--peg-text-secondary); max-width: 760px;
+}
+.kx-stack-6 { display: flex; flex-direction: column; gap: 6px; }
+.kx-mono {
+  font-family: var(--peg-font-mono);
+  font-size: var(--peg-fs-sm);
+  color: var(--peg-accent-strong); /* accent puro fica em 4.06:1 sobre canvas */
+}
+
+.kx-screen { display: flex; flex-direction: column; gap: var(--peg-space-3); }
+.kx-screen + .kx-screen { margin-top: var(--peg-space-10); }
+.kx-screen-head { display: flex; align-items: baseline; gap: var(--peg-space-3); flex-wrap: wrap; }
+.kx-screen-title { font-size: var(--peg-fs-h4); line-height: var(--peg-lh-h4); font-weight: 600; }
+.kx-screen-note { font-size: var(--peg-fs-sm); line-height: var(--peg-lh-sm); color: var(--peg-text-secondary); }
+.kx-screen-foot { font-size: var(--peg-fs-caption); line-height: var(--peg-lh-caption); color: var(--peg-text-secondary); }
+
+/* Palco: o frame tem largura fixa de device; a página não quebra em telas
+   estreitas — o palco rola no eixo X. */
+.kx-stage { overflow-x: auto; overflow-y: hidden; padding-bottom: var(--peg-space-1); }
+
+.kx-frame {
+  position: relative;
+  width: 1440px;
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-xl);
+  overflow: hidden;
+  box-shadow: var(--peg-elev-frame);
+  display: flex;
+}
+.kx-frame--editor { height: 900px; }
+.kx-frame--index  { height: 760px; }
+.kx-frame--media  { height: 780px; }
+
+/* ─── 4. ÍCONES ─────────────────────────────────────────────────────────── */
+.kx-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.kx-i {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 18px; height: 18px;
+}
+.kx-i--solid { fill: currentColor; stroke: none; }
+.kx-i--bold { stroke-width: 1.9; }
+.kx-i--heavy { stroke-width: 2.2; }
+.kx-i-11 { width: 11px; height: 11px; }
+.kx-i-12 { width: 12px; height: 12px; }
+.kx-i-13 { width: 13px; height: 13px; }
+.kx-i-14 { width: 14px; height: 14px; }
+.kx-i-15 { width: 15px; height: 15px; }
+.kx-i-16 { width: 16px; height: 16px; }
+.kx-i-17 { width: 17px; height: 17px; }
+.kx-i-19 { width: 19px; height: 19px; }
+.kx-i-20 { width: 20px; height: 20px; }
+.kx-i-22 { width: 22px; height: 22px; }
+.kx-i--muted { color: var(--peg-text-tertiary); }
+
+/* ─── 5. SIDEBAR / RAIL ─────────────────────────────────────────────────── */
+.kx-sidebar {
+  width: var(--peg-sidebar-width); flex: none;
+  background: var(--peg-surface-subtle);
+  border-right: 1px solid var(--peg-border);
+  display: flex; flex-direction: column;
+}
+.kx-brand {
+  height: var(--peg-topbar-height); flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 9px; padding: 0 var(--peg-space-3) 0 var(--peg-space-4);
+}
+.kx-brand-id { display: flex; align-items: center; gap: 9px; }
+.kx-brand-mark {
+  width: 22px; height: 22px; border-radius: var(--peg-radius-sm);
+  background: var(--peg-accent-strong); color: var(--peg-on-accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.kx-brand-name { font-size: var(--peg-fs-body); font-weight: 600; letter-spacing: -.01em; }
+
+.kx-nav { padding: 6px var(--peg-space-2) 0; display: flex; flex-direction: column; gap: 1px; }
+.kx-nav-group {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--peg-space-2) 10px var(--peg-space-1);
+}
+.kx-nav-group-label {
+  font-size: var(--peg-fs-micro); line-height: var(--peg-lh-micro);
+  font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--peg-text-secondary);
+}
+.kx-nav-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  height: 34px; padding: 0 10px;
+  border-radius: var(--peg-radius-sm);
+  font-size: var(--peg-fs-sm); font-weight: 500;
+  color: var(--peg-text-body);
+  transition: background var(--peg-motion), color var(--peg-motion);
+}
+.kx-nav-item .kx-i { color: var(--peg-text-tertiary); transition: color var(--peg-motion); }
+.kx-nav-item:hover { background: var(--peg-surface-selected); color: var(--peg-text-primary); }
+.kx-nav-item:hover .kx-i { color: var(--peg-text-body); }
+.kx-nav-item:active { background: var(--peg-surface-muted); }
+.kx-nav-item:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-nav-item[aria-current='page'] {
+  background: var(--peg-surface-selected);
+  box-shadow: inset 2px 0 0 var(--peg-accent-strong);
+  color: var(--peg-text-primary);
+}
+.kx-nav-item[aria-current='page'] .kx-i { color: var(--peg-text-primary); }
+.kx-nav-item--sub {
+  height: 30px; padding-left: var(--peg-space-8);
+  font-size: var(--peg-fs-sm); font-weight: 400;
+  color: var(--peg-text-secondary);
+}
+.kx-nav-item--sub[aria-current='page'] {
+  background: var(--peg-surface-selected);
+  box-shadow: none;
+  font-weight: 500; color: var(--peg-text-primary);
+}
+.kx-nav-item--tree { height: var(--peg-control-sm); gap: var(--peg-space-2); font-weight: 400; }
+
+.kx-nav-count {
+  margin-left: auto;
+  font-size: var(--peg-fs-micro); font-weight: 500;
+  color: var(--peg-text-secondary);
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-xs);
+  padding: 1px 6px;
+}
+.kx-nav-badge {
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: var(--peg-radius-xs);
+  background: var(--peg-inverse-surface); color: var(--peg-text-oninverse);
+  font-size: var(--peg-fs-micro); font-weight: 600;
+}
+.kx-sidebar-foot { margin-top: auto; padding: var(--peg-space-2); }
+.kx-divider-dotted {
+  border: 0; height: 1px;
+  background-image: var(--peg-divider-dotted);
+}
+.kx-nav-sep { margin: 10px var(--peg-space-2) 6px; }
+
+.kx-account {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 7px var(--peg-space-2);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  background: var(--peg-surface);
+  transition: border-color var(--peg-motion), box-shadow var(--peg-motion);
+}
+.kx-account:hover { border-color: var(--peg-border-strong); box-shadow: var(--peg-elev-1); }
+.kx-account:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-account-id { flex: 1; min-width: 0; }
+.kx-account-name { font-size: var(--peg-fs-sm); font-weight: 600; }
+.kx-account-role { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+
+/* rail compacto */
+.kx-rail {
+  width: var(--peg-rail-width); flex: none;
+  background: var(--peg-surface-subtle);
+  border-right: 1px solid var(--peg-border);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 15px 0;
+}
+.kx-rail-mark {
+  width: 24px; height: 24px; border-radius: var(--peg-radius-sm);
+  background: var(--peg-accent-strong); color: var(--peg-on-accent);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 18px;
+}
+.kx-rail-list { display: flex; flex-direction: column; gap: var(--peg-space-1); align-items: center; }
+.kx-rail-item {
+  display: flex; align-items: center; justify-content: center;
+  width: var(--peg-control-md); height: var(--peg-control-md);
+  border-radius: var(--peg-radius-md);
+  color: var(--peg-text-tertiary);
+  transition: background var(--peg-motion), color var(--peg-motion);
+}
+.kx-rail-item:hover { background: var(--peg-surface-selected); color: var(--peg-text-body); }
+.kx-rail-item:active { background: var(--peg-surface-muted); }
+.kx-rail-item:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-rail-item[aria-current='page'] {
+  background: var(--peg-surface-selected);
+  box-shadow: inset 2px 0 0 var(--peg-accent-strong);
+  color: var(--peg-text-primary);
+}
+.kx-rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--peg-space-1); align-items: center; }
+
+/* ─── 6. WORKSPACE / TOPBAR ─────────────────────────────────────────────── */
+.kx-work { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--peg-surface); }
+.kx-topbar {
+  height: var(--peg-topbar-height); flex: none;
+  border-bottom: 1px solid var(--peg-border);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--peg-space-4);
+  padding: 0 var(--peg-space-4) 0 var(--peg-space-5);
+}
+.kx-topbar--flush { padding: 0 var(--peg-space-5); }
+.kx-topbar-actions { display: flex; align-items: center; gap: var(--peg-space-2); }
+
+/* breadcrumb: baixo contraste, última posição enfatizada */
+.kx-crumbs {
+  display: flex; align-items: center; gap: var(--peg-space-2);
+  font-size: var(--peg-fs-sm); color: var(--peg-text-secondary); min-width: 0;
+}
+.kx-crumbs .kx-i { color: var(--peg-border-strong); }
+.kx-crumb-current {
+  color: var(--peg-text-primary); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;
+}
+.kx-crumb-chip {
+  color: var(--peg-text-primary); font-weight: 500;
+  background: var(--peg-surface-muted);
+  border-radius: var(--peg-radius-xs); padding: 2px 7px;
+}
+.kx-savestate {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--peg-fs-caption); color: var(--peg-text-secondary);
+  margin-right: var(--peg-space-1);
+}
+.kx-savestate .kx-i { color: var(--peg-success); }
+
+/* ─── 7. BOTÕES ─────────────────────────────────────────────────────────── */
+.kx-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--peg-control-sm); padding: 0 10px;
+  border-radius: var(--peg-radius-md);
+  border: 1px solid transparent;
+  font-size: var(--peg-fs-sm); font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--peg-motion), border-color var(--peg-motion),
+              color var(--peg-motion), box-shadow var(--peg-motion);
+}
+.kx-btn:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+
+.kx-btn--secondary {
+  background: var(--peg-surface);
+  border-color: var(--peg-border-strong);
+  color: var(--peg-text-body);
+  box-shadow: var(--peg-elev-1);
+}
+.kx-btn--secondary:hover { background: var(--peg-surface-subtle); color: var(--peg-text-primary); }
+.kx-btn--secondary:active { background: var(--peg-surface-muted); box-shadow: none; }
+
+.kx-btn--primary {
+  background: var(--peg-inverse-surface);
+  border-color: var(--peg-inverse-surface);
+  color: var(--peg-text-oninverse);
+}
+.kx-btn--primary:hover { background: var(--peg-inverse-surface-hover); border-color: var(--peg-inverse-surface-hover); }
+.kx-btn--primary:active { background: var(--peg-inverse-surface-active); border-color: var(--peg-inverse-surface-active); }
+
+.kx-btn--tertiary { color: var(--peg-text-secondary); }
+.kx-btn--tertiary:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
+
+.kx-btn--md { height: var(--peg-control-md); padding: 0 var(--peg-space-3); }
+.kx-btn--md-wide { height: var(--peg-control-md); padding: 0 14px; }
+.kx-btn--xs { height: var(--peg-control-xs); padding: 0 9px; font-size: var(--peg-fs-caption); }
+.kx-btn--xs-tight { height: 26px; padding: 0 9px; font-size: var(--peg-fs-caption); }
+.kx-btn--block { display: flex; flex: 1; }
+
+.kx-btn[aria-disabled='true'],
+.kx-btn:disabled {
+  background: var(--peg-canvas);
+  border-color: var(--peg-border);
+  color: var(--peg-text-disabled);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.kx-btn[aria-disabled='true']:hover,
+.kx-btn:disabled:hover { background: var(--peg-canvas); color: var(--peg-text-disabled); }
+
+.kx-btn--dashed {
+  background: transparent;
+  border: 1px dashed var(--peg-border-strong);
+  color: var(--peg-text-secondary);
+}
+.kx-btn--dashed:hover { background: var(--peg-surface-subtle); color: var(--peg-text-primary); }
+
+/* split button */
+.kx-split {
+  display: inline-flex; align-items: stretch;
+  border-radius: var(--peg-radius-md); overflow: hidden;
+  border: 1px solid var(--peg-inverse-surface);
+}
+.kx-split:focus-within { box-shadow: var(--peg-focus-ring); }
+.kx-split-main {
+  display: inline-flex; align-items: center;
+  height: var(--peg-control-sm); padding: 0 var(--peg-space-3);
+  background: var(--peg-inverse-surface); color: var(--peg-text-oninverse);
+  font-size: var(--peg-fs-sm); font-weight: 500;
+  transition: background var(--peg-motion);
+}
+.kx-split-main:hover { background: var(--peg-inverse-surface-hover); }
+.kx-split-main:active { background: var(--peg-inverse-surface-active); }
+.kx-split-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px;
+  background: var(--peg-inverse-surface);
+  border-left: 1px solid var(--peg-inverse-border);
+  color: var(--peg-text-oninverse);
+  transition: background var(--peg-motion);
+}
+.kx-split-toggle:hover { background: var(--peg-inverse-surface-hover); }
+.kx-split-main:focus-visible,
+.kx-split-toggle:focus-visible { outline: none; }
+
+/* botão de ícone */
+.kx-iconbtn {
+  display: flex; align-items: center; justify-content: center;
+  width: var(--peg-control-sm); height: var(--peg-control-sm);
+  border-radius: var(--peg-radius-md);
+  color: var(--peg-text-secondary);
+  transition: background var(--peg-motion), color var(--peg-motion);
+}
+.kx-iconbtn:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
+.kx-iconbtn:active { background: var(--peg-surface-selected); }
+.kx-iconbtn:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-iconbtn--28 { width: 28px; height: 28px; border-radius: var(--peg-radius-sm); }
+.kx-iconbtn--26 { width: 26px; height: 26px; border-radius: var(--peg-radius-sm); }
+.kx-iconbtn--30 { width: 30px; height: 30px; border-radius: var(--peg-radius-md); }
+.kx-iconbtn--muted { color: var(--peg-text-tertiary); }
+
+/* ─── 8. CAMPOS ─────────────────────────────────────────────────────────── */
+.kx-field { display: flex; flex-direction: column; gap: 5px; }
+.kx-field--loose { gap: 7px; }
+.kx-label { font-size: var(--peg-fs-sm); font-weight: 600; }
+.kx-label-req { color: var(--peg-danger); }
+.kx-help { font-size: var(--peg-fs-caption); line-height: var(--peg-lh-caption); color: var(--peg-text-secondary); }
+
+.kx-control {
+  display: flex; align-items: center; gap: var(--peg-space-2);
+  width: 100%; height: var(--peg-control-md);
+  padding: 0 var(--peg-space-3);
+  border: 1px solid var(--peg-border-strong);
+  border-radius: var(--peg-radius-md);
+  background: var(--peg-surface);
+  box-shadow: var(--peg-elev-1);
+  font-size: var(--peg-fs-sm);
+  color: var(--peg-text-primary);
+  transition: border-color var(--peg-motion), box-shadow var(--peg-motion);
+}
+.kx-control:hover { border-color: var(--peg-text-tertiary); }
+.kx-control:focus-visible,
+.kx-control:focus-within { outline: none; border-color: var(--peg-text-secondary); box-shadow: var(--peg-focus-ring); }
+.kx-control--select { justify-content: space-between; padding-right: 10px; }
+.kx-control--pad-sm { padding-left: 10px; }
+.kx-control .kx-i { color: var(--peg-text-tertiary); }
+.kx-control-value { flex: 1; min-width: 0; text-align: left; }
+
+.kx-textarea {
+  border: 1px solid var(--peg-border-strong);
+  border-radius: var(--peg-radius-md);
+  background: var(--peg-surface);
+  padding: var(--peg-space-2) 10px;
+  font-size: var(--peg-fs-sm); line-height: var(--peg-lh-sm);
+  color: var(--peg-text-body);
+  box-shadow: var(--peg-elev-1);
+  transition: border-color var(--peg-motion), box-shadow var(--peg-motion);
+}
+.kx-textarea:hover { border-color: var(--peg-text-tertiary); }
+.kx-textarea:focus-visible { outline: none; border-color: var(--peg-text-secondary); box-shadow: var(--peg-focus-ring); }
+
+.kx-search {
+  display: flex; align-items: center; gap: var(--peg-space-2);
+  height: var(--peg-control-sm); padding: 0 10px;
+  border: 1px solid var(--peg-border-strong);
+  border-radius: var(--peg-radius-md);
+  background: var(--peg-surface);
+  box-shadow: var(--peg-elev-1);
+  color: var(--peg-text-tertiary);
+  transition: border-color var(--peg-motion), box-shadow var(--peg-motion);
+}
+.kx-search:hover { border-color: var(--peg-text-tertiary); }
+.kx-search:focus-within { border-color: var(--peg-text-secondary); box-shadow: var(--peg-focus-ring); }
+/* placeholder ainda é texto informativo: secondary, não tertiary (3.36:1) */
+.kx-search-input { flex: 1; font-size: var(--peg-fs-sm); text-align: left; color: var(--peg-text-secondary); }
+.kx-kbd {
+  font-family: var(--peg-font-mono); font-size: var(--peg-fs-micro);
+  color: var(--peg-text-secondary);
+}
+
+/* checkbox */
+/* raio 6 em caixa de 16: a referência mede 5–6 px; 4 px lê quadrado demais */
+.kx-check {
+  width: 16px; height: 16px; flex: none;
+  border-radius: var(--peg-radius-sm);
+  border: 1px solid var(--peg-border-strong);
+  background: var(--peg-surface);
+  display: flex; align-items: center; justify-content: center;
+  color: transparent;
+  transition: border-color var(--peg-motion), background var(--peg-motion);
+}
+.kx-check:hover { border-color: var(--peg-text-secondary); }
+.kx-check:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-check[aria-checked='true'],
+.kx-check[aria-checked='mixed'] {
+  background: var(--peg-inverse-surface);
+  border-color: var(--peg-inverse-surface);
+  color: var(--peg-text-oninverse);
+}
+
+/* segmented control */
+.kx-seg {
+  display: inline-flex; align-items: center;
+  padding: 3px; background: var(--peg-surface-muted);
+  border-radius: var(--peg-radius-md);
+}
+.kx-seg-item {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 26px; padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--peg-radius-sm);
+  font-size: var(--peg-fs-caption); font-weight: 500;
+  color: var(--peg-text-secondary);
+  transition: background var(--peg-motion), color var(--peg-motion);
+}
+.kx-seg-item:hover { color: var(--peg-text-primary); }
+.kx-seg-item:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-seg-item[aria-selected='true'] {
+  background: var(--peg-surface);
+  border-color: var(--peg-border);
+  color: var(--peg-text-primary);
+  box-shadow: var(--peg-elev-1);
+}
+.kx-seg-item--icon { width: 30px; padding: 0; }
+
+/* ─── 9. PÍLULAS / TAGS / CHIPS ─────────────────────────────────────────── */
+.kx-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 var(--peg-space-2);
+  border-radius: var(--peg-radius-sm);
+  border: 1px solid transparent;
+  font-size: var(--peg-fs-caption); font-weight: 500;
+  white-space: nowrap;
+}
+.kx-pill-dot { width: 6px; height: 6px; border-radius: var(--peg-radius-pill); background: currentColor; flex: none; }
+.kx-pill--review    { background: var(--peg-warning-bg); border-color: var(--peg-warning-border); color: var(--peg-warning); }
+.kx-pill--published { background: var(--peg-success-bg); border-color: var(--peg-success-border); color: var(--peg-success); }
+.kx-pill--draft     { background: var(--peg-surface);    border-color: var(--peg-border-strong);  color: var(--peg-text-secondary); }
+.kx-pill--scheduled { background: var(--peg-info-bg);    border-color: var(--peg-info-border);    color: var(--peg-info); }
+.kx-pill--blocked   { background: var(--peg-danger-bg);  border-color: var(--peg-danger-border);  color: var(--peg-danger); }
+
+.kx-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 var(--peg-space-2);
+  border-radius: var(--peg-radius-sm);
+  background: var(--peg-surface-muted);
+  border: 1px solid var(--peg-border);
+  font-size: var(--peg-fs-caption);
+  color: var(--peg-text-body);
+}
+.kx-tag-x {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--peg-text-tertiary); border-radius: var(--peg-radius-xs);
+  transition: color var(--peg-motion);
+}
+.kx-tag-x:hover { color: var(--peg-text-primary); }
+.kx-tag-x:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-tag--add {
+  background: var(--peg-surface);
+  border: 1px dashed var(--peg-border-strong);
+  color: var(--peg-text-secondary);
+  transition: border-color var(--peg-motion), color var(--peg-motion);
+}
+.kx-tag--add:hover { border-color: var(--peg-text-secondary); color: var(--peg-text-primary); }
+.kx-tag--add:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+
+.kx-filterbar { display: flex; align-items: center; gap: 6px; }
+.kx-count-inline { color: var(--peg-text-secondary); margin-left: 5px; }
+
+/* ─── 10. TABS ──────────────────────────────────────────────────────────── */
+.kx-tabs {
+  padding: 0 var(--peg-page-padding);
+  display: flex; gap: var(--peg-space-5);
+  border-bottom: 1px solid var(--peg-border);
+}
+.kx-tab {
+  padding: 0 0 10px;
+  font-size: var(--peg-fs-sm); font-weight: 500;
+  color: var(--peg-text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--peg-motion), border-color var(--peg-motion);
+}
+.kx-tab:hover { color: var(--peg-text-primary); border-bottom-color: var(--peg-border-strong); }
+.kx-tab:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-tab[aria-selected='true'] {
+  font-weight: 600; color: var(--peg-text-primary);
+  border-bottom-color: var(--peg-text-primary);
+}
+.kx-tab-count { color: var(--peg-text-secondary); font-weight: 500; }
+
+/* ─── 11. PÁGINA / SEÇÕES ───────────────────────────────────────────────── */
+.kx-pagehead {
+  padding: var(--peg-space-5) var(--peg-page-padding) 14px;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--peg-page-padding);
+}
+.kx-pagetitle { font-size: var(--peg-fs-h3); line-height: var(--peg-lh-h3); font-weight: 600; letter-spacing: -.02em; }
+.kx-pagemeta { font-size: var(--peg-fs-sm); color: var(--peg-text-secondary); margin-top: 2px; }
+.kx-toolbar {
+  padding: var(--peg-space-3) var(--peg-page-padding);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--peg-space-4);
+}
+
+/* ─── 12. TABELA ────────────────────────────────────────────────────────── */
+.kx-tablewrap {
+  flex: 1; min-height: 0; overflow: hidden;
+  margin: 0 var(--peg-page-padding);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg) var(--peg-radius-lg) 0 0;
+  border-bottom: none;
+}
+.kx-table { font-size: var(--peg-fs-sm); table-layout: fixed; }
+.kx-table thead th {
+  height: 38px; padding: 0;
+  background: var(--peg-canvas);
+  border-bottom: 1px solid var(--peg-border);
+  font-size: var(--peg-fs-caption); font-weight: 500;
+  color: var(--peg-text-secondary);
+  vertical-align: middle;
+}
+.kx-table thead th:first-child { padding-left: 14px; }
+.kx-table thead th:last-child { padding-right: 14px; }
+.kx-th-sort {
+  display: inline-flex; align-items: center; gap: var(--peg-space-1);
+  color: inherit; border-radius: var(--peg-radius-xs);
+  transition: color var(--peg-motion);
+}
+.kx-th-sort:hover { color: var(--peg-text-primary); }
+.kx-th-sort:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-th-sort .kx-i { opacity: 0; transition: opacity var(--peg-motion); }
+.kx-th-sort:hover .kx-i { opacity: 1; }
+.kx-th-sort[aria-sort='descending'] .kx-i,
+.kx-th-sort[aria-sort='ascending'] .kx-i { opacity: 1; color: var(--peg-text-primary); }
+
+.kx-table tbody tr {
+  background-color: var(--peg-surface);
+  background-image: var(--peg-divider-dotted);
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: left bottom;
+  transition: background-color var(--peg-motion);
+}
+.kx-table tbody tr:hover { background-color: var(--peg-canvas); }
+.kx-table tbody tr:last-child { background-image: none; }
+/* row alvo 52 px: 19 (título) + 17 (meta) + 8+8 de padding */
+.kx-table td { padding: var(--peg-space-2) 0; vertical-align: middle; line-height: var(--peg-lh-sm); }
+.kx-table td:first-child { padding-left: 14px; }
+.kx-table td:last-child { padding-right: 14px; }
+.kx-cell-check { width: 42px; }
+.kx-cell-title { min-width: 0; padding-right: var(--peg-space-3); }
+.kx-cell-title-main {
+  font-size: var(--peg-fs-sm); line-height: var(--peg-lh-sm); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kx-cell-title-meta {
+  font-size: var(--peg-fs-caption); line-height: var(--peg-lh-caption);
+  color: var(--peg-text-secondary);
+}
+.kx-cell-author { display: flex; align-items: center; gap: var(--peg-space-2); }
+.kx-cell-muted { color: var(--peg-text-body); }
+.kx-cell-dim { color: var(--peg-text-secondary); }
+.kx-cell-qa { text-align: center; }
+.kx-qa { display: inline-flex; align-items: center; gap: var(--peg-space-1); }
+.kx-qa-dot { width: 6px; height: 6px; border-radius: var(--peg-radius-pill); flex: none; }
+.kx-cell-actions { width: 42px; text-align: right; }
+.kx-row-kebab {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: var(--peg-radius-sm);
+  color: var(--peg-text-tertiary);
+  transition: background var(--peg-motion), color var(--peg-motion);
+}
+.kx-row-kebab:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
+.kx-row-kebab:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+
+.kx-pager {
+  flex: none; margin: 0 var(--peg-page-padding) var(--peg-space-5);
+  border: 1px solid var(--peg-border); border-top: none;
+  border-radius: 0 0 var(--peg-radius-lg) var(--peg-radius-lg);
+  background: var(--peg-surface);
+  display: flex; align-items: center; justify-content: space-between;
+  height: 46px; padding: 0 14px;
+}
+.kx-pager-info { font-size: var(--peg-fs-sm); color: var(--peg-text-secondary); }
+.kx-pager-list { display: flex; align-items: center; gap: var(--peg-space-1); }
+.kx-page {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 28px; padding: 0 var(--peg-space-2);
+  border-radius: var(--peg-radius-sm);
+  font-size: var(--peg-fs-sm); color: var(--peg-text-secondary);
+  transition: background var(--peg-motion), color var(--peg-motion);
+}
+.kx-page:hover { background: var(--peg-surface-muted); color: var(--peg-text-primary); }
+.kx-page:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-page[aria-current='page'] { background: var(--peg-surface-muted); color: var(--peg-text-primary); font-weight: 500; }
+.kx-page--ellipsis { color: var(--peg-text-secondary); }
+.kx-page--nav {
+  width: 28px; min-width: 28px; padding: 0;
+  border: 1px solid var(--peg-border-strong);
+  background: var(--peg-surface); color: var(--peg-text-body);
+  box-shadow: var(--peg-elev-1);
+}
+.kx-page--nav[aria-disabled='true'] {
+  border-color: var(--peg-border); color: var(--peg-text-disabled);
+  box-shadow: none; cursor: not-allowed;
+}
+.kx-page--nav[aria-disabled='true']:hover { background: var(--peg-surface); color: var(--peg-text-disabled); }
+
+/* bulk action bar */
+.kx-bulkbar {
+  position: absolute; bottom: var(--peg-page-padding); left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--peg-space-3);
+  padding: var(--peg-space-2) var(--peg-space-2) var(--peg-space-2) 14px;
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  background: var(--peg-surface);
+  box-shadow: var(--peg-elev-3);
+}
+.kx-bulkbar-count { font-size: var(--peg-fs-sm); font-weight: 500; }
+.kx-vrule { width: 1px; height: 20px; background: var(--peg-border); flex: none; }
+
+/* ─── 13. EDITOR ────────────────────────────────────────────────────────── */
+.kx-canvas {
+  flex: 1; min-height: 0; overflow: hidden;
+  background: var(--peg-surface);
+  display: flex; justify-content: center; position: relative;
+}
+.kx-column { width: var(--peg-editor-column); padding: var(--peg-space-10) 0 0; }
+.kx-doc-status { display: flex; align-items: center; gap: var(--peg-space-2); margin-bottom: 14px; flex-wrap: wrap; }
+.kx-doc-meta { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+.kx-doc-title {
+  font-size: var(--peg-fs-h1); line-height: var(--peg-lh-h1);
+  font-weight: 600; letter-spacing: -.025em; text-wrap: pretty;
+}
+.kx-doc-dek {
+  font-size: var(--peg-fs-h4); line-height: 28px;
+  color: var(--peg-text-secondary); margin-top: var(--peg-space-3); text-wrap: pretty;
+}
+.kx-doc-rule { margin: var(--peg-page-padding) 0; }
+.kx-prose {
+  font-size: var(--peg-fs-lg); line-height: 27px;
+  color: var(--peg-prose); text-wrap: pretty;
+}
+.kx-prose + .kx-prose { margin-top: var(--peg-space-5); }
+.kx-mark { background: var(--peg-mark-bg); border-radius: var(--peg-radius-xs); padding: 0 1px; }
+
+/* toolbar flutuante de formatação inline */
+.kx-inline-toolbar {
+  position: absolute; top: 42px; left: 120px;
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: var(--peg-space-1);
+  border-radius: var(--peg-radius-md);
+  background: var(--peg-inverse-surface);
+  box-shadow: var(--peg-elev-3);
+}
+.kx-ftool {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--peg-radius-sm);
+  color: var(--peg-text-oninverse-muted);
+  transition: background var(--peg-motion), color var(--peg-motion);
+}
+.kx-ftool:hover { background: var(--peg-inverse-raised); color: var(--peg-text-oninverse); }
+.kx-ftool:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-ftool[aria-pressed='true'] { background: var(--peg-inverse-raised); color: var(--peg-text-oninverse); }
+.kx-ftool-sep { width: 1px; height: 18px; background: var(--peg-inverse-border); margin: 0 3px; flex: none; }
+
+/* blocos do documento */
+.kx-block { margin-top: var(--peg-page-padding); }
+.kx-mediablock {
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  overflow: hidden;
+}
+.kx-mediablock-ph {
+  height: 240px; background: var(--peg-surface-subtle);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--peg-space-2);
+  border-bottom: 1px solid var(--peg-border);
+  color: var(--peg-text-disabled);
+}
+.kx-mediablock-cap {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--peg-space-3); padding: 10px 14px; background: var(--peg-surface);
+}
+.kx-mediablock-cap-text { font-size: var(--peg-fs-sm); color: var(--peg-text-secondary); }
+.kx-ph-label { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+
+.kx-quote { padding-left: 18px; border-left: 2px solid var(--peg-inverse-surface); }
+.kx-quote-text {
+  font-size: 20px; line-height: 30px; font-weight: 500;
+  letter-spacing: -.01em; text-wrap: pretty;
+}
+.kx-quote-cite {
+  display: block; font-size: var(--peg-fs-sm);
+  color: var(--peg-text-secondary); margin-top: var(--peg-space-2); font-style: normal;
+}
+
+.kx-source {
+  display: flex; align-items: flex-start; gap: var(--peg-space-3);
+  padding: 14px;
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  background: var(--peg-canvas);
+}
+.kx-source-icon {
+  width: 26px; height: 26px; flex: none;
+  border-radius: var(--peg-radius-md);
+  border: 1px solid var(--peg-border);
+  background: var(--peg-surface);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--peg-text-secondary);
+}
+.kx-source-body { flex: 1; min-width: 0; }
+.kx-source-kicker {
+  font-size: var(--peg-fs-caption); font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase;
+  color: var(--peg-text-secondary);
+}
+.kx-source-title { font-size: var(--peg-fs-sm); font-weight: 500; margin-top: 3px; }
+.kx-source-meta { font-size: var(--peg-fs-sm); color: var(--peg-text-secondary); margin-top: 2px; }
+
+.kx-slash {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--peg-text-secondary);
+}
+.kx-slash-plus {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: none;
+  border-radius: var(--peg-radius-md);
+  border: 1px dashed var(--peg-border-strong);
+  color: var(--peg-text-tertiary);
+  transition: border-color var(--peg-motion), color var(--peg-motion);
+}
+.kx-slash-plus:hover { border-color: var(--peg-text-secondary); color: var(--peg-text-primary); }
+.kx-slash-plus:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-slash-text { font-size: var(--peg-fs-body); }
+.kx-key {
+  font-family: var(--peg-font-mono); font-size: var(--peg-fs-caption);
+  background: var(--peg-surface-muted);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-xs);
+  padding: 1px 5px; color: var(--peg-text-secondary);
+}
+
+/* ─── 14. INSPECTOR ─────────────────────────────────────────────────────── */
+.kx-inspector {
+  width: var(--peg-inspector-width); flex: none;
+  background: var(--peg-surface-inspector);
+  border-left: 1px solid var(--peg-border);
+  display: flex; flex-direction: column;
+}
+.kx-inspector-head {
+  height: var(--peg-topbar-height); flex: none;
+  border-bottom: 1px solid var(--peg-border);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--peg-space-2);
+  padding: 0 var(--peg-space-3) 0 var(--peg-space-4);
+}
+.kx-inspector-title { font-size: var(--peg-fs-sm); font-weight: 600; }
+.kx-inspector-body {
+  flex: 1; min-height: 0; overflow: hidden;
+  padding: var(--peg-space-4);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.kx-inspector-foot {
+  flex: none; border-top: 1px solid var(--peg-border);
+  padding: var(--peg-space-3) var(--peg-space-4);
+  display: flex; gap: var(--peg-space-2);
+  background: var(--peg-surface-inspector);
+}
+.kx-section {
+  padding-top: 14px;
+  background-image: var(--peg-divider-dotted);
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: left top;
+  display: flex; flex-direction: column; gap: var(--peg-space-3);
+}
+.kx-section--tight { gap: var(--peg-space-2); }
+.kx-section--qa { gap: 9px; }
+.kx-section-head { display: flex; align-items: center; justify-content: space-between; }
+.kx-section-aside { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+.kx-row-2 { display: flex; gap: 10px; }
+.kx-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.kx-col--fixed { width: 108px; flex: none; }
+.kx-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.kx-filecard {
+  display: flex; gap: 10px; align-items: center;
+  padding: var(--peg-space-2);
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  background: var(--peg-surface);
+}
+.kx-filecard-thumb {
+  width: 56px; height: 42px; flex: none;
+  border-radius: var(--peg-radius-sm);
+  background: var(--peg-surface-muted);
+  border: 1px solid var(--peg-border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--peg-text-disabled);
+}
+.kx-filecard-body { flex: 1; min-width: 0; }
+.kx-filecard-name {
+  font-size: var(--peg-fs-sm); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kx-filecard-meta { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+
+/* medidor de QA */
+.kx-meter { display: flex; gap: 3px; }
+.kx-meter-seg { flex: 1; height: var(--peg-space-1); border-radius: var(--peg-radius-pill); background: var(--peg-border); }
+.kx-meter-seg--on { background: var(--peg-success); }
+.kx-checklist { display: flex; flex-direction: column; gap: 7px; margin-top: 2px; }
+.kx-checkitem { display: flex; align-items: center; gap: var(--peg-space-2); font-size: var(--peg-fs-sm); color: var(--peg-text-body); }
+.kx-checkitem .kx-i { color: var(--peg-success); }
+.kx-checkitem--warn { color: var(--peg-warning); }
+.kx-checkitem--warn .kx-i { color: var(--peg-warning); }
+
+.kx-kv { display: flex; justify-content: space-between; font-size: var(--peg-fs-sm); }
+.kx-kv dt { color: var(--peg-text-secondary); }
+.kx-kv dd { margin: 0; font-family: var(--peg-font-mono); font-size: var(--peg-fs-caption); }
+
+.kx-usage {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  font-size: var(--peg-fs-sm); color: var(--peg-text-body);
+  border-radius: var(--peg-radius-sm); padding: 2px 0;
+  transition: color var(--peg-motion);
+}
+.kx-usage:hover { color: var(--peg-text-primary); }
+.kx-usage:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-usage .kx-i { color: var(--peg-text-tertiary); }
+.kx-usage-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+
+/* ─── 15. AVATAR ────────────────────────────────────────────────────────── */
+.kx-avatar {
+  border-radius: var(--peg-radius-pill);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--peg-fs-micro); font-weight: 600;
+  flex: none;
+  background: var(--peg-av-neutral-bg); color: var(--peg-av-neutral-fg);
+}
+.kx-avatar--22 { width: 22px; height: 22px; }
+.kx-avatar--24 { width: 24px; height: 24px; }
+.kx-avatar--28 { width: 28px; height: 28px; }
+
+/* ─── 16. MEDIA LIBRARY ─────────────────────────────────────────────────── */
+.kx-storage {
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  background: var(--peg-surface);
+  padding: var(--peg-space-3);
+}
+.kx-storage-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--peg-space-2); }
+.kx-storage-title { font-size: var(--peg-fs-sm); font-weight: 600; }
+.kx-storage-pct { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+.kx-progress {
+  height: 5px; border-radius: var(--peg-radius-pill);
+  background: var(--peg-surface-muted); overflow: hidden;
+  margin-bottom: var(--peg-space-2);
+}
+.kx-progress-fill { height: 100%; background: var(--peg-inverse-surface); border-radius: var(--peg-radius-pill); }
+.kx-storage-note { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+
+.kx-typefilters { padding: 0 var(--peg-page-padding) 14px; display: flex; gap: 6px; flex-wrap: wrap; }
+.kx-grid {
+  flex: 1; min-height: 0; overflow: hidden;
+  padding: 0 var(--peg-page-padding) var(--peg-page-padding);
+}
+.kx-grid-inner { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--peg-space-3); }
+.kx-asset {
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  overflow: hidden;
+  background: var(--peg-surface);
+  text-align: left;
+  transition: border-color var(--peg-motion), box-shadow var(--peg-motion);
+}
+.kx-asset:hover { border-color: var(--peg-border-strong); box-shadow: var(--peg-elev-2); }
+.kx-asset:focus-visible { outline: none; box-shadow: var(--peg-focus-ring); }
+.kx-asset-thumb {
+  height: 108px; background: var(--peg-surface-subtle);
+  border-bottom: 1px solid var(--peg-border);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; color: var(--peg-border-strong);
+}
+.kx-asset-check { position: absolute; top: var(--peg-space-2); left: var(--peg-space-2); }
+.kx-asset-type {
+  position: absolute; bottom: var(--peg-space-2); right: var(--peg-space-2);
+  display: inline-flex; align-items: center;
+  height: 18px; padding: 0 6px;
+  border-radius: var(--peg-radius-xs);
+  background: var(--peg-inverse-surface); color: var(--peg-text-oninverse);
+  font-size: var(--peg-fs-micro); font-weight: 500;
+}
+.kx-asset-body { padding: 9px 10px; }
+.kx-asset-name {
+  font-size: var(--peg-fs-caption); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kx-asset-meta { font-size: var(--peg-fs-micro); color: var(--peg-text-secondary); margin-top: 2px; }
+
+.kx-preview {
+  border: 1px solid var(--peg-border);
+  border-radius: var(--peg-radius-lg);
+  overflow: hidden; background: var(--peg-surface);
+}
+.kx-preview-canvas {
+  height: 168px; background: var(--peg-surface-muted);
+  position: relative; display: flex; align-items: center; justify-content: center;
+  color: var(--peg-text-disabled);
+}
+.kx-focal {
+  position: absolute; left: 38%; top: 42%;
+  width: 34px; height: 34px; border-radius: var(--peg-radius-pill);
+  border: 2px solid var(--peg-surface);
+  box-shadow: var(--peg-focal-ring);
+  display: flex; align-items: center; justify-content: center;
+}
+.kx-focal-dot {
+  width: 5px; height: 5px; border-radius: var(--peg-radius-pill);
+  background: var(--peg-surface);
+  box-shadow: var(--peg-focal-ring);
+}
+.kx-preview-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--peg-space-2);
+  padding: var(--peg-space-2) 10px;
+  border-top: 1px solid var(--peg-border);
+}
+.kx-preview-label { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+.kx-asset-id { display: flex; flex-direction: column; gap: var(--peg-space-1); }
+.kx-asset-id-name { font-size: var(--peg-fs-body); font-weight: 600; }
+.kx-asset-id-meta { font-size: var(--peg-fs-caption); color: var(--peg-text-secondary); }
+
+/* ─── 17. UTILITÁRIOS ───────────────────────────────────────────────────── */
+.kx-sr {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.kx-chip-static {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 10px;
+  border-radius: var(--peg-radius-sm);
+  background: var(--peg-surface);
+  border: 1px solid var(--peg-border-strong);
+  font-size: var(--peg-fs-caption); font-weight: 500;
+  color: var(--peg-text-body);
+}
+</style>
+</helmet>
+
+<div class="kx">
+
+  <svg class="kx-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <symbol id="kx-logo" viewBox="0 0 24 24"><path d="M5 19 12 5l7 14" /><path d="M8 14h8" /></symbol>
+      <symbol id="kx-panel-left" viewBox="0 0 24 24"><path d="M4 5h16v14H4z" /><path d="M10 5v14" /></symbol>
+      <symbol id="kx-panel-right" viewBox="0 0 24 24"><path d="M13 6l6 6-6 6" /><path d="M5 6v12" /></symbol>
+      <symbol id="kx-dashboard" viewBox="0 0 24 24"><path d="M4 13h6v8H4z" /><path d="M14 3h6v18h-6z" /><path d="M4 3h6v6H4z" /></symbol>
+      <symbol id="kx-doc" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z" /><path d="M14 3v5h5" /><path d="M9 13h6" /><path d="M9 17h4" /></symbol>
+      <symbol id="kx-doc-sm" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z" /><path d="M14 3v5h5" /></symbol>
+      <symbol id="kx-page" viewBox="0 0 24 24"><path d="M5 3h14v18H5z" /><path d="M9 8h6" /><path d="M9 12h6" /></symbol>
+      <symbol id="kx-categories" viewBox="0 0 24 24"><path d="M4 6h6v6H4z" /><path d="M14 6h6v6h-6z" /><path d="M4 16h16" /></symbol>
+      <symbol id="kx-tag" viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V4h7z" /><circle cx="8" cy="8" r="1.4" /></symbol>
+      <symbol id="kx-image" viewBox="0 0 24 24"><path d="M4 5h16v14H4z" /><circle cx="9" cy="10" r="1.6" /><path d="M4 17l5-4 4 3 3-2 4 3" /></symbol>
+      <symbol id="kx-source" viewBox="0 0 24 24"><path d="M6 4h9l4 4v12H6z" /><path d="M9 12h7" /><path d="M9 16h5" /></symbol>
+      <symbol id="kx-source-sm" viewBox="0 0 24 24"><path d="M6 4h9l4 4v12H6z" /><path d="M9 12h7" /></symbol>
+      <symbol id="kx-calendar" viewBox="0 0 24 24"><path d="M8 3v4" /><path d="M16 3v4" /><path d="M4 7h16v14H4z" /><path d="M4 11h16" /></symbol>
+      <symbol id="kx-calendar-sm" viewBox="0 0 24 24"><path d="M8 3v4" /><path d="M16 3v4" /><path d="M4 7h16v14H4z" /></symbol>
+      <symbol id="kx-workflow" viewBox="0 0 24 24"><path d="M5 6h14" /><path d="M5 12h9" /><path d="M5 18h5" /><circle cx="18" cy="16" r="3" /></symbol>
+      <symbol id="kx-seo" viewBox="0 0 24 24"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16" /><path d="M21 21l-4.3-4.3" /><path d="M8 11h6" /></symbol>
+      <symbol id="kx-ai" viewBox="0 0 24 24"><path d="M12 4v4" /><path d="M6 8h12v8H6z" /><path d="M9 20h6" /><path d="M12 16v4" /></symbol>
+      <symbol id="kx-analytics" viewBox="0 0 24 24"><path d="M4 19h16" /><path d="M7 19V9" /><path d="M12 19V5" /><path d="M17 19v-7" /></symbol>
+      <symbol id="kx-settings" viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M4 17h16" /><circle cx="9" cy="7" r="2.2" /><circle cx="15" cy="17" r="2.2" /></symbol>
+      <symbol id="kx-search" viewBox="0 0 24 24"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16" /><path d="M21 21l-4.3-4.3" /></symbol>
+      <symbol id="kx-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 1 0-12 0c0 6-3 7-3 7h18s-3-1-3-7" /><path d="M10.5 20a2 2 0 0 0 3 0" /></symbol>
+      <symbol id="kx-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6" /><circle cx="12" cy="12" r="2.4" /></symbol>
+      <symbol id="kx-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+      <symbol id="kx-minus" viewBox="0 0 24 24"><path d="M6 12h12" /></symbol>
+      <symbol id="kx-plus" viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M5 12h14" /></symbol>
+      <symbol id="kx-x" viewBox="0 0 24 24"><path d="M6 6l12 12" /><path d="M18 6 6 18" /></symbol>
+      <symbol id="kx-chev-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" /></symbol>
+      <symbol id="kx-chev-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></symbol>
+      <symbol id="kx-chev-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></symbol>
+      <symbol id="kx-kebab" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="12" cy="19" r="1.3" /></symbol>
+      <symbol id="kx-external" viewBox="0 0 24 24"><path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M18 14v6H4V6h6" /></symbol>
+      <symbol id="kx-alert" viewBox="0 0 24 24"><path d="M12 8v5" /><path d="M12 16.5h.01" /><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18" /></symbol>
+      <symbol id="kx-download" viewBox="0 0 24 24"><path d="M12 16V4" /><path d="M8 12l4 4 4-4" /><path d="M4 20h16" /></symbol>
+      <symbol id="kx-upload" viewBox="0 0 24 24"><path d="M12 16V4" /><path d="M8 8l4-4 4 4" /><path d="M4 20h16" /></symbol>
+      <symbol id="kx-export" viewBox="0 0 24 24"><path d="M12 3v12" /><path d="M8 11l4 4 4-4" /><path d="M4 19h16" /></symbol>
+      <symbol id="kx-filter" viewBox="0 0 24 24"><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></symbol>
+      <symbol id="kx-grid-view" viewBox="0 0 24 24"><path d="M4 4h7v7H4z" /><path d="M13 4h7v7h-7z" /><path d="M4 13h7v7H4z" /><path d="M13 13h7v7h-7z" /></symbol>
+      <symbol id="kx-list-view" viewBox="0 0 24 24"><path d="M8 6h12" /><path d="M8 12h12" /><path d="M8 18h12" /><path d="M4 6h.01" /><path d="M4 12h.01" /><path d="M4 18h.01" /></symbol>
+      <symbol id="kx-bold" viewBox="0 0 24 24"><path d="M7 5h5.5a3.5 3.5 0 0 1 0 7H7z" /><path d="M7 12h6a3.5 3.5 0 0 1 0 7H7z" /></symbol>
+      <symbol id="kx-italic" viewBox="0 0 24 24"><path d="M15 5H9" /><path d="M13 5l-4 14" /><path d="M15 19H9" /></symbol>
+      <symbol id="kx-link" viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 0 0-5.7-5.7L11 6.3" /><path d="M14 11a4 4 0 0 0-5.7 0L6 13.3a4 4 0 0 0 5.7 5.7L13 17.7" /></symbol>
+      <symbol id="kx-pencil" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z" /></symbol>
+      <symbol id="kx-crop" viewBox="0 0 24 24"><path d="M4 8V4h4" /><path d="M20 8V4h-4" /><path d="M4 16v4h4" /><path d="M20 16v4h-4" /></symbol>
+      <symbol id="kx-sort" viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M7 14l5 5 5-5" /></symbol>
+    </defs>
+  </svg>
+
+  <header class="kx-board-head">
+    <div class="kx-stack-6">
+      <p class="kx-eyebrow">PEG Product Design System · Fase 5</p>
+      <h1 class="kx-board-title">Kal El — CMS editorial</h1>
+      <p class="kx-board-sub">Shell: navegação + workspace editorial + inspector contextual. Accent <span class="kx-mono">#BF5252 / #B51B1B</span>, aplicado só em publicação, links e foco. Telas de calibração: Article Editor, Articles Index, Media Library.</p>
+    </div>
+    <p class="kx-chip-static">3 telas calibradas</p>
+  </header>
+
+  <!-- ═══════ 1. ARTICLE EDITOR ═══════ -->
+  <section class="kx-screen" data-screen-label="Kal El · Article Editor">
+    <div class="kx-screen-head">
+      <h2 class="kx-screen-title">Article Editor</h2>
+      <p class="kx-screen-note">Shell B · canvas 820 px · inspector 336 px · autosave discreto</p>
+    </div>
+
+    <div class="kx-stage">
+      <div class="kx-frame kx-frame--editor">
+
+        <nav class="kx-sidebar" aria-label="Navegação principal">
+          <div class="kx-brand">
+            <div class="kx-brand-id">
+              <span class="kx-brand-mark"><svg class="kx-i kx-i-13 kx-i--bold" aria-hidden="true"><use href="#kx-logo" /></svg></span>
+              <span class="kx-brand-name">Kal El</span>
+            </div>
+            <button type="button" class="kx-iconbtn kx-iconbtn--28 kx-iconbtn--muted" aria-label="Recolher navegação">
+              <svg class="kx-i kx-i-16" aria-hidden="true"><use href="#kx-panel-left" /></svg>
+            </button>
+          </div>
+
+          <ul class="kx-nav">
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-dashboard" /></svg>Dashboard</a></li>
+            <li class="kx-nav-group"><h3 class="kx-nav-group-label">Conteúdo</h3></li>
+            <li><a class="kx-nav-item" href="#" aria-current="page"><svg class="kx-i" aria-hidden="true"><use href="#kx-doc" /></svg>Artigos<span class="kx-nav-count">34</span></a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-page" /></svg>Páginas</a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-categories" /></svg>Categorias</a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-tag" /></svg>Tags</a></li>
+            <li><hr class="kx-divider-dotted kx-nav-sep" /></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-image" /></svg>Mídia</a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-source" /></svg>Fontes</a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-calendar" /></svg>Calendário</a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-workflow" /></svg>Workflow<span class="kx-nav-badge">7</span></a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-seo" /></svg>SEO</a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-ai" /></svg>Automação / IA</a></li>
+          </ul>
+
+          <div class="kx-sidebar-foot">
+            <ul class="kx-nav" style="padding: 0; margin-bottom: 8px;">
+              <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-analytics" /></svg>Analytics</a></li>
+              <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-settings" /></svg>Configurações</a></li>
+            </ul>
+            <button type="button" class="kx-account" aria-label="Conta de Ana Cardoso, editora-chefe. Abrir menu.">
+              <span class="kx-avatar kx-avatar--28">AC</span>
+              <span class="kx-account-id">
+                <span class="kx-account-name">Ana Cardoso</span>
+                <span class="kx-account-role">Editora-chefe</span>
+              </span>
+              <svg class="kx-i kx-i-15 kx-i--solid kx-i--muted" aria-hidden="true"><use href="#kx-kebab" /></svg>
+            </button>
+          </div>
+        </nav>
+
+        <main class="kx-work">
+          <header class="kx-topbar">
+            <nav class="kx-crumbs" aria-label="Trilha de navegação">
+              <span>Conteúdo</span>
+              <svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-chev-right" /></svg>
+              <span>Artigos</span>
+              <svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-chev-right" /></svg>
+              <span class="kx-crumb-current" aria-current="page">Reforma tributária: o que muda para o varejo</span>
+            </nav>
+            <div class="kx-topbar-actions">
+              <p class="kx-savestate" role="status">
+                <svg class="kx-i kx-i-14 kx-i--heavy" aria-hidden="true"><use href="#kx-check" /></svg>Salvo há 1 min
+              </p>
+              <button type="button" class="kx-btn kx-btn--secondary"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-eye" /></svg>Preview</button>
+              <button type="button" class="kx-btn kx-btn--secondary"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-calendar-sm" /></svg>Agendar</button>
+              <div class="kx-split">
+                <button type="button" class="kx-split-main">Publicar</button>
+                <button type="button" class="kx-split-toggle" aria-label="Mais opções de publicação" aria-haspopup="menu">
+                  <svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-down" /></svg>
+                </button>
+              </div>
+              <button type="button" class="kx-iconbtn" aria-label="Mais ações" aria-haspopup="menu">
+                <svg class="kx-i kx-i-17 kx-i--solid" aria-hidden="true"><use href="#kx-kebab" /></svg>
+              </button>
+            </div>
+          </header>
+
+          <div class="kx-canvas">
+            <article class="kx-column">
+              <div class="kx-doc-status">
+                <span class="kx-pill kx-pill--review"><span class="kx-pill-dot"></span>Em revisão</span>
+                <p class="kx-doc-meta">Economia · Marcos Reis · 1.240 palavras · leitura 5 min</p>
+              </div>
+
+              <h3 class="kx-doc-title">Reforma tributária: o que muda para o varejo em 2027</h3>
+              <p class="kx-doc-dek">Regras de transição alteram crédito de ICMS e obrigam redesenho de precificação em rede. Entenda os prazos e o impacto por porte de operação.</p>
+              <hr class="kx-divider-dotted kx-doc-rule" />
+
+              <div style="position: relative;">
+                <p class="kx-prose">O texto aprovado pelo Congresso muda a lógica de apuração para empresas com operação em mais de um estado. A partir de janeiro, o crédito acumulado passa a seguir regras de transição escalonadas, e o varejo com centro de distribuição próprio será o primeiro a sentir o efeito no fluxo de caixa.</p>
+                <p class="kx-prose">Segundo a <span class="kx-mark">Confederação Nacional do Comércio</span>, cerca de 38% das redes ainda não revisaram contratos de fornecimento. O prazo para adequação de sistemas fiscais termina antes da primeira apuração no novo modelo.</p>
+
+                <div class="kx-inline-toolbar" role="toolbar" aria-label="Formatação inline">
+                  <button type="button" class="kx-ftool" aria-pressed="true" aria-label="Negrito"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-bold" /></svg></button>
+                  <button type="button" class="kx-ftool" aria-pressed="false" aria-label="Itálico"><svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-italic" /></svg></button>
+                  <button type="button" class="kx-ftool" aria-pressed="false" aria-label="Link"><svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-link" /></svg></button>
+                  <span class="kx-ftool-sep" aria-hidden="true"></span>
+                  <button type="button" class="kx-ftool" aria-label="Vincular fonte"><svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-source-sm" /></svg></button>
+                  <button type="button" class="kx-ftool" aria-label="Lista"><svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-list-view" /></svg></button>
+                </div>
+              </div>
+
+              <figure class="kx-block kx-mediablock">
+                <div class="kx-mediablock-ph">
+                  <svg class="kx-i kx-i-22" aria-hidden="true"><use href="#kx-image" /></svg>
+                  <p class="kx-ph-label">Bloco de mídia · 1600×900 · placeholder</p>
+                </div>
+                <figcaption class="kx-mediablock-cap">
+                  <span class="kx-mediablock-cap-text">Centro de distribuição em Cajamar (SP) — crédito: Agência Brasil</span>
+                  <span style="display: flex; gap: 2px;">
+                    <button type="button" class="kx-iconbtn kx-iconbtn--26 kx-iconbtn--muted" aria-label="Editar legenda"><svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-pencil" /></svg></button>
+                    <button type="button" class="kx-iconbtn kx-iconbtn--26 kx-iconbtn--muted" aria-label="Ações do bloco de mídia" aria-haspopup="menu"><svg class="kx-i kx-i-14 kx-i--solid" aria-hidden="true"><use href="#kx-kebab" /></svg></button>
+                  </span>
+                </figcaption>
+              </figure>
+
+              <blockquote class="kx-block kx-quote">
+                <p class="kx-quote-text">“Quem não revisar contrato de fornecimento neste semestre vai apurar no escuro no primeiro trimestre.”</p>
+                <cite class="kx-quote-cite">Helena Braga · diretora tributária, CNC</cite>
+              </blockquote>
+
+              <aside class="kx-block kx-source">
+                <span class="kx-source-icon"><svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-source" /></svg></span>
+                <div class="kx-source-body">
+                  <p class="kx-source-kicker">Fonte vinculada</p>
+                  <p class="kx-source-title">Nota técnica CNC 41/2026 — Transição de crédito de ICMS</p>
+                  <p class="kx-source-meta">Documento oficial · verificado por Ana Cardoso em 12/08</p>
+                </div>
+                <button type="button" class="kx-btn kx-btn--secondary kx-btn--xs-tight">Abrir<svg class="kx-i kx-i-12 kx-i--bold" aria-hidden="true"><use href="#kx-external" /></svg></button>
+              </aside>
+
+              <div class="kx-block kx-slash">
+                <button type="button" class="kx-slash-plus" aria-label="Inserir bloco"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-plus" /></svg></button>
+                <p class="kx-slash-text">Escreva ou use <kbd class="kx-key">/</kbd> para inserir um bloco</p>
+              </div>
+            </article>
+          </div>
+        </main>
+
+        <aside class="kx-inspector" aria-label="Inspector do documento">
+          <div class="kx-inspector-head">
+            <div class="kx-seg" role="tablist" aria-label="Seções do inspector">
+              <button type="button" class="kx-seg-item" role="tab" aria-selected="true">Publicação</button>
+              <button type="button" class="kx-seg-item" role="tab" aria-selected="false">SEO</button>
+              <button type="button" class="kx-seg-item" role="tab" aria-selected="false">QA</button>
+            </div>
+            <button type="button" class="kx-iconbtn kx-iconbtn--28 kx-iconbtn--muted" aria-label="Recolher inspector">
+              <svg class="kx-i kx-i-16" aria-hidden="true"><use href="#kx-panel-right" /></svg>
+            </button>
+          </div>
+
+          <div class="kx-inspector-body">
+            <div class="kx-field">
+              <h4 class="kx-label" id="kx-lbl-status">Status</h4>
+              <button type="button" class="kx-control kx-control--select" aria-labelledby="kx-lbl-status" aria-haspopup="listbox">
+                <span class="kx-control-value">Em revisão</span>
+                <svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-down" /></svg>
+              </button>
+            </div>
+
+            <div class="kx-field">
+              <h4 class="kx-label" id="kx-lbl-pub">Publicação</h4>
+              <button type="button" class="kx-control" aria-labelledby="kx-lbl-pub">
+                <svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-calendar-sm" /></svg>
+                <span class="kx-control-value">18/08/2026, 07:00</span>
+              </button>
+              <p class="kx-help">Fuso do portal (BRT). Agendamento exige aprovação de editor.</p>
+            </div>
+
+            <div class="kx-section">
+              <div class="kx-field">
+                <h4 class="kx-label" id="kx-lbl-author">Autor</h4>
+                <button type="button" class="kx-control kx-control--pad-sm" aria-labelledby="kx-lbl-author" aria-haspopup="listbox">
+                  <span class="kx-avatar kx-avatar--22" style="background: var(--peg-av-blue-bg); color: var(--peg-av-blue-fg);">MR</span>
+                  <span class="kx-control-value">Marcos Reis</span>
+                  <svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-down" /></svg>
+                </button>
+              </div>
+
+              <div class="kx-row-2">
+                <div class="kx-col">
+                  <h4 class="kx-label" id="kx-lbl-cat">Categoria</h4>
+                  <button type="button" class="kx-control kx-control--select" aria-labelledby="kx-lbl-cat" aria-haspopup="listbox">
+                    <span class="kx-control-value">Economia</span>
+                    <svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-down" /></svg>
+                  </button>
+                </div>
+                <div class="kx-col kx-col--fixed">
+                  <h4 class="kx-label" id="kx-lbl-ed">Editoria</h4>
+                  <button type="button" class="kx-control kx-control--select" aria-labelledby="kx-lbl-ed" aria-haspopup="listbox">
+                    <span class="kx-control-value">Nacional</span>
+                    <svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-down" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="kx-field kx-field--loose">
+                <h4 class="kx-label">Tags</h4>
+                <div class="kx-tags">
+                  <span class="kx-tag">tributário<button type="button" class="kx-tag-x" aria-label="Remover tag tributário"><svg class="kx-i kx-i-11 kx-i--heavy" aria-hidden="true"><use href="#kx-x" /></svg></button></span>
+                  <span class="kx-tag">varejo<button type="button" class="kx-tag-x" aria-label="Remover tag varejo"><svg class="kx-i kx-i-11 kx-i--heavy" aria-hidden="true"><use href="#kx-x" /></svg></button></span>
+                  <button type="button" class="kx-tag kx-tag--add">+ tag</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="kx-section kx-section--tight">
+              <h4 class="kx-label">Imagem destacada</h4>
+              <div class="kx-filecard">
+                <span class="kx-filecard-thumb"><svg class="kx-i kx-i-16" aria-hidden="true"><use href="#kx-image" /></svg></span>
+                <div class="kx-filecard-body">
+                  <p class="kx-filecard-name">cd-cajamar-01.jpg</p>
+                  <p class="kx-filecard-meta">1600×900 · 412 KB · foco definido</p>
+                </div>
+                <button type="button" class="kx-iconbtn kx-iconbtn--26 kx-iconbtn--muted" aria-label="Ações da imagem destacada" aria-haspopup="menu">
+                  <svg class="kx-i kx-i-15 kx-i--solid" aria-hidden="true"><use href="#kx-kebab" /></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="kx-section kx-section--qa">
+              <div class="kx-section-head">
+                <h4 class="kx-label">QA editorial</h4>
+                <p class="kx-section-aside">4 de 5</p>
+              </div>
+              <div class="kx-meter" role="img" aria-label="QA editorial: 4 de 5 itens concluídos">
+                <span class="kx-meter-seg kx-meter-seg--on"></span>
+                <span class="kx-meter-seg kx-meter-seg--on"></span>
+                <span class="kx-meter-seg kx-meter-seg--on"></span>
+                <span class="kx-meter-seg kx-meter-seg--on"></span>
+                <span class="kx-meter-seg"></span>
+              </div>
+              <ul class="kx-checklist">
+                <li class="kx-checkitem"><svg class="kx-i kx-i-14 kx-i--heavy" aria-hidden="true"><use href="#kx-check" /></svg>Título e dek preenchidos</li>
+                <li class="kx-checkitem"><svg class="kx-i kx-i-14 kx-i--heavy" aria-hidden="true"><use href="#kx-check" /></svg>Fonte primária vinculada</li>
+                <li class="kx-checkitem"><svg class="kx-i kx-i-14 kx-i--heavy" aria-hidden="true"><use href="#kx-check" /></svg>Imagem com crédito</li>
+                <li class="kx-checkitem kx-checkitem--warn"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-alert" /></svg>Meta description ausente</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="kx-inspector-foot">
+            <button type="button" class="kx-btn kx-btn--secondary kx-btn--md kx-btn--block">Devolver</button>
+            <button type="button" class="kx-btn kx-btn--primary kx-btn--md kx-btn--block">Aprovar</button>
+          </div>
+        </aside>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ 2. ARTICLES INDEX ═══════ -->
+  <section class="kx-screen" data-screen-label="Kal El · Articles Index">
+    <div class="kx-screen-head">
+      <h2 class="kx-screen-title">Articles Index</h2>
+      <p class="kx-screen-note">Shell C · views, filtros, bulk actions governadas por permissão</p>
+    </div>
+
+    <div class="kx-stage">
+      <div class="kx-frame kx-frame--index">
+
+        <nav class="kx-rail" aria-label="Navegação compacta">
+          <span class="kx-rail-mark"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-logo" /></svg></span>
+          <ul class="kx-rail-list">
+            <li><a class="kx-rail-item" href="#" aria-label="Dashboard" title="Dashboard"><svg class="kx-i kx-i-19" aria-hidden="true"><use href="#kx-dashboard" /></svg></a></li>
+            <li><a class="kx-rail-item" href="#" aria-label="Artigos" title="Artigos" aria-current="page"><svg class="kx-i kx-i-19" aria-hidden="true"><use href="#kx-doc" /></svg></a></li>
+            <li><a class="kx-rail-item" href="#" aria-label="Mídia" title="Mídia"><svg class="kx-i kx-i-19" aria-hidden="true"><use href="#kx-image" /></svg></a></li>
+            <li><a class="kx-rail-item" href="#" aria-label="Calendário" title="Calendário"><svg class="kx-i kx-i-19" aria-hidden="true"><use href="#kx-calendar" /></svg></a></li>
+            <li><a class="kx-rail-item" href="#" aria-label="Workflow" title="Workflow"><svg class="kx-i kx-i-19" aria-hidden="true"><use href="#kx-workflow" /></svg></a></li>
+          </ul>
+          <div class="kx-rail-foot">
+            <a class="kx-rail-item" href="#" aria-label="Configurações" title="Configurações"><svg class="kx-i kx-i-19" aria-hidden="true"><use href="#kx-settings" /></svg></a>
+            <button type="button" class="kx-avatar kx-avatar--28" style="margin-top: 4px;" aria-label="Conta de Ana Cardoso" aria-haspopup="menu">AC</button>
+          </div>
+        </nav>
+
+        <main class="kx-work">
+          <header class="kx-topbar kx-topbar--flush">
+            <nav class="kx-crumbs" aria-label="Trilha de navegação">
+              <span>Conteúdo</span>
+              <svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-chev-right" /></svg>
+              <span class="kx-crumb-chip" aria-current="page">Artigos</span>
+            </nav>
+            <div class="kx-topbar-actions">
+              <div class="kx-search" style="width: 260px;">
+                <svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-search" /></svg>
+                <button type="button" class="kx-search-input">Buscar em artigos</button>
+                <kbd class="kx-kbd">⌘K</kbd>
+              </div>
+              <button type="button" class="kx-iconbtn" aria-label="Notificações">
+                <svg class="kx-i kx-i-17" aria-hidden="true"><use href="#kx-bell" /></svg>
+              </button>
+            </div>
+          </header>
+
+          <div class="kx-pagehead">
+            <div>
+              <h3 class="kx-pagetitle">Artigos</h3>
+              <p class="kx-pagemeta">1.842 artigos · 34 em revisão · 12 agendados</p>
+            </div>
+            <div class="kx-topbar-actions">
+              <button type="button" class="kx-btn kx-btn--secondary kx-btn--md"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-export" /></svg>Exportar CSV</button>
+              <button type="button" class="kx-btn kx-btn--primary kx-btn--md-wide"><svg class="kx-i kx-i-15 kx-i--bold" aria-hidden="true"><use href="#kx-plus" /></svg>Novo artigo</button>
+            </div>
+          </div>
+
+          <div class="kx-tabs" role="tablist" aria-label="Views de artigos">
+            <button type="button" class="kx-tab" role="tab" aria-selected="true">Todos <span class="kx-tab-count">1.842</span></button>
+            <button type="button" class="kx-tab" role="tab" aria-selected="false">Rascunho <span class="kx-tab-count">96</span></button>
+            <button type="button" class="kx-tab" role="tab" aria-selected="false">Revisão <span class="kx-tab-count">34</span></button>
+            <button type="button" class="kx-tab" role="tab" aria-selected="false">Agendados <span class="kx-tab-count">12</span></button>
+            <button type="button" class="kx-tab" role="tab" aria-selected="false">Publicados <span class="kx-tab-count">1.694</span></button>
+            <button type="button" class="kx-tab" role="tab" aria-selected="false">Bloqueados <span class="kx-tab-count">6</span></button>
+          </div>
+
+          <div class="kx-toolbar">
+            <div class="kx-filterbar">
+              <span class="kx-chip-static">Autor: Marcos Reis<button type="button" class="kx-tag-x" aria-label="Remover filtro de autor"><svg class="kx-i kx-i-11 kx-i--heavy" aria-hidden="true"><use href="#kx-x" /></svg></button></span>
+              <span class="kx-chip-static">Categoria: Economia<button type="button" class="kx-tag-x" aria-label="Remover filtro de categoria"><svg class="kx-i kx-i-11 kx-i--heavy" aria-hidden="true"><use href="#kx-x" /></svg></button></span>
+              <button type="button" class="kx-btn kx-btn--dashed kx-btn--xs"><svg class="kx-i kx-i-12 kx-i--heavy" aria-hidden="true"><use href="#kx-plus" /></svg>Filtro</button>
+              <button type="button" class="kx-btn kx-btn--tertiary kx-btn--xs">Limpar</button>
+            </div>
+            <div class="kx-topbar-actions">
+              <span class="kx-section-aside">Ordenar por</span>
+              <button type="button" class="kx-btn kx-btn--secondary kx-btn--xs" aria-haspopup="listbox">Atualização<svg class="kx-i kx-i-12 kx-i--bold" aria-hidden="true"><use href="#kx-chev-down" /></svg></button>
+            </div>
+          </div>
+
+          <div class="kx-tablewrap">
+            <table class="kx-table">
+              <caption class="kx-sr">Artigos — 8 de 1.842 resultados</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="kx-cell-check">
+                    <button type="button" class="kx-check" role="checkbox" aria-checked="mixed" aria-label="Selecionar todos os artigos">
+                      <svg class="kx-i kx-i-11" style="stroke-width: 3.4;" aria-hidden="true"><use href="#kx-minus" /></svg>
+                    </button>
+                  </th>
+                  <th scope="col"><button type="button" class="kx-th-sort">Artigo<svg class="kx-i kx-i-12" aria-hidden="true"><use href="#kx-sort" /></svg></button></th>
+                  <th scope="col" style="width: 120px;">Status</th>
+                  <th scope="col" style="width: 150px;">Autor</th>
+                  <th scope="col" style="width: 110px;">Categoria</th>
+                  <th scope="col" style="width: 110px;"><button type="button" class="kx-th-sort" aria-sort="descending">Atualizado<svg class="kx-i kx-i-12" aria-hidden="true"><use href="#kx-sort" /></svg></button></th>
+                  <th scope="col" style="width: 120px;">Publicação</th>
+                  <th scope="col" style="width: 70px; text-align: center;">QA</th>
+                  <th scope="col" class="kx-cell-actions"><span class="kx-sr">Ações</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ articles }}" as="a" hint-placeholder-count="8">
+                  <tr>
+                    <td class="kx-cell-check">
+                      <button type="button" class="kx-check" role="checkbox" aria-checked="false" aria-label="Selecionar {{ a.title }}">
+                        <svg class="kx-i kx-i-11 kx-i--heavy" aria-hidden="true"><use href="#kx-check" /></svg>
+                      </button>
+                    </td>
+                    <td class="kx-cell-title">
+                      <div class="kx-cell-title-main">{{ a.title }}</div>
+                      <div class="kx-cell-title-meta">{{ a.meta }}</div>
+                    </td>
+                    <td><span class="kx-pill {{ a.pillClass }}"><span class="kx-pill-dot"></span>{{ a.status }}</span></td>
+                    <td>
+                      <div class="kx-cell-author">
+                        <span class="kx-avatar kx-avatar--24" style="background: var({{ a.avBgVar }}); color: var({{ a.avFgVar }});">{{ a.initials }}</span>
+                        <span class="kx-cell-muted">{{ a.author }}</span>
+                      </div>
+                    </td>
+                    <td class="kx-cell-muted">{{ a.category }}</td>
+                    <td class="kx-cell-dim">{{ a.updated }}</td>
+                    <td class="kx-cell-dim">{{ a.publish }}</td>
+                    <td class="kx-cell-qa">
+                      <span class="kx-qa">
+                        <span class="kx-qa-dot" style="background: var({{ a.qaVar }});"></span>
+                        <span class="kx-cell-dim">{{ a.qa }}</span>
+                      </span>
+                    </td>
+                    <td class="kx-cell-actions">
+                      <button type="button" class="kx-row-kebab" aria-label="Ações para {{ a.title }}" aria-haspopup="menu">
+                        <svg class="kx-i kx-i-16 kx-i--solid" aria-hidden="true"><use href="#kx-kebab" /></svg>
+                      </button>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+
+          <nav class="kx-pager" aria-label="Paginação de artigos">
+            <p class="kx-pager-info">Mostrando 8 de 1.842</p>
+            <div class="kx-pager-list">
+              <button type="button" class="kx-page kx-page--nav" aria-disabled="true" aria-label="Página anterior"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-left" /></svg></button>
+              <button type="button" class="kx-page" aria-current="page">1</button>
+              <button type="button" class="kx-page">2</button>
+              <button type="button" class="kx-page">3</button>
+              <span class="kx-page kx-page--ellipsis" aria-hidden="true">…</span>
+              <button type="button" class="kx-page">231</button>
+              <button type="button" class="kx-page kx-page--nav" aria-label="Próxima página"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-right" /></svg></button>
+            </div>
+          </nav>
+
+          <div class="kx-bulkbar" role="region" aria-label="Ações em massa">
+            <p class="kx-bulkbar-count">3 artigos selecionados</p>
+            <span class="kx-vrule" aria-hidden="true"></span>
+            <div class="kx-filterbar">
+              <button type="button" class="kx-btn kx-btn--secondary" style="height: 30px; border-radius: var(--peg-radius-md);">Mover para revisão</button>
+              <button type="button" class="kx-btn kx-btn--secondary" style="height: 30px; border-radius: var(--peg-radius-md);">Agendar</button>
+              <button type="button" class="kx-btn" style="height: 30px; border-radius: var(--peg-radius-md);" aria-disabled="true" title="Exclusão em massa exige papel de editor-chefe">Excluir</button>
+              <button type="button" class="kx-iconbtn kx-iconbtn--30" aria-label="Limpar seleção">
+                <svg class="kx-i kx-i-16 kx-i--bold" aria-hidden="true"><use href="#kx-x" /></svg>
+              </button>
+            </div>
+          </div>
+        </main>
+
+      </div>
+    </div>
+    <p class="kx-screen-foot">Excluir aparece desabilitado: a permissão de exclusão em massa pertence ao papel de editor-chefe com confirmação proporcional ao risco.</p>
+  </section>
+
+  <!-- ═══════ 3. MEDIA LIBRARY ═══════ -->
+  <section class="kx-screen" data-screen-label="Kal El · Media Library">
+    <div class="kx-screen-head">
+      <h2 class="kx-screen-title">Media Library</h2>
+      <p class="kx-screen-note">Base visual: file explorer do corpus · grid/list, filtros de tipo, detalhe com foco e usos</p>
+    </div>
+
+    <div class="kx-stage">
+      <div class="kx-frame kx-frame--media">
+
+        <nav class="kx-sidebar" aria-label="Navegação de mídia">
+          <div class="kx-brand">
+            <div class="kx-brand-id">
+              <span class="kx-brand-mark"><svg class="kx-i kx-i-13 kx-i--bold" aria-hidden="true"><use href="#kx-logo" /></svg></span>
+              <span class="kx-brand-name">Kal El</span>
+            </div>
+          </div>
+
+          <ul class="kx-nav">
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-doc-sm" /></svg>Artigos</a></li>
+            <li><a class="kx-nav-item" href="#" aria-current="page"><svg class="kx-i" aria-hidden="true"><use href="#kx-image" /></svg>Mídia<span class="kx-nav-count">4.212</span></a></li>
+            <li><a class="kx-nav-item" href="#"><svg class="kx-i" aria-hidden="true"><use href="#kx-source-sm" /></svg>Fontes</a></li>
+          </ul>
+
+          <hr class="kx-divider-dotted" style="margin: 12px 16px 8px;" />
+
+          <ul class="kx-nav" style="padding-top: 0;">
+            <li class="kx-nav-group" style="padding: 4px 10px 6px;">
+              <h3 class="kx-nav-group-label">Coleções</h3>
+              <button type="button" class="kx-iconbtn kx-iconbtn--26 kx-iconbtn--muted" aria-label="Ações de coleções" aria-haspopup="menu">
+                <svg class="kx-i kx-i-14 kx-i--solid" aria-hidden="true"><use href="#kx-kebab" /></svg>
+              </button>
+            </li>
+            <li><button type="button" class="kx-nav-item kx-nav-item--tree" aria-expanded="true"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-down" /></svg>Editorial 2026</button></li>
+            <li><a class="kx-nav-item kx-nav-item--sub" href="#">Economia</a></li>
+            <li><a class="kx-nav-item kx-nav-item--sub" href="#" aria-current="page">Varejo</a></li>
+            <li><a class="kx-nav-item kx-nav-item--sub" href="#">Política</a></li>
+            <li><button type="button" class="kx-nav-item kx-nav-item--tree" aria-expanded="false"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-right" /></svg>Institucional</button></li>
+            <li><button type="button" class="kx-nav-item kx-nav-item--tree" aria-expanded="false"><svg class="kx-i kx-i-14 kx-i--bold" aria-hidden="true"><use href="#kx-chev-right" /></svg>Arquivo</button></li>
+          </ul>
+
+          <div class="kx-sidebar-foot">
+            <div class="kx-storage">
+              <div class="kx-storage-head">
+                <h4 class="kx-storage-title">Armazenamento</h4>
+                <p class="kx-storage-pct">62%</p>
+              </div>
+              <div class="kx-progress" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="Armazenamento usado">
+                <div class="kx-progress-fill" style="width: 62%;"></div>
+              </div>
+              <p class="kx-storage-note">124 GB de 200 GB usados</p>
+            </div>
+          </div>
+        </nav>
+
+        <main class="kx-work">
+          <header class="kx-topbar kx-topbar--flush">
+            <nav class="kx-crumbs" aria-label="Trilha de navegação">
+              <span>Mídia</span>
+              <svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-chev-right" /></svg>
+              <span>Editorial 2026</span>
+              <svg class="kx-i kx-i-14" aria-hidden="true"><use href="#kx-chev-right" /></svg>
+              <span class="kx-crumb-chip" aria-current="page">Varejo</span>
+            </nav>
+            <div class="kx-topbar-actions">
+              <button type="button" class="kx-btn kx-btn--secondary"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-upload" /></svg>Enviar arquivos</button>
+              <button type="button" class="kx-avatar kx-avatar--28" aria-label="Conta de Ana Cardoso" aria-haspopup="menu">AC</button>
+            </div>
+          </header>
+
+          <div class="kx-pagehead">
+            <div>
+              <h3 class="kx-pagetitle">Varejo</h3>
+              <p class="kx-pagemeta">248 arquivos · 3,1 GB · última atualização hoje, 08:12</p>
+            </div>
+            <div class="kx-topbar-actions">
+              <div class="kx-seg" role="group" aria-label="Modo de exibição">
+                <button type="button" class="kx-seg-item kx-seg-item--icon" aria-selected="true" aria-label="Grade"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-grid-view" /></svg></button>
+                <button type="button" class="kx-seg-item kx-seg-item--icon" aria-selected="false" aria-label="Lista"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-list-view" /></svg></button>
+              </div>
+              <div class="kx-search" style="width: 220px;">
+                <svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-search" /></svg>
+                <button type="button" class="kx-search-input">Buscar arquivos</button>
+              </div>
+              <button type="button" class="kx-btn kx-btn--secondary"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-filter" /></svg>Filtros</button>
+            </div>
+          </div>
+
+          <div class="kx-typefilters" role="group" aria-label="Filtrar por tipo">
+            <button type="button" class="kx-btn kx-btn--primary kx-btn--xs" aria-pressed="true">Tudo</button>
+            <button type="button" class="kx-btn kx-btn--secondary kx-btn--xs" aria-pressed="false">Imagens <span class="kx-count-inline">211</span></button>
+            <button type="button" class="kx-btn kx-btn--secondary kx-btn--xs" aria-pressed="false">Vídeo <span class="kx-count-inline">18</span></button>
+            <button type="button" class="kx-btn kx-btn--secondary kx-btn--xs" aria-pressed="false">Documento <span class="kx-count-inline">14</span></button>
+            <button type="button" class="kx-btn kx-btn--secondary kx-btn--xs" aria-pressed="false">Áudio <span class="kx-count-inline">5</span></button>
+          </div>
+
+          <div class="kx-grid">
+            <ul class="kx-grid-inner">
+              <sc-for list="{{ media }}" as="m" hint-placeholder-count="10">
+                <li>
+                  <button type="button" class="kx-asset" style="width: 100%;">
+                    <span class="kx-asset-thumb">
+                      <svg class="kx-i kx-i-20" style="stroke-width: 1.5;" aria-hidden="true"><use href="#kx-image" /></svg>
+                      <span class="kx-check kx-asset-check" role="checkbox" aria-checked="false" aria-label="Selecionar {{ m.name }}"></span>
+                      <span class="kx-asset-type">{{ m.type }}</span>
+                    </span>
+                    <span class="kx-asset-body">
+                      <span class="kx-asset-name">{{ m.name }}</span>
+                      <span class="kx-asset-meta">{{ m.meta }}</span>
+                    </span>
+                  </button>
+                </li>
+              </sc-for>
+            </ul>
+          </div>
+        </main>
+
+        <aside class="kx-inspector" aria-label="Detalhe do arquivo">
+          <div class="kx-inspector-head">
+            <h3 class="kx-inspector-title">Detalhe do arquivo</h3>
+            <div style="display: flex; gap: 2px;">
+              <button type="button" class="kx-iconbtn kx-iconbtn--28 kx-iconbtn--muted" aria-label="Baixar arquivo"><svg class="kx-i kx-i-16" aria-hidden="true"><use href="#kx-download" /></svg></button>
+              <button type="button" class="kx-iconbtn kx-iconbtn--28 kx-iconbtn--muted" aria-label="Recolher inspector"><svg class="kx-i kx-i-16" aria-hidden="true"><use href="#kx-panel-right" /></svg></button>
+            </div>
+          </div>
+
+          <div class="kx-inspector-body">
+            <figure class="kx-preview">
+              <div class="kx-preview-canvas">
+                <svg class="kx-i kx-i-22" style="stroke-width: 1.5;" aria-hidden="true"><use href="#kx-image" /></svg>
+                <span class="kx-focal" role="img" aria-label="Ponto focal em 38% horizontal, 42% vertical"><span class="kx-focal-dot"></span></span>
+              </div>
+              <figcaption class="kx-preview-foot">
+                <span class="kx-preview-label">Ponto focal · 38% / 42%</span>
+                <button type="button" class="kx-btn kx-btn--secondary kx-btn--xs-tight"><svg class="kx-i kx-i-12 kx-i--bold" aria-hidden="true"><use href="#kx-crop" /></svg>Ajustar</button>
+              </figcaption>
+            </figure>
+
+            <div class="kx-asset-id">
+              <h4 class="kx-asset-id-name">cd-cajamar-01.jpg</h4>
+              <p class="kx-asset-id-meta">Enviado por Marcos Reis · 12/08/2026</p>
+            </div>
+
+            <dl class="kx-section kx-section--tight">
+              <div class="kx-kv"><dt>Dimensões</dt><dd>1600 × 900</dd></div>
+              <div class="kx-kv"><dt>Tamanho</dt><dd>412 KB</dd></div>
+              <div class="kx-kv"><dt>Formato</dt><dd>JPEG · sRGB</dd></div>
+            </dl>
+
+            <div class="kx-section">
+              <div class="kx-field">
+                <h4 class="kx-label" id="kx-lbl-alt">Texto alternativo<span class="kx-label-req" aria-hidden="true"> *</span><span class="kx-sr"> (obrigatório)</span></h4>
+                <p class="kx-textarea" aria-labelledby="kx-lbl-alt">Vista externa do centro de distribuição em Cajamar, com caminhões em doca de carga.</p>
+              </div>
+              <div class="kx-field">
+                <h4 class="kx-label" id="kx-lbl-credit">Crédito</h4>
+                <p class="kx-control" aria-labelledby="kx-lbl-credit">Agência Brasil</p>
+              </div>
+            </div>
+
+            <div class="kx-section kx-section--qa">
+              <div class="kx-section-head">
+                <h4 class="kx-label">Usos</h4>
+                <p class="kx-section-aside">3 artigos</p>
+              </div>
+              <ul>
+                <li><a class="kx-usage" href="#"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-doc-sm" /></svg><span class="kx-usage-name">Reforma tributária: o que muda…</span></a></li>
+                <li><a class="kx-usage" href="#"><svg class="kx-i kx-i-15" aria-hidden="true"><use href="#kx-doc-sm" /></svg><span class="kx-usage-name">Logística sob pressão em SP</span></a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="kx-inspector-foot">
+            <button type="button" class="kx-btn kx-btn--secondary kx-btn--md kx-btn--block">Substituir</button>
+            <button type="button" class="kx-btn kx-btn--primary kx-btn--md kx-btn--block">Salvar</button>
+          </div>
+        </aside>
+
+      </div>
+    </div>
+    <p class="kx-screen-foot">Os blocos de imagem são placeholders — envie os arquivos reais e eu troco no lugar.</p>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  renderVals() {
+    // Estado e taxonomia resolvem para classes/tokens, nunca para literais de cor.
+    const st = {
+      review:    { status: 'Em revisão', pillClass: 'kx-pill--review' },
+      published: { status: 'Publicado',  pillClass: 'kx-pill--published' },
+      draft:     { status: 'Rascunho',   pillClass: 'kx-pill--draft' },
+      scheduled: { status: 'Agendado',   pillClass: 'kx-pill--scheduled' },
+      blocked:   { status: 'Bloqueado',  pillClass: 'kx-pill--blocked' }
+    };
+    const av = {
+      MR: { initials: 'MR', avBgVar: '--peg-av-blue-bg',    avFgVar: '--peg-av-blue-fg',    author: 'Marcos Reis' },
+      LT: { initials: 'LT', avBgVar: '--peg-av-green-bg',   avFgVar: '--peg-av-green-fg',   author: 'Lia Tavares' },
+      AC: { initials: 'AC', avBgVar: '--peg-av-neutral-bg', avFgVar: '--peg-av-neutral-fg', author: 'Ana Cardoso' },
+      JP: { initials: 'JP', avBgVar: '--peg-av-violet-bg',  avFgVar: '--peg-av-violet-fg',  author: 'João Prado' },
+      BR: { initials: 'BR', avBgVar: '--peg-av-red-bg',     avFgVar: '--peg-av-red-fg',     author: 'Bruna Rocha' }
+    };
+    const QA_OK = '--peg-success', QA_WARN = '--peg-warning', QA_BAD = '--peg-danger';
+    const articles = [
+      { title: 'Reforma tributária: o que muda para o varejo em 2027', meta: '1.240 palavras · 2 fontes', ...st.review,    ...av.MR, category: 'Economia',  updated: 'há 12 min', publish: '18/08, 07:00', qa: '4/5', qaVar: QA_WARN },
+      { title: 'Balanço do trimestre no setor automotivo',              meta: '860 palavras · 3 fontes',   ...st.published, ...av.LT, category: 'Negócios',  updated: 'há 1 h',    publish: '14/08, 06:30', qa: '5/5', qaVar: QA_OK },
+      { title: 'Guia de diagnóstico eletrônico — parte 3',              meta: '2.110 palavras · 1 fonte',  ...st.draft,     ...av.AC, category: 'Técnico',   updated: 'há 3 h',    publish: '—',            qa: '2/5', qaVar: QA_BAD },
+      { title: 'Entrevista: cadeia de suprimentos em 2027',             meta: '1.780 palavras · 4 fontes', ...st.scheduled, ...av.JP, category: 'Economia',  updated: 'ontem',     publish: '20/08, 08:00', qa: '5/5', qaVar: QA_OK },
+      { title: 'Nota sobre reajuste de tarifas portuárias',             meta: '420 palavras · sem fonte',  ...st.blocked,   ...av.BR, category: 'Logística', updated: 'ontem',     publish: '—',            qa: '1/5', qaVar: QA_BAD },
+      { title: 'Como as redes regionais reagiram ao novo crédito',      meta: '1.520 palavras · 3 fontes', ...st.published, ...av.MR, category: 'Economia',  updated: '2 dias',    publish: '12/08, 07:00', qa: '5/5', qaVar: QA_OK },
+      { title: 'Painel: inadimplência no crédito comercial',            meta: '980 palavras · 2 fontes',   ...st.review,    ...av.LT, category: 'Finanças',  updated: '2 dias',    publish: '19/08, 09:00', qa: '4/5', qaVar: QA_WARN },
+      { title: 'Série especial: o custo logístico do Nordeste',         meta: '3.240 palavras · 6 fontes', ...st.published, ...av.JP, category: 'Logística', updated: '3 dias',    publish: '09/08, 07:30', qa: '5/5', qaVar: QA_OK }
+    ];
+    const media = [
+      { name: 'cd-cajamar-01.jpg',      meta: '1600×900 · 412 KB',    type: 'JPG' },
+      { name: 'doca-carga-04.jpg',      meta: '2400×1600 · 1,1 MB',   type: 'JPG' },
+      { name: 'grafico-credito.png',    meta: '1200×800 · 96 KB',     type: 'PNG' },
+      { name: 'entrevista-helena.jpg',  meta: '1800×1200 · 680 KB',   type: 'JPG' },
+      { name: 'nota-tecnica-cnc.pdf',   meta: '14 páginas · 2,4 MB',  type: 'PDF' },
+      { name: 'loja-centro-sp.jpg',     meta: '1600×900 · 388 KB',    type: 'JPG' },
+      { name: 'depoimento-varejo.mp4',  meta: '00:02:14 · 42 MB',     type: 'MP4' },
+      { name: 'mapa-distribuicao.svg',  meta: 'vetor · 88 KB',        type: 'SVG' },
+      { name: 'estoque-galpao-02.jpg',  meta: '2000×1333 · 820 KB',   type: 'JPG' },
+      { name: 'coletiva-imprensa.jpg',  meta: '1600×1067 · 540 KB',   type: 'JPG' }
+    ];
+    return { articles, media };
+  }
+}
+</script>
+</body>
+</html>

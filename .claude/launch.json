@@ -4,12 +4,14 @@
     {
       "name": "cms",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--dir",
-        "C:/Users/pablo/Documents/OpenCode/Kal El/.claude/worktrees/kal-el-visual-ux-final-ade7eb/apps/cms",
-        "dev"
-      ],
+      "runtimeArgs": ["--dir", "apps/cms", "dev"],
       "port": 3000
+    },
+    {
+      "name": "kalel-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/static-server.js"],
+      "port": 4319
     }
   ]
 }
