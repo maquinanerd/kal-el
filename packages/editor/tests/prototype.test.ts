@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { documentV2Schema, type ArticleDocumentV2 } from "@kal-el/contracts";
-import { documentToProseMirror, proseMirrorToDocument, serializeDeterministic as tiptapSerialize } from "../src/tiptap.js";
+import { buildTiptapSchema, documentToProseMirror, proseMirrorToDocument, serializeDeterministic as tiptapSerialize } from "../src/tiptap.js";
 import { buildLexicalEditor, documentToLexical, lexicalToDocument, serializeDeterministic as lexicalSerialize } from "../src/lexical.js";
 
 const FULL_DOC: ArticleDocumentV2 = {
@@ -66,6 +66,36 @@ describe("TipTap (ProseMirror) prototype", () => {
   it("rejects unknown node types at the schema boundary (sanitization)", () => {
     const doc = { version: 2, nodes: [{ type: "html", content: [{ type: "text", text: "<script>alert(1)</script>", marks: [] }] }] } as unknown as ArticleDocumentV2;
     expect(() => documentToProseMirror(doc)).toThrow();
+  });
+
+  it("serializes an image inserted without caption/credit/alt into a contract-valid document", () => {
+    // The editor inserts atoms with null optional attrs (ProseMirror has no `undefined`);
+    // a literal null would fail `documentV2Schema` and the article would refuse to save.
+    const schema = buildTiptapSchema();
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("antes")]),
+      schema.node("image", { mediaId: "11111111-1111-4111-8111-111111111111", caption: null, credit: null, altText: null }),
+    ]);
+    const serialized = proseMirrorToDocument(doc);
+    expect(JSON.parse(JSON.stringify(serialized)).nodes[1]).toEqual({ type: "image", attrs: { mediaId: "11111111-1111-4111-8111-111111111111" } });
+    expect(documentV2Schema.safeParse(serialized).success).toBe(true);
+  });
+
+  it("renders every block atom to DOM without a content hole (leaf specs)", () => {
+    // A `0` hole in a leaf node's toDOM makes DOMSerializer throw the moment the
+    // node is rendered, which took down the editor as soon as an atom was inserted.
+    const schema = buildTiptapSchema();
+    for (const [name, attrs] of [
+      ["image", { mediaId: "11111111-1111-4111-8111-111111111111" }],
+      ["gallery", { mediaIds: ["11111111-1111-4111-8111-111111111111"] }],
+      ["embed", { url: "https://youtu.be/abc", provider: "youtube", id: "abc" }],
+      ["source", { label: "IMDb", url: "https://imdb.com", kind: "external" }],
+    ] as const) {
+      const spec = schema.nodes[name].spec.toDOM;
+      expect(spec).toBeDefined();
+      const rendered = spec!(schema.nodes[name].create(attrs)) as unknown[];
+      expect(rendered.includes(0)).toBe(false);
+    }
   });
 
   it("accepts out-of-range heading levels structurally (range is enforced by the zod contract at the API boundary)", () => {

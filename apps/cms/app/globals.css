@@ -75,3 +75,73 @@ a {
   border-radius: 4px;
 }
 .peg-editor__surface .ProseMirror a { color: var(--peg-accent, #2563eb); text-decoration: underline; }
+
+/* --- Editor: upload status + hint --- */
+.peg-editor__status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 20px;
+  border-bottom: var(--peg-border);
+  font-size: 13px;
+  color: var(--peg-text-secondary, #555);
+}
+.peg-editor__status--error { color: var(--peg-danger, #b91c1c); }
+.peg-editor__hint {
+  margin: 0;
+  padding: 8px 20px 12px;
+  font-size: 12px;
+  color: var(--peg-text-tertiary, #888);
+}
+
+/* --- Editor: block atoms (image, gallery, embed, source) --- */
+.peg-editor__atom {
+  position: relative;
+  margin: 0.9em 0;
+  padding: 8px;
+  border: 1px solid var(--peg-border-color, #e5e7eb);
+  border-radius: 8px;
+  background: var(--peg-surface-hover, #f9fafb);
+}
+.peg-editor__atom--selected {
+  border-color: var(--peg-accent, #2563eb);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--peg-accent, #2563eb) 25%, transparent);
+}
+.peg-editor__atom-body figure { margin: 0; }
+.peg-editor__atom-body img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+.peg-editor__atom-body figcaption {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--peg-text-secondary, #555);
+}
+.peg-editor__atom-label { font-size: 13px; color: var(--peg-text-secondary, #555); word-break: break-all; }
+.peg-editor__atom-strip { display: flex; gap: 6px; flex-wrap: wrap; }
+.peg-editor__atom-strip img { width: 96px; height: 72px; object-fit: cover; }
+.peg-editor__atom-bar {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.peg-editor__atom:hover .peg-editor__atom-bar,
+.peg-editor__atom--selected .peg-editor__atom-bar,
+.peg-editor__atom-bar:focus-within { opacity: 1; }
+.peg-editor__atom-btn {
+  border: 1px solid var(--peg-border-color, #e5e7eb);
+  border-radius: 6px;
+  background: var(--peg-surface, #fff);
+  color: var(--peg-text-secondary, #555);
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.peg-editor__atom-btn:hover { color: var(--peg-text-primary, #111); border-color: var(--peg-accent, #2563eb); }

@@ -441,7 +441,11 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
         const mediaRow = await getMedia(app.db, siteId, mediaId, app.config.API_BASE_URL);
         const buf = await app.storage.get(mediaRow.storageKey);
         if (!buf) throw notFound("media not found");
-        return reply.type(mediaRow.mimeType).send(buf);
+        // Helmet marks every response `same-origin`, which stops the CMS (a different
+        // origin than the API) from rendering media in <img>. Access stays gated by the
+        // media.read guard above — and the session cookie is SameSite=Lax, so a
+        // third-party page embedding this URL gets a 401 rather than the file.
+        return reply.header("cross-origin-resource-policy", "cross-origin").type(mediaRow.mimeType).send(buf);
       });
 
       siteApp.patch("/media/:mediaId", { preHandler: guard("media.manage") }, async (req) => {

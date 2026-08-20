@@ -4,6 +4,9 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 60_000,
   retries: 0,
+  // Every spec shares one database and one bootstrap account, so concurrent workers
+  // race on shared editorial state (e.g. two articles deriving the same slug).
+  workers: 1,
   use: {
     baseURL: "http://localhost:3100",
     headless: true,

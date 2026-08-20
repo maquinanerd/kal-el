@@ -16,7 +16,9 @@ import {
   listEntities,
   listRevisions,
   listTags,
+  mediaFileUrl,
   updateArticle,
+  uploadMedia,
   type ArticleDetail,
   type ArticleRevision,
   type ArticleStatus,
@@ -132,6 +134,7 @@ export default function ArticlePage() {
   const [selAuthors, setSelAuthors] = useState<Set<string>>(new Set());
 
   const [mediaPicker, setMediaPicker] = useState<"image" | "gallery" | "featured" | "social" | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [compareRevision, setCompareRevision] = useState<ArticleRevision | null>(null);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
 
@@ -227,6 +230,22 @@ export default function ArticlePage() {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  /** Uploads an image dropped/pasted/picked inside the body editor and returns its mediaId. */
+  const uploadFromEditor = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!activeSiteId) return null;
+      try {
+        setUploadError(null);
+        const item = await uploadMedia(activeSiteId, file);
+        return item.id;
+      } catch (err) {
+        setUploadError(err instanceof ApiError ? `${file.name}: ${err.message}` : `Falha ao enviar ${file.name}`);
+        return null;
+      }
+    },
+    [activeSiteId],
+  );
+
   async function doAction(action: string) {
     if (!activeSiteId) return;
     setActionError(null);
@@ -274,6 +293,7 @@ export default function ArticlePage() {
 
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
+      {uploadError && <Alert tone="danger">Falha ao enviar imagem — {uploadError}</Alert>}
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <Badge tone="neutral">{status}</Badge>
@@ -296,6 +316,8 @@ export default function ArticlePage() {
             onChange={(next) => { setDoc(next); scheduleSave(); }}
             onRequestImage={() => setMediaPicker("image")}
             onRequestGallery={() => setMediaPicker("gallery")}
+            onUploadImage={uploadFromEditor}
+            resolveMediaUrl={(mediaId) => (activeSiteId ? mediaFileUrl(activeSiteId, mediaId) : null)}
           />
         </div>
 

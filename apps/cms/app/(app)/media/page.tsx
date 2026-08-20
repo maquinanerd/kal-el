@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, Button, EmptyState, IconPlus, PageHead, Search } from "@kal-el/design-system";
 import { useAuth } from "../../../lib/auth";
-import { ApiError, deleteMedia, listMedia, uploadMedia, type MediaItem } from "../../../lib/api";
+import { ApiError, MEDIA_ACCEPT, deleteMedia, isUploadableImage, listMedia, uploadMedia, type MediaItem } from "../../../lib/api";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -45,15 +45,21 @@ export default function MediaPage() {
     else setItems([]);
   }, [activeSiteId]);
 
-  async function doUpload(file: File) {
+  async function doUpload(files: File[]) {
     if (!activeSiteId) return;
+    const images = files.filter(isUploadableImage);
+    if (images.length === 0) {
+      setError("Formato não suportado. Use JPG, PNG, WebP, GIF ou AVIF.");
+      return;
+    }
     setUploading(true);
-    setError(null);
+    setError(images.length < files.length ? `${files.length - images.length} arquivo(s) ignorado(s) — formato não suportado.` : null);
     try {
-      await uploadMedia(activeSiteId, file);
+      for (const file of images) await uploadMedia(activeSiteId, file);
       await load(activeSiteId, q, 0);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Falha ao enviar arquivo");
+      await load(activeSiteId, q, 0);
     } finally {
       setUploading(false);
     }
@@ -83,7 +89,18 @@ export default function MediaPage() {
         description={`${total} item(s)`}
         actions={
           <>
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && void doUpload(e.target.files[0])} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept={MEDIA_ACCEPT}
+              multiple
+              hidden
+              onChange={(e) => {
+                const files = [...(e.target.files ?? [])];
+                e.target.value = "";
+                if (files.length > 0) void doUpload(files);
+              }}
+            />
             <Button variant="primary" icon={<IconPlus />} onClick={() => fileRef.current?.click()} disabled={uploading || !activeSiteId}>
               {uploading ? "Enviando…" : "Enviar"}
             </Button>
@@ -100,7 +117,7 @@ export default function MediaPage() {
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) void doUpload(f); }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); const files = [...e.dataTransfer.files]; if (files.length > 0) void doUpload(files); }}
         style={{
           border: `1px dashed ${dragOver ? "var(--peg-accent, #2563eb)" : "var(--peg-border-color, #e5e7eb)"}`,
           borderRadius: 8,
@@ -114,7 +131,7 @@ export default function MediaPage() {
         ) : !activeSiteId ? (
           <EmptyState title="Nenhum site disponível" body="Selecione um site." />
         ) : items.length === 0 ? (
-          <EmptyState title="Nenhuma mídia" body="Arraste uma imagem aqui ou clique em Enviar." />
+          <EmptyState title="Nenhuma mídia" body="Arraste imagens aqui ou clique em Enviar." />
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
             {items.map((m) => (

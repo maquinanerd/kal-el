@@ -22,16 +22,36 @@ export function buildTiptapSchema(): Schema {
   const bulletList: NodeSpec = { group: "block", content: "listItem+", parseDOM: [{ tag: "ul" }], toDOM: () => ["ul", 0] };
   const orderedList: NodeSpec = { group: "block", content: "listItem+", parseDOM: [{ tag: "ol" }], toDOM: () => ["ol", 0] };
   const listItem: NodeSpec = { content: "inline*", parseDOM: [{ tag: "li" }], toDOM: () => ["li", 0] };
+  // Atoms are leaf nodes: their `toDOM` must never contain a content hole (`0`),
+  // otherwise DOMSerializer throws when the node is rendered.
   const image: NodeSpec = {
     group: "block",
     atom: true,
     attrs: { mediaId: {}, caption: { default: null }, credit: { default: null }, altText: { default: null } },
-    parseDOM: [{ tag: "img[src]" }],
-    toDOM: () => ["img"],
+    parseDOM: [{ tag: "img[data-media-id]", getAttrs: (dom) => {
+      const el = dom as { getAttribute(name: string): string | null };
+      return { mediaId: el.getAttribute("data-media-id") ?? "", altText: el.getAttribute("alt") || null };
+    } }],
+    toDOM: (node) => ["img", { "data-media-id": node.attrs.mediaId as string, alt: (node.attrs.altText as string | null) ?? "" }],
   };
-  const gallery: NodeSpec = { group: "block", atom: true, attrs: { mediaIds: { default: [] } }, toDOM: () => ["div", 0] };
-  const embed: NodeSpec = { group: "block", atom: true, attrs: { url: {}, provider: {}, id: { default: null } }, toDOM: () => ["div", 0] };
-  const source: NodeSpec = { group: "block", atom: true, attrs: { label: {}, url: {}, kind: { default: null } }, toDOM: () => ["div", 0] };
+  const gallery: NodeSpec = {
+    group: "block",
+    atom: true,
+    attrs: { mediaIds: { default: [] } },
+    toDOM: (node) => ["div", { "data-gallery": (node.attrs.mediaIds as string[]).join(",") }],
+  };
+  const embed: NodeSpec = {
+    group: "block",
+    atom: true,
+    attrs: { url: {}, provider: {}, id: { default: null } },
+    toDOM: (node) => ["div", { "data-embed": node.attrs.url as string, "data-provider": node.attrs.provider as string }],
+  };
+  const source: NodeSpec = {
+    group: "block",
+    atom: true,
+    attrs: { label: {}, url: {}, kind: { default: null } },
+    toDOM: (node) => ["div", { "data-source": node.attrs.label as string, "data-url": node.attrs.url as string }],
+  };
   const table: NodeSpec = { group: "block", content: "tableRow+", toDOM: () => ["table", 0] };
   const tableRow: NodeSpec = { content: "tableCell+", toDOM: () => ["tr", 0] };
   const tableCell: NodeSpec = { content: "inline*", attrs: { header: { default: false } }, toDOM: (n) => [n.attrs.header ? "th" : "td", 0] };
@@ -81,6 +101,15 @@ export function buildTiptapSchema(): Schema {
     },
     marks: { bold, italic, code, underline, strike, link },
   });
+}
+
+/**
+ * ProseMirror stores absent atom attributes as `null`, but the document contract
+ * declares them `.optional()` — a literal `null` fails validation on save. Map it
+ * back to `undefined` so the key is dropped when the document is serialized.
+ */
+function optional(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function attrsFor(node: DocumentNodeV2): Record<string, unknown> {
@@ -227,16 +256,16 @@ export function proseMirrorToDocument(node: Node): ArticleDocumentV2 {
         break;
       }
       case "image":
-        nodes.push({ type: "image", attrs: { mediaId: child.attrs.mediaId as string, caption: child.attrs.caption as string | undefined, credit: child.attrs.credit as string | undefined, altText: child.attrs.altText as string | undefined } });
+        nodes.push({ type: "image", attrs: { mediaId: child.attrs.mediaId as string, caption: optional(child.attrs.caption), credit: optional(child.attrs.credit), altText: optional(child.attrs.altText) } });
         break;
       case "gallery":
         nodes.push({ type: "gallery", attrs: { mediaIds: child.attrs.mediaIds as string[] } });
         break;
       case "embed":
-        nodes.push({ type: "embed", attrs: { url: child.attrs.url as string, provider: child.attrs.provider as string, id: child.attrs.id as string | undefined } });
+        nodes.push({ type: "embed", attrs: { url: child.attrs.url as string, provider: child.attrs.provider as string, id: optional(child.attrs.id) } });
         break;
       case "source":
-        nodes.push({ type: "source", attrs: { label: child.attrs.label as string, url: child.attrs.url as string, kind: child.attrs.kind as string | undefined } });
+        nodes.push({ type: "source", attrs: { label: child.attrs.label as string, url: child.attrs.url as string, kind: optional(child.attrs.kind) } });
         break;
     }
   });

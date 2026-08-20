@@ -167,9 +167,10 @@ export function listMedia(siteId: string, opts: { q?: string; limit?: number; of
   return request<MediaPage>("GET", `/v1/sites/${siteId}/media${suffix}`);
 }
 
-export async function uploadMedia(siteId: string, file: File): Promise<MediaItem> {
+export async function uploadMedia(siteId: string, file: File, filename?: string): Promise<MediaItem> {
   const form = new FormData();
-  form.append("file", file);
+  // Clipboard files can arrive nameless; the API needs a filename to derive the extension.
+  form.append("file", file, filename ?? (file.name || "imagem.png"));
   const headers: Record<string, string> = {};
   const csrf = csrfToken();
   if (csrf) headers["x-kal-el-csrf"] = csrf;
@@ -178,6 +179,18 @@ export async function uploadMedia(siteId: string, file: File): Promise<MediaItem
   const json = text ? (JSON.parse(text) as { data?: MediaItem; error?: { code?: string; message?: string } }) : undefined;
   if (!res.ok) throw new ApiError(res.status, json?.error?.code ?? "UNKNOWN", json?.error?.message ?? `HTTP ${res.status}`);
   return json?.data as MediaItem;
+}
+
+/** Deterministic URL of a media binary — usable directly as an `<img src>`. */
+export function mediaFileUrl(siteId: string, mediaId: string): string {
+  return `${API_BASE}/v1/sites/${siteId}/media/${mediaId}/file`;
+}
+
+/** Accepted by the API on upload (raster only — SVG is rejected server-side). */
+export const MEDIA_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,image/avif";
+
+export function isUploadableImage(file: File): boolean {
+  return MEDIA_ACCEPT.split(",").includes(file.type);
 }
 
 export function deleteMedia(siteId: string, mediaId: string): Promise<{ id: string; deleted: boolean }> {
