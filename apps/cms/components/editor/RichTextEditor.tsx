@@ -8,8 +8,8 @@ import type { Transaction } from "@tiptap/pm/state";
 import { history, redo, undo } from "@tiptap/pm/history";
 import { keymap } from "@tiptap/pm/keymap";
 import { baseKeymap, lift, setBlockType, toggleMark, wrapIn } from "@tiptap/pm/commands";
-import { liftListItem, sinkListItem, splitListItem, wrapInList } from "@tiptap/pm/schema-list";
-import type { MarkType, NodeType } from "@tiptap/pm/model";
+import { liftListItem, splitListItem, wrapInList } from "@tiptap/pm/schema-list";
+import type { MarkType, Node as ProseNode, NodeType } from "@tiptap/pm/model";
 import { buildTiptapSchema, documentToProseMirror, proseMirrorToDocument } from "@kal-el/editor";
 import type { ArticleDocumentV2 } from "@kal-el/contracts";
 import { Button, Input, LinkDialog, Menu, Modal } from "@kal-el/design-system";
@@ -78,27 +78,53 @@ function selectionInside(state: EditorState, type: NodeType): boolean {
   return false;
 }
 
+/** The innermost enclosing list, with the position it starts at. */
+function enclosingList(state: EditorState): { node: ProseNode; pos: number; type: NodeType } | null {
+  const bulletList = state.schema.nodes.bulletList as NodeType;
+  const orderedList = state.schema.nodes.orderedList as NodeType;
+  const { $from } = state.selection;
+  for (let d = $from.depth; d > 0; d -= 1) {
+    const node = $from.node(d);
+    if (node.type === bulletList || node.type === orderedList) {
+      return { node, pos: $from.before(d), type: node.type };
+    }
+  }
+  return null;
+}
+
 /**
  * Bullet <-> ordered <-> no list.
  *
  * Un-listing used the generic `lift`, which lifts the list ITEM out by one level and
  * leaves the list around it; `liftListItem` is the command that knows how to take the
- * paragraph out of the list entirely. Switching between the two list types lifts first:
- * wrapping a bullet item in an ordered list would nest one list inside the other, which
- * the document contract has no way to store.
+ * paragraph out of the list entirely.
+ *
+ * Switching BETWEEN the two types used to lift first and then wrap, and with a collapsed
+ * caret `liftListItem` acts on the one item under it - so a three-item bullet list with
+ * the caret in the middle became bulletList[one] / orderedList[two] / bulletList[three].
+ * That persisted as three separate `list` nodes, read as "• one / 1. two / • three" with
+ * the numbering restarting, and re-clicking did not put it back together.
+ *
+ * `bulletList` and `orderedList` have identical content (`listItem+`), so the conversion
+ * is a type change on the list node itself: one step, every item preserved, no lift and
+ * no re-wrap. Which is also what the button promises - make THIS list numbered.
  */
 function toggleListType(view: EditorView, listType: NodeType) {
-  const listItem = view.state.schema.nodes.listItem as NodeType;
-  const other = listType === view.state.schema.nodes.bulletList ? view.state.schema.nodes.orderedList : view.state.schema.nodes.bulletList;
+  const { state } = view;
+  const listItem = state.schema.nodes.listItem as NodeType;
+  const current = enclosingList(state);
 
-  if (selectionInside(view.state, listType)) {
+  if (!current) {
+    run(view, wrapInList(listType));
+    return;
+  }
+  if (current.type === listType) {
+    // same type: the button is a toggle, so take the selected item(s) out of the list
     run(view, liftListItem(listItem));
     return;
   }
-  if (selectionInside(view.state, other)) {
-    liftListItem(listItem)(view.state, view.dispatch, view);
-  }
-  run(view, wrapInList(listType));
+  view.dispatch(state.tr.setNodeMarkup(current.pos, listType));
+  view.focus();
 }
 
 /** Quote on/off. `wrapIn` alone could only ever add one. */
@@ -385,7 +411,28 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function R
           "Mod-Alt-3": setBlockType(schema.nodes.heading, { level: 3 }),
           "Mod-Alt-4": setBlockType(schema.nodes.heading, { level: 4 }),
         }),
-        keymap({ Enter: splitListItem(listItem), Tab: sinkListItem(listItem), "Shift-Tab": liftListItem(listItem) }),
+        /**
+         * Enter splits a list item. Tab and Shift-Tab are deliberately NOT bound.
+         *
+         * `Tab: sinkListItem` indented an item by nesting a list inside the previous one,
+         * and `listItem` is declared `content: "paragraph+"` precisely so that cannot be
+         * stored (a nested list has nowhere to live in the v2 contract and would vanish on
+         * save). `sinkListItem` passes its own preconditions - it only checks that there
+         * IS a previous sibling item - and then builds the nested shape and calls
+         * `tr.step`, which the schema rejects: `TransformError: Invalid content for node
+         * listItem`, thrown out of the keymap, out of ProseMirror's keydown listener, and
+         * into the page as an uncaught exception. It also threw before
+         * `event.preventDefault()` ran, so Tab moved focus out of the editor on the way.
+         *
+         * That path was unreachable while `wrapInList` was a silent no-op; making lists
+         * work made it reachable on the first Tab in the first list anyone writes.
+         *
+         * Refusing to nest has to mean the command declines, not that it throws. Leaving
+         * both unbound lets Tab and Shift-Tab do what they should do in a text surface -
+         * move focus forward and back - which is also how a keyboard user gets out of the
+         * editor at all.
+         */
+        keymap({ Enter: splitListItem(listItem) }),
         keymap(baseKeymap),
       ],
     });
