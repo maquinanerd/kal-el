@@ -13,7 +13,7 @@ import {
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody } from "@kal-el/contracts";
 import { migrateDocumentToV2 } from "@kal-el/contracts";
 
-import { badRequest, conflict, forbidden, notFound } from "../plugins/errors.js";
+import { badRequest, conflict, forbidden, isUniqueViolation, notFound, pgConstraint } from "../plugins/errors.js";
 import { writeAudit } from "../plugins/audit.js";
 import { upsertSlugRedirect } from "./redirects.js";
 import { assertMediaInSite, collectDocumentMediaIds } from "./media.js";
@@ -63,15 +63,45 @@ export function slugify(input: string): string {
   );
 }
 
-async function uniqueSlug(db: Db, siteId: string, base: string): Promise<string> {
-  let slug = base;
-  let i = 2;
+/** How many index rejections a single write may absorb before it gives up. */
+const SLUG_CONFLICT_RETRIES = 20;
+
+/** `base`, then `base-2`, `base-3`, ... */
+function slugCandidate(base: string, attempt: number): string {
+  return attempt < 2 ? base : `${base}-${attempt}`;
+}
+
+function isSlugConflict(err: unknown): boolean {
+  return isUniqueViolation(err) && pgConstraint(err) === "articles_site_slug_unique";
+}
+
+/**
+ * Runs `write` against successive slug candidates until one commits.
+ *
+ * Probing for a free slug beforehand is only ever a hint: two concurrent requests
+ * read the same slug as free and one of them loses at write time. The authority is
+ * the `articles_site_slug_unique` index, so a rejection from it means "take the next
+ * suffix", not "fail the request".
+ */
+async function withUniqueSlug<T>(db: Db, siteId: string, base: string, write: (slug: string) => Promise<T>): Promise<T> {
+  let attempt = 1;
+  let retries = 0;
   for (;;) {
-    const exists = await db.query.articles.findFirst({
-      where: and(eq(articles.siteId, siteId), eq(articles.slug, slug)),
-    });
-    if (!exists) return slug;
-    slug = `${base}-${i++}`;
+    // Skip suffixes that are already taken, so a busy base slug does not spend the
+    // retry budget losing the same race over and over.
+    for (;;) {
+      const exists = await db.query.articles.findFirst({
+        where: and(eq(articles.siteId, siteId), eq(articles.slug, slugCandidate(base, attempt))),
+      });
+      if (!exists) break;
+      attempt++;
+    }
+    try {
+      return await write(slugCandidate(base, attempt));
+    } catch (err) {
+      if (!isSlugConflict(err) || ++retries > SLUG_CONFLICT_RETRIES) throw err;
+      attempt++;
+    }
   }
 }
 
@@ -193,7 +223,6 @@ export async function createArticle(
     }
   }
 
-  const slug = body.slug ?? (await uniqueSlug(db, siteId, slugify(body.title)));
   const document = body.document ? migrateDocumentToV2(body.document) : DEFAULT_DOCUMENT;
   const seo: SeoMetadata = {
     seoTitle: null,
@@ -218,70 +247,75 @@ export async function createArticle(
   await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : []), ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : [])]);
   await assertPrimaryCategoryInSite(db, siteId, seo.primaryCategoryId);
 
-  const row = await db.transaction(async (tx) => {
-    const [inserted] = await tx
-      .insert(articles)
-      .values({
-        siteId,
-        type: body.type,
-        title: body.title,
-        slug,
-        dek: body.dek ?? null,
-        excerpt: body.excerpt ?? null,
-        document,
-        seo,
-        provenance: body.provenance ?? null,
-        externalKey: body.externalKey ?? null,
-        featuredMediaId,
-        status,
-        publishedAt,
-        scheduledAt,
-        createdBy,
-        updatedBy: createdBy,
-        version: 0,
-      })
-      .returning();
-    if (!inserted) throw new Error("createArticle returned no row");
-
-    await tx.insert(articleRevisions).values({
-      articleId: inserted.id,
-      revisionNumber: 1,
-      document,
-      createdBy,
-      note: "created",
-    });
-
-    // imported/published articles still emit the revalidation event (exactly-once)
-    if (status === "published" && publishedAt) {
-      await tx
-        .insert(outboxEvents)
+  const insert = (slug: string) =>
+    db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(articles)
         .values({
           siteId,
-          aggregateType: "article",
-          aggregateId: inserted.id,
-          eventType: "article.published",
-          payload: { articleId: inserted.id, slug, publishedAt: publishedAt.toISOString(), version: 0 },
-          idempotencyKey: `article:${inserted.id}:publish:${publishedAt.getTime()}`,
+          type: body.type,
+          title: body.title,
+          slug,
+          dek: body.dek ?? null,
+          excerpt: body.excerpt ?? null,
+          document,
+          seo,
+          provenance: body.provenance ?? null,
+          externalKey: body.externalKey ?? null,
+          featuredMediaId,
+          status,
+          publishedAt,
+          scheduledAt,
+          createdBy,
+          updatedBy: createdBy,
+          version: 0,
         })
-        .onConflictDoNothing();
-    }
+        .returning();
+      if (!inserted) throw new Error("createArticle returned no row");
 
-    await replaceRelations(tx as unknown as Db, inserted.id, body);
+      await tx.insert(articleRevisions).values({
+        articleId: inserted.id,
+        revisionNumber: 1,
+        document,
+        createdBy,
+        note: "created",
+      });
 
-    await writeAudit(tx, {
-      siteId,
-      actorType: actor.kind,
-      actorId: actorUserId(actor),
-      action: "articles.create",
-      objectType: "article",
-      objectId: inserted.id,
-      details: { title: body.title, slug, status, publishedAt: publishedAt?.toISOString() ?? null, externalKey: body.externalKey ?? null, provenance: body.provenance ?? null },
-      ip: actor.ip ?? null,
-      requestId: actor.requestId ?? null,
+      // imported/published articles still emit the revalidation event (exactly-once)
+      if (status === "published" && publishedAt) {
+        await tx
+          .insert(outboxEvents)
+          .values({
+            siteId,
+            aggregateType: "article",
+            aggregateId: inserted.id,
+            eventType: "article.published",
+            payload: { articleId: inserted.id, slug, publishedAt: publishedAt.toISOString(), version: 0 },
+            idempotencyKey: `article:${inserted.id}:publish:${publishedAt.getTime()}`,
+          })
+          .onConflictDoNothing();
+      }
+
+      await replaceRelations(tx as unknown as Db, inserted.id, body);
+
+      await writeAudit(tx, {
+        siteId,
+        actorType: actor.kind,
+        actorId: actorUserId(actor),
+        action: "articles.create",
+        objectType: "article",
+        objectId: inserted.id,
+        details: { title: body.title, slug, status, publishedAt: publishedAt?.toISOString() ?? null, externalKey: body.externalKey ?? null, provenance: body.provenance ?? null },
+        ip: actor.ip ?? null,
+        requestId: actor.requestId ?? null,
+      });
+
+      return inserted;
     });
 
-    return inserted;
-  });
+  // An explicit slug is the caller's choice: a collision there is a real 409, not
+  // something to silently rename. A derived slug may take the next free suffix.
+  const row = body.slug ? await insert(body.slug) : await withUniqueSlug(db, siteId, slugify(body.title), insert);
 
   return { article: await articleDto(db, row), created: true };
 }
@@ -327,14 +361,8 @@ export async function updateArticle(
     });
   }
 
-  let slug = row.slug;
-  if (body.slug && body.slug !== row.slug) {
-    const previousSlug = row.slug;
-    slug = await uniqueSlug(db, siteId, body.slug);
-    if (previousSlug) {
-      await upsertSlugRedirect(db, siteId, previousSlug, slug);
-    }
-  }
+  const previousSlug = row.slug;
+  const requestedSlug = body.slug && body.slug !== previousSlug ? body.slug : null;
 
   const document = body.document ? migrateDocumentToV2(body.document) : row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT;
   const seo = body.seo ? { ...row.seo, ...body.seo } : row.seo;
@@ -344,57 +372,69 @@ export async function updateArticle(
   await assertMediaInSite(db, siteId, [...collectDocumentMediaIds(document), ...(featuredMediaId ? [featuredMediaId] : []), ...(seo.socialImageMediaId ? [seo.socialImageMediaId] : [])]);
   await assertPrimaryCategoryInSite(db, siteId, seo.primaryCategoryId);
 
-  const updated = await db.transaction(async (tx) => {
-    const [result] = await tx
-      .update(articles)
-      .set({
-        type: body.type ?? row.type,
-        title: body.title ?? row.title,
-        slug,
-        dek: body.dek !== undefined ? body.dek : row.dek,
-        excerpt: body.excerpt !== undefined ? body.excerpt : row.excerpt,
-        document,
-        seo,
-        provenance: body.provenance !== undefined ? body.provenance : row.provenance,
-        featuredMediaId,
-        updatedBy,
-        version: row.version + 1,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId)))
-      .returning();
-    if (!result) throw conflict("article changed concurrently");
+  const applyUpdate = (slug: string | null) =>
+    db.transaction(async (tx) => {
+      const [result] = await tx
+        .update(articles)
+        .set({
+          type: body.type ?? row.type,
+          title: body.title ?? row.title,
+          slug,
+          dek: body.dek !== undefined ? body.dek : row.dek,
+          excerpt: body.excerpt !== undefined ? body.excerpt : row.excerpt,
+          document,
+          seo,
+          provenance: body.provenance !== undefined ? body.provenance : row.provenance,
+          featuredMediaId,
+          updatedBy,
+          version: row.version + 1,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(articles.id, articleId), eq(articles.siteId, siteId)))
+        .returning();
+      if (!result) throw conflict("article changed concurrently");
 
-    if (body.document && JSON.stringify(document) !== JSON.stringify(row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT)) {
-      const maxRev = await tx
-        .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
-        .from(articleRevisions)
-        .where(eq(articleRevisions.articleId, articleId));
-      await tx.insert(articleRevisions).values({
-        articleId,
-        revisionNumber: Number(maxRev[0]?.n ?? 0) + 1,
-        document,
-        createdBy: updatedBy,
-        note: "updated",
+      if (body.document && JSON.stringify(document) !== JSON.stringify(row.document ? migrateDocumentToV2(row.document) : DEFAULT_DOCUMENT)) {
+        const maxRev = await tx
+          .select({ n: sql<number>`coalesce(max(${articleRevisions.revisionNumber}), 0)` })
+          .from(articleRevisions)
+          .where(eq(articleRevisions.articleId, articleId));
+        await tx.insert(articleRevisions).values({
+          articleId,
+          revisionNumber: Number(maxRev[0]?.n ?? 0) + 1,
+          document,
+          createdBy: updatedBy,
+          note: "updated",
+        });
+      }
+
+      await replaceRelations(tx as unknown as Db, articleId, body);
+
+      await writeAudit(tx, {
+        siteId,
+        actorType: actor.kind,
+        actorId: updatedBy,
+        action: "articles.update",
+        objectType: "article",
+        objectId: articleId,
+        details: { version: result.version, changedFields: Object.keys(body) },
+        ip: actor.ip ?? null,
+        requestId: actor.requestId ?? null,
       });
-    }
 
-    await replaceRelations(tx as unknown as Db, articleId, body);
-
-    await writeAudit(tx, {
-      siteId,
-      actorType: actor.kind,
-      actorId: updatedBy,
-      action: "articles.update",
-      objectType: "article",
-      objectId: articleId,
-      details: { version: result.version, changedFields: Object.keys(body) },
-      ip: actor.ip ?? null,
-      requestId: actor.requestId ?? null,
+      return result;
     });
 
-    return result;
-  });
+  // Renames go through the same retry as creation, and the 301 is written only once
+  // the new slug has actually committed — otherwise a losing attempt would leave a
+  // redirect pointing at a slug this article never got.
+  const updated = requestedSlug
+    ? await withUniqueSlug(db, siteId, requestedSlug, async (slug) => {
+        const result = await applyUpdate(slug);
+        if (previousSlug) await upsertSlugRedirect(db, siteId, previousSlug, slug);
+        return result;
+      })
+    : await applyUpdate(previousSlug);
 
   return articleDto(db, updated);
 }

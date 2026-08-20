@@ -52,6 +52,37 @@ describe("articles", () => {
     expect(res.statusCode).toBe(409);
   });
 
+  it("derives distinct slugs for articles created concurrently with the same title", async () => {
+    // The CMS creates every new article as "Novo artigo", so two editors clicking at
+    // the same instant derive the same slug. Checking the slug before inserting is a
+    // TOCTOU: the unique index has to be the one to arbitrate.
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        ctx.app.inject({
+          method: "POST",
+          url: `/v1/sites/${siteId}/articles`,
+          headers: articleHeaders(),
+          payload: { title: "Novo artigo" },
+        }),
+      ),
+    );
+
+    expect(results.map((r) => r.statusCode)).toEqual(Array(6).fill(201));
+    const slugs = results.map((r) => r.json().data.slug as string);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    for (const slug of slugs) expect(slug).toMatch(/^novo-artigo(-\d+)?$/);
+  });
+
+  it("still rejects an explicitly requested slug that is taken", async () => {
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/v1/sites/${siteId}/articles`,
+      headers: articleHeaders(),
+      payload: { title: "Explicito", slug: "novo-artigo" },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
   it("enforces optimistic concurrency on update", async () => {
     const created = await ctx.app.inject({
       method: "POST",
