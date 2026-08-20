@@ -119,6 +119,7 @@ export default function ArticlePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<ArticleRevision[]>([]);
   const [editorKey, setEditorKey] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -136,45 +137,11 @@ export default function ArticlePage() {
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
 
   const loadedRef = useRef(false);
+  // fields the user changed while the GET was still in flight — the response must not clobber them
+  const touchedRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef({ title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version });
   draftRef.current = { title, dek, slug, seoTitle, seoDesc, canonical, robotsIndex, robotsFollow, socialTitle, socialDesc, socialImageId, primaryCategoryId, featuredMediaId, doc, selCats, selTags, selEntities, selAuthors, version };
-
-  useEffect(() => {
-    if (!activeSiteId) return;
-    getArticle(activeSiteId, params.id)
-      .then((a) => {
-        setArticle(a);
-        setTitle(a.title);
-        setDek(a.dek ?? "");
-        setSlug(a.slug ?? "");
-        setSeoTitle(a.seo?.seoTitle ?? "");
-        setSeoDesc(a.seo?.metaDescription ?? "");
-        setCanonical(a.seo?.canonicalUrl ?? "");
-        setRobotsIndex(a.seo?.robotsIndex ?? "index");
-        setRobotsFollow(a.seo?.robotsFollow ?? "follow");
-        setSocialTitle(a.seo?.socialTitle ?? "");
-        setSocialDesc(a.seo?.socialDescription ?? "");
-        setSocialImageId(a.seo?.socialImageMediaId ?? "");
-        setPrimaryCategoryId(a.seo?.primaryCategoryId ?? "");
-        setFeaturedMediaId(a.featuredMediaId ?? "");
-        setDoc((a.document as ArticleDocumentV2) ?? EMPTY_DOC);
-        setVersion(a.version);
-        setStatus(a.status);
-        setSelCats(new Set(a.categories ?? []));
-        setSelTags(new Set(a.tags ?? []));
-        setSelEntities(new Set(a.entities ?? []));
-        setSelAuthors(new Set(a.authors ?? []));
-        loadedRef.current = true;
-      })
-      .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Falha ao carregar"));
-
-    listRevisions(activeSiteId, params.id).then(setRevisions).catch(() => {});
-    listCategories(activeSiteId).then(setCats).catch(() => {});
-    listTags(activeSiteId).then(setTags).catch(() => {});
-    listEntities(activeSiteId).then(setEntities).catch(() => {});
-    listAuthors(activeSiteId).then(setAuthors).catch(() => {});
-  }, [activeSiteId, params.id]);
 
   const save = useCallback(
     async (overrides?: Partial<Record<string, unknown>>) => {
@@ -227,6 +194,71 @@ export default function ArticlePage() {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  const editField = useCallback(
+    <T,>(field: string, setter: (value: T) => void, value: T) => {
+      touchedRef.current.add(field);
+      setter(value);
+      scheduleSave();
+    },
+    [scheduleSave],
+  );
+
+  useEffect(() => {
+    if (!activeSiteId) return;
+    let cancelled = false;
+    loadedRef.current = false;
+    setLoaded(false);
+
+    getArticle(activeSiteId, params.id)
+      .then((a) => {
+        if (cancelled) return;
+        // whatever the user already typed wins over the response that just arrived
+        const touched = touchedRef.current;
+        const apply = <T,>(field: string, setter: (value: T) => void, value: T) => {
+          if (!touched.has(field)) setter(value);
+        };
+        setArticle(a);
+        apply("title", setTitle, a.title);
+        apply("dek", setDek, a.dek ?? "");
+        apply("slug", setSlug, a.slug ?? "");
+        apply("seoTitle", setSeoTitle, a.seo?.seoTitle ?? "");
+        apply("seoDesc", setSeoDesc, a.seo?.metaDescription ?? "");
+        apply("canonical", setCanonical, a.seo?.canonicalUrl ?? "");
+        apply("robotsIndex", setRobotsIndex, a.seo?.robotsIndex ?? "index");
+        apply("robotsFollow", setRobotsFollow, a.seo?.robotsFollow ?? "follow");
+        apply("socialTitle", setSocialTitle, a.seo?.socialTitle ?? "");
+        apply("socialDesc", setSocialDesc, a.seo?.socialDescription ?? "");
+        apply("socialImageId", setSocialImageId, a.seo?.socialImageMediaId ?? "");
+        apply("primaryCategoryId", setPrimaryCategoryId, a.seo?.primaryCategoryId ?? "");
+        apply("featuredMediaId", setFeaturedMediaId, a.featuredMediaId ?? "");
+        // the body is only editable once loaded, so it can never be dirty here
+        setDoc((a.document as ArticleDocumentV2) ?? EMPTY_DOC);
+        setVersion(a.version);
+        setStatus(a.status);
+        apply("categories", setSelCats, new Set(a.categories ?? []));
+        apply("tags", setSelTags, new Set(a.tags ?? []));
+        apply("entities", setSelEntities, new Set(a.entities ?? []));
+        apply("authors", setSelAuthors, new Set(a.authors ?? []));
+        loadedRef.current = true;
+        setLoaded(true);
+        // autosaves debounced before this point were dropped by the loadedRef guard in save()
+        if (touched.size > 0) scheduleSave();
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Falha ao carregar");
+      });
+
+    listRevisions(activeSiteId, params.id).then((r) => { if (!cancelled) setRevisions(r); }).catch(() => {});
+    listCategories(activeSiteId).then((c) => { if (!cancelled) setCats(c); }).catch(() => {});
+    listTags(activeSiteId).then((t) => { if (!cancelled) setTags(t); }).catch(() => {});
+    listEntities(activeSiteId).then((e) => { if (!cancelled) setEntities(e); }).catch(() => {});
+    listAuthors(activeSiteId).then((a) => { if (!cancelled) setAuthors(a); }).catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSiteId, params.id, scheduleSave]);
+
   async function doAction(action: string) {
     if (!activeSiteId) return;
     setActionError(null);
@@ -256,7 +288,8 @@ export default function ArticlePage() {
     void save({ document: revision.document });
   }
 
-  function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
+  function toggleSet(field: string, setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
+    touchedRef.current.add(field);
     setter((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -278,7 +311,7 @@ export default function ArticlePage() {
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <Badge tone="neutral">{status}</Badge>
         <Button size="sm" variant="secondary" onClick={() => void openPreview()}>Preview</Button>
-        <Button size="sm" variant="secondary" onClick={() => setLinkPickerOpen(true)}>Link interno</Button>
+        <Button size="sm" variant="secondary" disabled={!loaded} onClick={() => setLinkPickerOpen(true)}>Link interno</Button>
         {WORKFLOW_ACTIONS[status]?.map((a) => (
           <Button key={a.key} size="sm" variant={a.variant} onClick={() => void doAction(a.key)}>{a.label}</Button>
         ))}
@@ -286,38 +319,44 @@ export default function ArticlePage() {
 
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <Input label="Título" value={title} onChange={(e) => { setTitle(e.target.value); scheduleSave(); }} />
-          <Input label="Subtítulo (dek)" value={dek} onChange={(e) => { setDek(e.target.value); scheduleSave(); }} />
+          <Input label="Título" value={title} onChange={(e) => editField("title", setTitle, e.target.value)} />
+          <Input label="Subtítulo (dek)" value={dek} onChange={(e) => editField("dek", setDek, e.target.value)} />
 
-          <RichTextEditor
-            key={`${article?.id ?? "loading"}-${editorKey}`}
-            ref={editorRef}
-            document={doc}
-            onChange={(next) => { setDoc(next); scheduleSave(); }}
-            onRequestImage={() => setMediaPicker("image")}
-            onRequestGallery={() => setMediaPicker("gallery")}
-          />
+          {loaded ? (
+            <RichTextEditor
+              key={`${params.id}-${editorKey}`}
+              ref={editorRef}
+              document={doc}
+              onChange={(next) => editField("doc", setDoc, next)}
+              onRequestImage={() => setMediaPicker("image")}
+              onRequestGallery={() => setMediaPicker("gallery")}
+            />
+          ) : (
+            <div className="peg-editor peg-editor--loading" role="status" aria-live="polite">
+              Carregando o conteúdo do artigo…
+            </div>
+          )}
         </div>
 
         <aside style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="peg-card">
             <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <Input label="Slug" value={slug} onChange={(e) => { setSlug(e.target.value); scheduleSave(); }} />
-              <Input label="SEO — título" value={seoTitle} onChange={(e) => { setSeoTitle(e.target.value); scheduleSave(); }} />
-              <Textarea label="SEO — meta descrição" rows={3} value={seoDesc} onChange={(e) => { setSeoDesc(e.target.value); scheduleSave(); }} />
-              <Input label="Canonical (URL)" value={canonical} onChange={(e) => { setCanonical(e.target.value); scheduleSave(); }} />
+              <Input label="Slug" value={slug} onChange={(e) => editField("slug", setSlug, e.target.value)} />
+              <Input label="SEO — título" value={seoTitle} onChange={(e) => editField("seoTitle", setSeoTitle, e.target.value)} />
+              <Textarea label="SEO — meta descrição" rows={3} value={seoDesc} onChange={(e) => editField("seoDesc", setSeoDesc, e.target.value)} />
+              <Input label="Canonical (URL)" value={canonical} onChange={(e) => editField("canonical", setCanonical, e.target.value)} />
               <div style={{ display: "flex", gap: 8 }}>
-                <Select label="Robots index" value={robotsIndex} onChange={(e) => { setRobotsIndex(e.target.value); scheduleSave(); }}>
+                <Select label="Robots index" value={robotsIndex} onChange={(e) => editField("robotsIndex", setRobotsIndex, e.target.value)}>
                   <option value="index">index</option>
                   <option value="noindex">noindex</option>
                 </Select>
-                <Select label="Robots follow" value={robotsFollow} onChange={(e) => { setRobotsFollow(e.target.value); scheduleSave(); }}>
+                <Select label="Robots follow" value={robotsFollow} onChange={(e) => editField("robotsFollow", setRobotsFollow, e.target.value)}>
                   <option value="follow">follow</option>
                   <option value="nofollow">nofollow</option>
                 </Select>
               </div>
-              <Input label="Social — título" value={socialTitle} onChange={(e) => { setSocialTitle(e.target.value); scheduleSave(); }} />
-              <Textarea label="Social — descrição" rows={2} value={socialDesc} onChange={(e) => { setSocialDesc(e.target.value); scheduleSave(); }} />
+              <Input label="Social — título" value={socialTitle} onChange={(e) => editField("socialTitle", setSocialTitle, e.target.value)} />
+              <Textarea label="Social — descrição" rows={2} value={socialDesc} onChange={(e) => editField("socialDesc", setSocialDesc, e.target.value)} />
               <div>
                 <span className="peg-field__label">Social — imagem</span>
                 {socialImageId ? (
@@ -329,7 +368,7 @@ export default function ArticlePage() {
                   <Button size="sm" variant="secondary" onClick={() => setMediaPicker("social")}>Selecionar</Button>
                 )}
               </div>
-              <Select label="Categoria primária" value={primaryCategoryId} onChange={(e) => { setPrimaryCategoryId(e.target.value); scheduleSave(); }}>
+              <Select label="Categoria primária" value={primaryCategoryId} onChange={(e) => editField("primaryCategoryId", setPrimaryCategoryId, e.target.value)}>
                 <option value="">—</option>
                 {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
@@ -367,10 +406,10 @@ export default function ArticlePage() {
 
           <div className="peg-card">
             <div className="peg-card__body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <CheckboxGroup label="Categorias" items={cats.map((c) => ({ id: c.id, name: c.name }))} selected={selCats} onToggle={(id) => toggleSet(setSelCats, id)} />
-              <CheckboxGroup label="Tags" items={tags.map((t) => ({ id: t.id, name: t.name }))} selected={selTags} onToggle={(id) => toggleSet(setSelTags, id)} />
-              <CheckboxGroup label="Entidades" items={entities.map((e) => ({ id: e.id, name: e.name }))} selected={selEntities} onToggle={(id) => toggleSet(setSelEntities, id)} />
-              <CheckboxGroup label="Autores" items={authors.map((a) => ({ id: a.id, name: a.name }))} selected={selAuthors} onToggle={(id) => toggleSet(setSelAuthors, id)} />
+              <CheckboxGroup label="Categorias" items={cats.map((c) => ({ id: c.id, name: c.name }))} selected={selCats} onToggle={(id) => toggleSet("categories", setSelCats, id)} />
+              <CheckboxGroup label="Tags" items={tags.map((t) => ({ id: t.id, name: t.name }))} selected={selTags} onToggle={(id) => toggleSet("tags", setSelTags, id)} />
+              <CheckboxGroup label="Entidades" items={entities.map((e) => ({ id: e.id, name: e.name }))} selected={selEntities} onToggle={(id) => toggleSet("entities", setSelEntities, id)} />
+              <CheckboxGroup label="Autores" items={authors.map((a) => ({ id: a.id, name: a.name }))} selected={selAuthors} onToggle={(id) => toggleSet("authors", setSelAuthors, id)} />
             </div>
           </div>
 
@@ -419,15 +458,13 @@ export default function ArticlePage() {
         onClose={() => setMediaPicker(null)}
         onSelect={(ids) => {
           if (mediaPicker === "featured") {
-            setFeaturedMediaId(ids[0] ?? "");
-            scheduleSave();
+            editField("featuredMediaId", setFeaturedMediaId, ids[0] ?? "");
           } else if (mediaPicker === "gallery") {
             editorRef.current?.insertGallery(ids);
           } else if (mediaPicker === "image") {
             editorRef.current?.insertImage(ids[0] ?? "");
           } else if (mediaPicker === "social") {
-            setSocialImageId(ids[0] ?? "");
-            scheduleSave();
+            editField("socialImageId", setSocialImageId, ids[0] ?? "");
           }
           setMediaPicker(null);
         }}

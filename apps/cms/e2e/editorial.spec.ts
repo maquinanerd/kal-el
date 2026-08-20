@@ -13,7 +13,7 @@ test.describe("editorial lifecycle", () => {
     await page.getByRole("button", { name: "Novo artigo" }).first().click();
     await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 15_000 });
 
-    // wait for the article to finish loading before editing (avoid overwriting user input)
+    // this test edits after the load settles; the pre-load case has its own test below
     await expect(page.getByLabel("Título", { exact: true })).toHaveValue("Novo artigo", { timeout: 15_000 });
 
     const unique = `E2E ${Date.now()}`;
@@ -40,5 +40,43 @@ test.describe("editorial lifecycle", () => {
       data: { title: "x", status: "published" },
     });
     expect(res.status()).toBe(401);
+  });
+
+  test("text typed before the GET resolves is kept and saved", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("E-mail").fill("owner@kalel.dev");
+    await page.getByLabel("Senha").fill("kalel-dev-password-1");
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page).toHaveURL(/\/articles/, { timeout: 15_000 });
+
+    // hold the article GET open so the editor page renders while the request is still in flight
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const articleGet = /\/v1\/sites\/[^/]+\/articles\/[^/?]+(\?.*)?$/;
+    await page.route(articleGet, async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      await gate;
+      return route.continue();
+    });
+
+    await page.getByRole("button", { name: "Novo artigo" }).first().click();
+    await expect(page).toHaveURL(/\/articles\/[0-9a-f-]+/, { timeout: 15_000 });
+
+    // the body is not editable yet — it would be remounted when the response lands
+    await expect(page.getByText("Carregando o conteúdo do artigo")).toBeVisible();
+
+    const unique = `E2E pre-load ${Date.now()}`;
+    await page.getByLabel("Título", { exact: true }).fill(unique);
+
+    release();
+
+    // the response arrives now and must not overwrite what was typed
+    await expect(page.locator(".peg-editor__surface .ProseMirror")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel("Título", { exact: true })).toHaveValue(unique);
+
+    // and the edit made during loading still reaches the server
+    await expect(page.getByText("Salvo")).toBeVisible({ timeout: 15_000 });
+    await page.reload();
+    await expect(page.getByLabel("Título", { exact: true })).toHaveValue(unique, { timeout: 15_000 });
   });
 });

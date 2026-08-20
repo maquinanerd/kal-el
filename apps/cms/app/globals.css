@@ -13,6 +13,15 @@ a {
   border-radius: var(--peg-radius-md, 8px);
   background: var(--peg-surface, #fff);
 }
+.peg-editor--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 16px 20px;
+  font: var(--peg-font-body);
+  color: var(--peg-text-secondary, #555);
+}
 .peg-editor__toolbar {
   display: flex;
   align-items: center;
