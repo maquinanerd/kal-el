@@ -696,3 +696,68 @@ Fica o padrão, que vale para qualquer controle: **um controle que troca de esta
 que os dados chegam atravessa as cores dos dois estados.** No primário isso é perigoso
 porque fundo e texto andam em direções opostas e necessariamente se cruzam. Um snapshot
 de acessibilidade tirado durante a troca é um snapshot de um estado que ninguém projetou.
+
+---
+
+# Encerramento da camada visual
+
+Estado em que a camada de UI/UX é declarada concluída.
+
+```
+branch  claude/kal-el-visual-ux-final-ade7eb
+base    5de5b28   (entrega visual anterior)
+```
+
+## Gates, medidos no HEAD atual
+
+```
+pnpm -r typecheck   limpo (13 pacotes)
+pnpm -r lint        limpo (13 pacotes)
+next build          limpo, BUILD_ID emitido, pages/ completo
+API                 162 testes, 22 arquivos — verde
+e2e                 41 testes — verde
+axe                 AXE_TOTAL_VIOLATION_INSTANCES=0
+```
+
+Varredura visual contra o build de produção, 13 telas × 4 viewports × 2 temas:
+
+```
+captured 78 combinations
+actually measured     : 78
+nav errors            : 0
+shell did NOT render  : 0
+invisible CTAs        : 0
+unreachable content   : 0
+double scrollbars     : 0
+raw enums in UI       : 0
+SWEEP OK
+```
+
+## O que esta rodada encontrou
+
+Os seis P1 do segundo product review estavam fechados. Fechar a suíte e2e depois deles
+revelou mais três defeitos que nenhum dos dois reviews tinha alcançado, porque as
+expectativas desatualizadas dos testes os escondiam:
+
+| Defeito | Por que ninguém viu |
+|---|---|
+| Mídia não renderizava em nenhuma tela (`Cross-Origin-Resource-Policy: same-origin` no binário) | O fixture era um GIF de 13 bytes que passava na checagem de magic bytes e não podia ser decodificado por navegador nenhum — as asserções de API ficavam satisfeitas |
+| A página rolava 365px lateralmente a 390px (`.peg-sr-only` absoluto escapando do container de scroll da tabela) | Só aparece com dados realistas: títulos longos o bastante para a tabela passar de 779px |
+| A suíte inteira instável (teto de 600 req/min) | Um 429 chega ao navegador como um botão que não faz nada, indistinguível de regressão de produto |
+
+## Estado local
+
+```
+CMS     http://localhost:3000   (next start, build do HEAD atual)
+API     http://localhost:3001   (PostgreSQL local 55432)
+worker  up — outbox 0 pendentes, 0 vencidos, 0 falhos
+```
+
+Nada exposto fora da máquina. Nenhum deploy.
+
+## O que fica fora da camada visual
+
+Coleções de mídia, usage tracking, author platform, busca global, bulk actions, saved
+views, colunas customizáveis, assignments e times — produto de longo prazo, não defeito.
+E a rota de exclusão de artigo, que a API não expõe: apareceu quando a validação visual
+precisou limpar os artigos que criou e não teve como.
