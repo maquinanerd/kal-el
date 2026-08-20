@@ -44,6 +44,15 @@
   border-radius: var(--peg-radius-sm);
 }
 
+/* Wordmark "cms Kal-el" — Montserrat Alternates bold, o desenho oficial da marca. */
+.peg-wordmark {
+  font-family: var(--peg-font-brand);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--peg-text-primary);
+  white-space: nowrap;
+}
+
 .peg-btn {
   display: inline-flex;
   align-items: center;
@@ -775,8 +784,11 @@
   gap: var(--peg-space-2);
   padding: 0 var(--peg-space-4);
   border-bottom: 1px solid var(--peg-border);
-  font: var(--peg-font-label);
-  font-weight: 600;
+  font-family: var(--peg-font-brand);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--peg-text-primary);
 }
 .peg-sidebar__brand-dot {
   width: 18px;
@@ -842,6 +854,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--peg-font-brand);
   font-weight: 700;
   font-size: 13px;
   margin-bottom: var(--peg-space-2);

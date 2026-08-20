@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <AppLayout>
       <Sidebar
-        brand="Kal El"
+        brand="Kal-el"
         groups={navGroups}
         footer={
           <button type="button" className="peg-nav-item" onClick={signOutAndGo}>
