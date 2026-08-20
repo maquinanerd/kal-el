@@ -8,8 +8,8 @@ const PNG = Buffer.from(
 
 async function login(page: Page) {
   await page.goto("/login");
-  await page.getByLabel("E-mail").fill("owner@kalel.dev");
-  await page.getByLabel("Senha").fill("kalel-dev-password-1");
+  await page.getByLabel("E-mail", { exact: true }).fill("owner@kalel.dev");
+  await page.getByLabel("Senha", { exact: true }).fill("kalel-dev-password-1");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/articles/, { timeout: 15_000 });
 }

@@ -81,15 +81,23 @@
   --peg-focus-ring-danger: 0 0 0 3px rgba(185, 28, 28, 0.1);
 
   /* ── Typography ─────────────────────────────────────────────────── */
-  --peg-font-sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --peg-font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* Tipografia da marca Kal-El.
+     Poppins = interface e texto corrido; Montserrat = títulos; Montserrat Alternates = wordmark.
+     As --font-* vêm do next/font (apps Next) e caem no nome literal da família em qualquer
+     outro contexto — a pilha de sistema segue como último recurso. */
+  --peg-font-sans: var(--font-poppins, "Poppins"), system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --peg-font-heading: var(--font-montserrat, "Montserrat"), var(--peg-font-sans);
+  --peg-font-brand: var(--font-montserrat-alt, "Montserrat Alternates"), var(--peg-font-heading);
+  --peg-font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Roboto Mono", monospace;
 
   /* Valid font shorthand: <weight> <size>/<line-height> <family> */
-  --peg-font-display: 600 48px/56px var(--peg-font-sans);
-  --peg-font-h1: 600 36px/44px var(--peg-font-sans);
-  --peg-font-h2: 600 30px/38px var(--peg-font-sans);
-  --peg-font-h3: 600 24px/32px var(--peg-font-sans);
-  --peg-font-h4: 600 18px/26px var(--peg-font-sans);
+  --peg-font-display: 700 48px/56px var(--peg-font-heading);
+  --peg-font-h1: 700 36px/44px var(--peg-font-heading);
+  --peg-font-h2: 600 30px/38px var(--peg-font-heading);
+  --peg-font-h3: 600 24px/32px var(--peg-font-heading);
+  --peg-font-h4: 600 18px/26px var(--peg-font-heading);
+  /* Editorial scale — prose, not chrome, so it stays on the reading face. */
   --peg-font-dek: 400 18px/28px var(--peg-font-sans);
   --peg-font-quote: 500 20px/30px var(--peg-font-sans);
   --peg-font-read: 400 16px/27px var(--peg-font-sans); /* article body */

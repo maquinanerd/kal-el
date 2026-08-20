@@ -13,8 +13,8 @@ import { CREDENTIALS, STORAGE_STATE } from "./_surfaces";
  */
 setup("authenticate", async ({ page }) => {
   await page.goto("/login");
-  await page.getByLabel("E-mail").fill(CREDENTIALS.email);
-  await page.getByLabel("Senha").fill(CREDENTIALS.password);
+  await page.getByLabel("E-mail", { exact: true }).fill(CREDENTIALS.email);
+  await page.getByLabel("Senha", { exact: true }).fill(CREDENTIALS.password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/articles/, { timeout: 30_000 });
   await page.context().storageState({ path: STORAGE_STATE });

@@ -36,8 +36,8 @@ test.describe("editorial lifecycle", () => {
   // session applied this returned 403 (CSRF) instead of 401, which is a different control.
   test("keeps text typed the moment the article opens, even on a slow load", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel("E-mail").fill("owner@kalel.dev");
-    await page.getByLabel("Senha").fill("kalel-dev-password-1");
+    await page.getByLabel("E-mail", { exact: true }).fill("owner@kalel.dev");
+    await page.getByLabel("Senha", { exact: true }).fill("kalel-dev-password-1");
     await page.getByRole("button", { name: "Entrar" }).click();
     await expect(page).toHaveURL(/\/articles/, { timeout: 15_000 });
 

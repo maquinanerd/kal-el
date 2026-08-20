@@ -1,0 +1,272 @@
+/* Kal-el — tela de login (PEG design system).
+   Split reto: arte à esquerda, painel do formulário à direita. */
+
+.peg-login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(420px, 40%, 620px);
+  background: var(--peg-canvas);
+}
+
+/* --- lado da arte --- */
+
+/* A arte e um quadro de HQ: proporcao ~0.95 num campo que pode ficar bem mais largo.
+   Por isso ela e contida (nunca recortada) sobre o proprio papel do desenho, com um
+   teto de tamanho para nao inchar em monitor grande. */
+.peg-login__hero {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f6f6f4;
+  padding: clamp(var(--peg-space-4), 3vw, var(--peg-space-12));
+}
+
+.peg-login__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 760px;
+  max-height: 820px;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* --- painel do formulário --- */
+
+.peg-login__panel {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  padding: var(--peg-space-12) clamp(var(--peg-space-6), 4vw, var(--peg-space-16));
+  background: var(--peg-canvas);
+}
+
+.peg-login__content {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--peg-space-8);
+}
+
+/* --- marca --- */
+
+/* Tamanho e ritmo do wordmark; desenho (familia/peso/cor) vem de .peg-wordmark. */
+.peg-login__brand {
+  margin: 0 0 var(--peg-space-2);
+  font-size: clamp(38px, 4.4vw, 60px);
+  line-height: 1.15;
+}
+
+.peg-login__tagline {
+  margin: 0;
+  font: var(--peg-font-body-lg);
+  color: var(--peg-text-secondary);
+}
+
+/* --- cabeçalho do formulário --- */
+
+.peg-login__title {
+  margin: 0 0 var(--peg-space-1);
+  font: var(--peg-font-h4);
+  color: var(--peg-text-primary);
+}
+
+.peg-login__subtitle {
+  margin: 0;
+  font: var(--peg-font-body);
+  color: var(--peg-text-secondary);
+}
+
+/* --- formulário --- */
+
+.peg-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peg-space-5);
+}
+
+.peg-login__field {
+  gap: var(--peg-space-2);
+}
+
+.peg-login__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.peg-login__control .peg-input {
+  height: 48px;
+  padding-left: 54px;
+  border-radius: var(--peg-radius-lg);
+  border-color: var(--peg-border);
+  background: var(--peg-surface);
+}
+
+.peg-login__control .peg-input:focus {
+  border-color: var(--peg-accent);
+}
+
+.peg-login__control--password .peg-input {
+  padding-right: 46px;
+}
+
+.peg-login__icon {
+  position: absolute;
+  left: 17px;
+  display: flex;
+  color: var(--peg-text-tertiary);
+  pointer-events: none;
+}
+
+/* filete entre o ícone e o campo de texto */
+.peg-login__control::after {
+  content: "";
+  position: absolute;
+  left: 45px;
+  width: 1px;
+  height: 22px;
+  background: var(--peg-border);
+  pointer-events: none;
+}
+
+.peg-login__reveal {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--peg-radius-sm);
+  background: transparent;
+  color: var(--peg-text-tertiary);
+  cursor: pointer;
+}
+
+.peg-login__reveal:hover {
+  color: var(--peg-text-primary);
+  background: var(--peg-surface-muted);
+}
+
+.peg-login__options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peg-space-4);
+  flex-wrap: wrap;
+}
+
+.peg-login__options .peg-checkbox {
+  color: var(--peg-text-secondary);
+}
+
+.peg-login__options .peg-checkbox__box {
+  background: var(--peg-surface);
+}
+
+.peg-login__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--peg-font-label);
+  color: var(--peg-accent);
+  cursor: pointer;
+}
+
+.peg-login__link:hover {
+  color: var(--peg-accent-hover);
+  text-decoration: underline;
+}
+
+.peg-login__error {
+  display: flex;
+  align-items: center;
+  gap: var(--peg-space-2);
+  padding: var(--peg-space-3);
+  border: 1px solid var(--peg-danger);
+  border-radius: var(--peg-radius-md);
+  background: var(--peg-accent-soft);
+  font: var(--peg-font-body-sm);
+  color: var(--peg-danger);
+}
+
+/* Botão primário na cor de produto do Kal-el (o primary do PEG é neutro). */
+.peg-login__submit.peg-btn {
+  height: 52px;
+  width: 100%;
+  border-radius: var(--peg-radius-lg);
+  background: var(--peg-accent);
+  border-color: var(--peg-accent);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(200, 16, 46, 0.22);
+}
+
+.peg-login__submit.peg-btn:hover:not(:disabled) {
+  background: var(--peg-accent-hover);
+  border-color: var(--peg-accent-hover);
+  filter: none;
+}
+
+.peg-login__submit.peg-btn:disabled {
+  box-shadow: none;
+}
+
+.peg-login__footer {
+  margin: 0;
+  font: var(--peg-font-body);
+  color: var(--peg-text-secondary);
+}
+
+/* --- responsivo --- */
+
+@media (max-width: 900px) {
+  .peg-login {
+    grid-template-columns: 1fr;
+    grid-template-rows: 28dvh auto;
+  }
+
+  /* Na faixa horizontal do mobile a arte preenche: ai recortar e o certo.
+     Posicao absoluta porque height:100% nao resolve contra um item de grid
+     que so tem altura por estiramento. */
+  .peg-login__hero {
+    display: block;
+    position: relative;
+    padding: 0;
+  }
+
+  .peg-login__art {
+    position: absolute;
+    inset: 0;
+    max-width: none;
+    max-height: none;
+    object-fit: cover;
+    object-position: center 30%;
+  }
+
+  .peg-login__panel {
+    padding: var(--peg-space-10) var(--peg-space-6) var(--peg-space-12);
+    background: var(--peg-surface);
+  }
+
+  .peg-login__content {
+    max-width: 420px;
+    gap: var(--peg-space-6);
+  }
+}
+
+@media (max-width: 560px) {
+  .peg-login__panel {
+    padding: var(--peg-space-8) var(--peg-space-5) var(--peg-space-10);
+  }
+
+  .peg-login__brand {
+    font-size: 36px;
+  }
+}

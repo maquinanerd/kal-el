@@ -267,8 +267,8 @@ test.describe("P1-5 — identity is not a logout button", () => {
     const page = await context.newPage();
     try {
       await page.goto("http://localhost:3100/login");
-      await page.getByLabel("E-mail").fill(CREDENTIALS.email);
-      await page.getByLabel("Senha").fill(CREDENTIALS.password);
+      await page.getByLabel("E-mail", { exact: true }).fill(CREDENTIALS.email);
+      await page.getByLabel("Senha", { exact: true }).fill(CREDENTIALS.password);
       await page.getByRole("button", { name: "Entrar" }).click();
       await expect(page).toHaveURL(/\/articles/, { timeout: 30_000 });
 
