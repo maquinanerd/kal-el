@@ -329,6 +329,21 @@ export default function ArticlePage() {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  /**
+   * A status whose URL is public, or about to be.
+   *
+   * `slugIsLocked` decides this at LOAD time, from the status the article had then. It was
+   * never re-asked afterwards, so publishing without leaving the editor left the slug in
+   * automatic mode: the next character typed into the title silently rewrote the address
+   * of a piece that was already live. Locking is applied on the transition and is
+   * one-way - it never unlocks, because a slug the writer claimed by hand stays claimed.
+   */
+  function lockSlugIfPublic(nextStatus: string) {
+    if (nextStatus === "published" || nextStatus === "scheduled" || nextStatus === "archived") {
+      setSlugLocked(true);
+    }
+  }
+
   /** Title edits carry the slug along until someone claims it. */
   function onTitleChange(next: string) {
     setTitle(next);
@@ -362,6 +377,7 @@ export default function ArticlePage() {
     try {
       const updated = await scheduleArticle(activeSiteId, params.id, when.toISOString(), key);
       setStatus(updated.status);
+      lockSlugIfPublic(updated.status);
       setVersion(updated.version);
       setScheduledAt(updated.scheduledAt ?? when.toISOString());
     } catch (err) {
@@ -381,6 +397,7 @@ export default function ArticlePage() {
     try {
       const updated = await articleAction(activeSiteId, params.id, action, key, note);
       setStatus(updated.status);
+      lockSlugIfPublic(updated.status);
       setVersion(updated.version);
       setScheduledAt(updated.scheduledAt ?? null);
       // the response already carries the note this transition just wrote
