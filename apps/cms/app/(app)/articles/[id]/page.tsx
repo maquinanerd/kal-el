@@ -287,9 +287,21 @@ export default function ArticlePage() {
 
   if (loadError) return <p className="peg-field__error">{loadError}</p>;
 
+  // Nothing is editable until the article arrives. Showing the fields earlier means
+  // showing an empty document that is not the article — and anything typed into it was
+  // silently overwritten the moment the response landed.
+  if (!article) {
+    return (
+      <>
+        <PageHead title="Carregando…" description="Editor" />
+        <p className="peg-table__muted">Carregando artigo…</p>
+      </>
+    );
+  }
+
   return (
     <>
-      <PageHead title={article?.title ?? "Carregando…"} description={saveState ? SAVE_LABEL[saveState] : "Editor"} />
+      <PageHead title={article.title} description={saveState ? SAVE_LABEL[saveState] : "Editor"} />
 
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       {saveError && saveState === "error" && <Alert tone="danger">Falha ao salvar: {saveError}</Alert>}
@@ -310,7 +322,7 @@ export default function ArticlePage() {
           <Input label="Subtítulo (dek)" value={dek} onChange={(e) => { setDek(e.target.value); scheduleSave(); }} />
 
           <RichTextEditor
-            key={`${article?.id ?? "loading"}-${editorKey}`}
+            key={`${article.id}-${editorKey}`}
             ref={editorRef}
             document={doc}
             onChange={(next) => { setDoc(next); scheduleSave(); }}
