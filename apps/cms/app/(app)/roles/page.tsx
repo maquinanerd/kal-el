@@ -20,6 +20,9 @@ import { ApiError, createRole, listPermissions, listRoles, type PermissionInfo, 
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [available, setAvailable] = useState<PermissionInfo[]>([]);
+  /* An empty `available` means two different things: the fetch has not answered yet, or
+     there is genuinely nothing to grant. Only the second one may disable the button. */
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Role | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -39,6 +42,8 @@ export default function RolesPage() {
       setError(
         err instanceof ApiError ? (err.status === 403 ? "Sem permissão para gerenciar papéis" : err.message) : "Falha ao carregar",
       );
+    } finally {
+      setLoaded(true);
     }
   }, []);
 
@@ -85,7 +90,7 @@ export default function RolesPage() {
         title="Papéis"
         description="Quem pode fazer o quê. Papéis são globais e atribuídos por site."
         actions={
-          <Button variant="primary" onClick={() => setComposerOpen(true)} disabled={available.length === 0}>
+          <Button variant="primary" onClick={() => setComposerOpen(true)} disabled={loaded && available.length === 0}>
             Novo papel
           </Button>
         }
