@@ -46,6 +46,9 @@ export default function LoginPage() {
     <main className="peg-login">
       <div className="peg-login__hero">
         <img className="peg-login__art" src="/login-hero.webp" alt="" fetchPriority="high" />
+        <p className="peg-login__caption">
+          <span className="peg-login__caption-initial">A</span>lguém precisa contar essa história...
+        </p>
       </div>
 
       <section className="peg-login__panel">
@@ -135,7 +138,12 @@ export default function LoginPage() {
               </p>
             )}
 
-            <Button type="submit" variant="primary" className="peg-login__submit" disabled={submitting}>
+            <Button
+              type="submit"
+              variant="primary"
+              className="peg-login__submit"
+              disabled={submitting}
+            >
               {submitting ? "Entrando…" : "Entrar"}
             </Button>
           </form>
