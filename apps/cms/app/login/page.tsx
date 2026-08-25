@@ -51,14 +51,8 @@ export default function LoginPage() {
       <section className="peg-login__panel">
         <div className="peg-login__content">
           <header>
-            <p className="peg-login__brand peg-wordmark">cms Kal-el</p>
-            <p className="peg-login__tagline">Content Management System</p>
+            <p className="peg-login__brand peg-wordmark">CMS Kal-El</p>
           </header>
-
-          <div>
-            <h1 className="peg-login__title">Bem-vindo de volta</h1>
-            <p className="peg-login__subtitle">Entre para continuar no seu painel.</p>
-          </div>
 
           <form className="peg-login__form" onSubmit={onSubmit}>
             <div className="peg-field peg-login__field">
@@ -145,8 +139,6 @@ export default function LoginPage() {
               {submitting ? "Entrando…" : "Entrar"}
             </Button>
           </form>
-
-          <p className="peg-login__footer">Acesso restrito à equipe editorial do Kal-el.</p>
         </div>
       </section>
     </main>
