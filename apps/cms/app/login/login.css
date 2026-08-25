@@ -17,6 +17,7 @@
 .peg-login__hero {
   display: grid;
   place-items: center;
+  position: relative;
   overflow: hidden;
   background: #f6f6f4;
   padding: clamp(var(--peg-space-4), 3vw, var(--peg-space-12));
@@ -30,6 +31,31 @@
   max-height: 820px;
   object-fit: contain;
   object-position: center;
+}
+
+/* A headline strip makes the illustration read as an editorial comic panel,
+   while remaining a real text element rather than text baked into the artwork. */
+.peg-login__caption {
+  position: absolute;
+  top: clamp(16px, 2.5vw, 40px);
+  left: clamp(16px, 2.5vw, 40px);
+  z-index: 1;
+  margin: 0;
+  padding: 9px 14px;
+  border: 3px solid #050505;
+  background: #fffef8;
+  color: #050505;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+  font-size: clamp(11px, 1.2vw, 16px);
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  transform: rotate(-0.5deg);
+}
+
+.peg-login__caption-initial {
+  font-size: 1.5em;
+  line-height: 0;
 }
 
 /* --- painel do formulário --- */
@@ -258,6 +284,13 @@
     display: block;
     position: relative;
     padding: 0;
+  }
+
+  .peg-login__caption {
+    top: 16px;
+    left: 16px;
+    padding: 8px 12px;
+    font-size: 11px;
   }
 
   .peg-login__art {
