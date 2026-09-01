@@ -4,6 +4,7 @@ import { z } from "zod";
 extendZodWithOpenApi(z);
 import { apiErrorSchema } from "./common";
 import {
+  articleListQuerySchema,
   articleSchema,
   articleSummarySchema,
   authorSchema,
@@ -211,7 +212,10 @@ function registerCorePaths() {
     method: "get",
     path: "/v1/sites/{siteId}/articles",
     summary: "List articles",
-    request: { params: z.object({ siteId: z.string().uuid() }) },
+    request: {
+      params: z.object({ siteId: z.string().uuid() }),
+      query: articleListQuerySchema,
+    },
     responses: {
       200: { description: "list", content: { "application/json": { schema: z.object({ data: z.object({ items: z.array(articleSummarySchema) }) }) } } },
     },
