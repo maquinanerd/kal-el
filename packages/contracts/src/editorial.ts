@@ -240,7 +240,22 @@ export const articleListQuerySchema = z.object({
    */
   slug: z.string().max(300).optional(),
   q: z.string().max(200).optional(),
+  /**
+   * Sort order. `updated` (the default) is the newsroom's view: what changed last.
+   * `published` is the reader's: newest publication first, unpublished last.
+   *
+   * A delivery front end needs the second. An imported archive is written in one
+   * afternoon, so in update order a migration batch — or a typo fixed in a 2019 story —
+   * lands on the front page, above the news of the day.
+   */
+  order: z.enum(["updated", "published"]).default("updated"),
   cursor: z.string().max(256).optional(),
+  /**
+   * Offset paging, for listings that must address page N directly and say how many
+   * pages exist (a numbered pagination). A request with `offset` gets a `total`. It cannot
+   * be combined with `cursor`.
+   */
+  offset: z.coerce.number().int().min(0).max(100_000).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
 
