@@ -43,6 +43,13 @@
       "when": 1787172838876,
       "tag": "0005_hot_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789081569881,
+      "tag": "0006_nasty_namorita",
+      "breakpoints": true
     }
   ]
 }

@@ -666,17 +666,41 @@ export async function updateArticle(
   return articleDto(db, updated);
 }
 
-export function encodeCursor(row: ArticleRow): string {
-  return Buffer.from(`${row.updatedAt.toISOString()}|${row.id}`).toString("base64url");
+export type ArticleListOrder = "updated" | "published";
+
+/**
+ * Keyset cursors, one shape per order, so a cursor minted under one order can never be
+ * replayed under the other and silently skip or repeat rows.
+ *
+ *   updated:   base64url("<updatedAt ISO>|<id>")        — unchanged, so existing clients keep working
+ *   published: base64url("p|<publishedAt ISO or ''>|<id>") — '' is an unpublished row
+ */
+export function encodeCursor(row: ArticleRow, order: ArticleListOrder = "updated"): string {
+  const raw = order === "published" ? `p|${row.publishedAt?.toISOString() ?? ""}|${row.id}` : `${row.updatedAt.toISOString()}|${row.id}`;
+  return Buffer.from(raw).toString("base64url");
 }
 
-export function decodeCursor(cursor: string): { updatedAt: Date; id: string } {
-  const [iso, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
-  if (!iso || !id || Number.isNaN(Date.parse(iso))) {
+export type DecodedCursor =
+  | { order: "updated"; updatedAt: Date; id: string }
+  | { order: "published"; publishedAt: Date | null; id: string };
+
+export function decodeCursor(cursor: string, order: ArticleListOrder = "updated"): DecodedCursor {
+  const parts = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+  if (order === "published") {
+    const [prefix, iso, id] = parts;
+    if (prefix !== "p" || iso === undefined || !id || (iso !== "" && Number.isNaN(Date.parse(iso)))) {
+      throw badRequest("invalid cursor for order=published");
+    }
+    return { order, publishedAt: iso === "" ? null : new Date(iso), id };
+  }
+  const [iso, id] = parts;
+  if (parts.length !== 2 || !iso || !id || Number.isNaN(Date.parse(iso))) {
     throw badRequest("invalid cursor");
   }
-  return { updatedAt: new Date(iso), id };
+  return { order, updatedAt: new Date(iso), id };
 }
+
+type Condition = ReturnType<typeof and> | ReturnType<typeof eq> | ReturnType<typeof ilike> | ReturnType<typeof inArray> | ReturnType<typeof or>;
 
 export async function listArticles(
   db: Db,
@@ -690,13 +714,16 @@ export async function listArticles(
     externalKey?: string;
     slug?: string;
     q?: string;
+    order?: ArticleListOrder;
     cursor?: string;
+    offset?: number;
     limit: number;
   },
 ) {
-  const conditions: (ReturnType<typeof eq> | ReturnType<typeof ilike> | ReturnType<typeof inArray> | ReturnType<typeof or> | undefined)[] = [
-    eq(articles.siteId, siteId),
-  ];
+  const order: ArticleListOrder = q.order ?? "updated";
+  if (q.cursor && q.offset !== undefined) throw badRequest("cursor and offset cannot be combined");
+
+  const conditions: (Condition | undefined)[] = [eq(articles.siteId, siteId)];
   if (q.status) conditions.push(eq(articles.status, q.status as never));
   if (q.type) conditions.push(eq(articles.type, q.type as never));
   if (q.externalKey) conditions.push(eq(articles.externalKey, q.externalKey));
@@ -704,84 +731,131 @@ export async function listArticles(
   if (q.slug) conditions.push(eq(articles.slug, q.slug));
   if (q.q) conditions.push(ilike(articles.title, `%${q.q}%`));
 
+  /*
+   * Relation filters as subqueries. They used to load every matching article id into the
+   * process and send them back as an `IN (…)` list: fine for a demo corpus, a list of
+   * several thousand UUIDs per request for a desk of an imported archive.
+   */
   if (q.authorId) {
-    const ids = await db.select({ articleId: articleAuthors.articleId }).from(articleAuthors).where(eq(articleAuthors.authorId, q.authorId));
-    conditions.push(inArray(articles.id, ids.map((r) => r.articleId)));
+    conditions.push(inArray(articles.id, db.select({ id: articleAuthors.articleId }).from(articleAuthors).where(eq(articleAuthors.authorId, q.authorId))));
   }
   if (q.categoryId) {
-    const ids = await db.select({ articleId: articleCategories.articleId }).from(articleCategories).where(eq(articleCategories.categoryId, q.categoryId));
-    conditions.push(inArray(articles.id, ids.map((r) => r.articleId)));
-  }
-  if (q.tagId) {
-    const ids = await db.select({ articleId: articleTags.articleId }).from(articleTags).where(eq(articleTags.tagId, q.tagId));
-    conditions.push(inArray(articles.id, ids.map((r) => r.articleId)));
-  }
-
-  if (q.cursor) {
-    const { updatedAt, id } = decodeCursor(q.cursor);
     conditions.push(
-      or(
-        sql`(${articles.updatedAt}, ${articles.id}) < (${updatedAt}, ${id})`,
-        sql`(${articles.updatedAt} = ${updatedAt} AND ${articles.id} < ${id})`,
-      ),
+      inArray(articles.id, db.select({ id: articleCategories.articleId }).from(articleCategories).where(eq(articleCategories.categoryId, q.categoryId))),
     );
   }
+  if (q.tagId) {
+    conditions.push(inArray(articles.id, db.select({ id: articleTags.articleId }).from(articleTags).where(eq(articleTags.tagId, q.tagId))));
+  }
 
-  const rows = await db
-    .select()
-    .from(articles)
-    .where(and(...conditions))
-    .orderBy(desc(articles.updatedAt), desc(articles.id))
-    .limit(q.limit + 1);
+  // Everything above filters; the cursor only positions. `total` counts the filter.
+  const filter = and(...conditions);
+
+  const positioned: (Condition | undefined)[] = [...conditions];
+  if (q.cursor) {
+    const c = decodeCursor(q.cursor, order);
+    if (c.order === "updated") {
+      positioned.push(
+        or(
+          sql`(${articles.updatedAt}, ${articles.id}) < (${c.updatedAt}, ${c.id})`,
+          sql`(${articles.updatedAt} = ${c.updatedAt} AND ${articles.id} < ${c.id})`,
+        ),
+      );
+    } else if (c.publishedAt) {
+      // Newer-first among published rows, then every unpublished row (NULLS LAST).
+      positioned.push(
+        or(
+          sql`${articles.publishedAt} < ${c.publishedAt}`,
+          sql`(${articles.publishedAt} = ${c.publishedAt} AND ${articles.id} < ${c.id})`,
+          sql`${articles.publishedAt} IS NULL`,
+        ),
+      );
+    } else {
+      positioned.push(sql`(${articles.publishedAt} IS NULL AND ${articles.id} < ${c.id})`);
+    }
+  }
+
+  const ordering =
+    order === "published"
+      ? [sql`${articles.publishedAt} DESC NULLS LAST`, desc(articles.id)]
+      : [desc(articles.updatedAt), desc(articles.id)];
+
+  const [rows, counted] = await Promise.all([
+    db
+      .select()
+      .from(articles)
+      .where(and(...positioned))
+      .orderBy(...ordering)
+      .limit(q.limit + 1)
+      .offset(q.offset ?? 0),
+    q.offset !== undefined
+      ? db.select({ n: sql<number>`count(*)::int` }).from(articles).where(filter)
+      : Promise.resolve(null),
+  ]);
 
   const hasMore = rows.length > q.limit;
   const items = hasMore ? rows.slice(0, q.limit) : rows;
-  const nextCursor = hasMore && items.length > 0 ? encodeCursor(items[items.length - 1] as ArticleRow) : null;
+  const nextCursor = hasMore && items.length > 0 ? encodeCursor(items[items.length - 1] as ArticleRow, order) : null;
 
   /**
-   * Author and category ids for the whole page, in two queries rather than 2N.
+   * Every relation id for the whole page, in four queries rather than 4N.
    *
-   * `summaryDto` returned empty arrays for every relation, so a list could not show who
-   * wrote a piece or which desk it belongs to - the article index was reduced to title,
-   * status and a timestamp, which is not enough to run an editorial day. Batched by
-   * article id; `relationIds` stays the per-article path used by the detail view.
+   * `summaryDto` returns empty arrays for all four. Authors and categories were filled in
+   * here first; tags and entities were left behind, which is worse than the original bug
+   * rather than a smaller version of it: `articleSummarySchema` declares both, so a client
+   * read `"tags": []` and concluded the article had none. Every field the summary schema
+   * declares is now populated, or it should not be in the schema.
+   *
+   * Batched by article id; `relationIds` stays the per-article path used by the detail view.
    */
   const ids = items.map((r) => r.id);
-  const [authorRows, categoryRows] = ids.length
+  const [authorRows, categoryRows, tagRows, entityRows] = ids.length
     ? await Promise.all([
         db
-          .select({ articleId: articleAuthors.articleId, authorId: articleAuthors.authorId })
+          .select({ articleId: articleAuthors.articleId, relatedId: articleAuthors.authorId })
           .from(articleAuthors)
           .where(inArray(articleAuthors.articleId, ids))
           .orderBy(asc(articleAuthors.position)),
         db
-          .select({ articleId: articleCategories.articleId, categoryId: articleCategories.categoryId })
+          .select({ articleId: articleCategories.articleId, relatedId: articleCategories.categoryId })
           .from(articleCategories)
           .where(inArray(articleCategories.articleId, ids)),
+        db
+          .select({ articleId: articleTags.articleId, relatedId: articleTags.tagId })
+          .from(articleTags)
+          .where(inArray(articleTags.articleId, ids)),
+        db
+          .select({ articleId: articleEntities.articleId, relatedId: articleEntities.entityId })
+          .from(articleEntities)
+          .where(inArray(articleEntities.articleId, ids)),
       ])
-    : [[], []];
+    : [[], [], [], []];
 
-  const authorsBy = new Map<string, string[]>();
-  for (const r of authorRows) {
-    const list = authorsBy.get(r.articleId);
-    if (list) list.push(r.authorId);
-    else authorsBy.set(r.articleId, [r.authorId]);
-  }
-  const categoriesBy = new Map<string, string[]>();
-  for (const r of categoryRows) {
-    const list = categoriesBy.get(r.articleId);
-    if (list) list.push(r.categoryId);
-    else categoriesBy.set(r.articleId, [r.categoryId]);
-  }
+  const groupByArticle = (rel: { articleId: string; relatedId: string }[]) => {
+    const by = new Map<string, string[]>();
+    for (const r of rel) {
+      const list = by.get(r.articleId);
+      if (list) list.push(r.relatedId);
+      else by.set(r.articleId, [r.relatedId]);
+    }
+    return by;
+  };
+
+  const authorsBy = groupByArticle(authorRows);
+  const categoriesBy = groupByArticle(categoryRows);
+  const tagsBy = groupByArticle(tagRows);
+  const entitiesBy = groupByArticle(entityRows);
 
   return {
     items: items.map((row) => ({
       ...summaryDto(row),
       authors: authorsBy.get(row.id) ?? [],
       categories: categoriesBy.get(row.id) ?? [],
+      tags: tagsBy.get(row.id) ?? [],
+      entities: entitiesBy.get(row.id) ?? [],
     })),
     nextCursor,
-    total: undefined,
+    total: counted ? (counted[0]?.n ?? 0) : undefined,
   };
 }
 

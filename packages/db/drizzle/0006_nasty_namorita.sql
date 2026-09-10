@@ -1,0 +1,1 @@
+CREATE INDEX "articles_site_status_published_idx" ON "articles" USING btree ("site_id","status","published_at" DESC NULLS LAST,"id" DESC NULLS LAST);
