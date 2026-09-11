@@ -230,6 +230,15 @@ export const articleListQuerySchema = z.object({
   categoryId: uuidSchema.optional(),
   tagId: uuidSchema.optional(),
   externalKey: z.string().max(256).optional(),
+  /**
+   * Exact-match filter on the published slug.
+   *
+   * A delivery frontend serves `/{category}/{slug}` and has only the slug to work with;
+   * without this it has to page the whole corpus to find one article, which is O(n) per
+   * request and gets slower as the archive grows. `q` does not substitute: it is a
+   * substring match on the title, not on the slug.
+   */
+  slug: z.string().max(300).optional(),
   q: z.string().max(200).optional(),
   cursor: z.string().max(256).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
