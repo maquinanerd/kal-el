@@ -217,7 +217,32 @@ function registerCorePaths() {
       query: articleListQuerySchema,
     },
     responses: {
-      200: { description: "list", content: { "application/json": { schema: z.object({ data: z.object({ items: z.array(articleSummarySchema) }) }) } } },
+      200: {
+        description: "list",
+        content: {
+          "application/json": {
+            schema: z.object({
+              data: z.object({
+                items: z.array(articleSummarySchema),
+                nextCursor: z
+                  .string()
+                  .nullable()
+                  .describe("Keyset cursor for the next page under the same `order`; null on the last page."),
+                total: z
+                  .number()
+                  .int()
+                  .nonnegative()
+                  .optional()
+                  .describe("How many articles match the filters. Present only when `offset` is sent."),
+              }),
+            }),
+          },
+        },
+      },
+      400: {
+        description: "invalid query: a malformed cursor, a cursor minted under the other `order`, or `cursor` combined with `offset`",
+        content: { "application/json": { schema: apiErrorSchema } },
+      },
     },
   });
 

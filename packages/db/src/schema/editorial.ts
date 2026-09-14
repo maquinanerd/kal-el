@@ -158,6 +158,13 @@ export const articles = pgTable(
     index("articles_site_status_idx").on(t.siteId, t.status),
     index("articles_site_updated_idx").on(t.siteId, t.updatedAt),
     /**
+     * Reader order: `status = 'published'` newest publication first — the query every
+     * delivery listing makes (`order=published`). Without it the planner sorts the whole
+     * published set of a site on each page, and an imported archive is tens of thousands
+     * of rows.
+     */
+    index("articles_site_status_published_idx").on(t.siteId, t.status, t.publishedAt.desc(), t.id.desc()),
+    /**
      * The scheduler's due query is `status = 'scheduled' AND scheduled_at <= now()`
      * ordered by `scheduled_at`, and it is cross-tenant - there is no `site_id` in it.
      * `articles_site_status_idx` leads with `site_id`, so it cannot serve that query at
