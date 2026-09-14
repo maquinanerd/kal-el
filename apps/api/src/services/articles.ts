@@ -762,22 +762,30 @@ export async function listArticles(
         ),
       );
     } else if (c.publishedAt) {
-      // Newer-first among published rows, then every unpublished row (NULLS LAST).
+      // After (publishedAt, id) in `published_at DESC NULLS LAST, id DESC NULLS LAST`: an
+      // earlier publication, the same instant with a lower id, or any unpublished row, since
+      // those sort last. A NULL never satisfies the row comparison, hence the second arm.
       positioned.push(
         or(
-          sql`${articles.publishedAt} < ${c.publishedAt}`,
-          sql`(${articles.publishedAt} = ${c.publishedAt} AND ${articles.id} < ${c.id})`,
+          sql`(${articles.publishedAt}, ${articles.id}) < (${c.publishedAt}, ${c.id})`,
           sql`${articles.publishedAt} IS NULL`,
         ),
       );
     } else {
+      // Inside the unpublished group, which sorts last and by id alone.
       positioned.push(sql`(${articles.publishedAt} IS NULL AND ${articles.id} < ${c.id})`);
     }
   }
 
+  /*
+   * `published` matches `articles_site_status_published_idx` key for key, NULLS LAST on both.
+   * `desc()` renders a bare `DESC`, which PostgreSQL reads as NULLS FIRST, and the planner
+   * does not equate the two even on the NOT NULL id: it read the index for `published_at`
+   * only and sorted every page by id on top. The cursor condition above follows this order.
+   */
   const ordering =
     order === "published"
-      ? [sql`${articles.publishedAt} DESC NULLS LAST`, desc(articles.id)]
+      ? [sql`${articles.publishedAt} DESC NULLS LAST`, sql`${articles.id} DESC NULLS LAST`]
       : [desc(articles.updatedAt), desc(articles.id)];
 
   const [rows, counted] = await Promise.all([
