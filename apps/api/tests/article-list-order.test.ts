@@ -151,6 +151,39 @@ describe("article list: publication order, offset paging, relations", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("answers 400, not 500, to a cursor whose id is not a UUID, under either order", async () => {
+    // An unvalidated id reached PostgreSQL, whose uuid cast (22P02) surfaced as a 500. The
+    // refusal must be indistinguishable from any other invalid cursor under that order.
+    const b64 = (raw: string) => Buffer.from(raw, "utf8").toString("base64url");
+    const cases = [
+      {
+        order: "published",
+        malformed: [
+          b64("p|2026-09-09T10:00:00.000Z|not-a-uuid"),
+          b64("p||not-a-uuid"),
+          b64("p|2026-09-09T10:00:00.000Z|00000000-0000-0000-0000-00000000000z"),
+        ],
+      },
+      {
+        order: "updated",
+        malformed: [
+          b64("2026-09-09T10:00:00.000Z|not-a-uuid"),
+          b64("2026-09-09T10:00:00.000Z|00000000-0000-0000-0000-00000000000z"),
+        ],
+      },
+    ];
+    for (const { order, malformed } of cases) {
+      const reference = await list(`order=${order}&cursor=${b64("garbage")}`);
+      expect(reference.statusCode).toBe(400);
+      for (const cursor of malformed) {
+        const res = await list(`order=${order}&cursor=${cursor}`);
+        expect(res.statusCode, `order=${order}, cursor ${cursor}`).toBe(400);
+        expect(res.json().error.code).toBe(reference.json().error.code);
+        expect(res.json().error.message).toBe(reference.json().error.message);
+      }
+    }
+  });
+
   it("addresses a page directly with offset, and says how many there are", async () => {
     const res = await list("status=published&order=published&limit=1&offset=1");
     expect(res.statusCode).toBe(200);

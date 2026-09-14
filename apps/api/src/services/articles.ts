@@ -15,7 +15,7 @@ import {
   tags,
 } from "@kal-el/db/schema";
 import type { Article, ArticleDocumentV2, ArticleStatus, ArticleSummary, CreateArticleBody, SeoMetadata, UpdateArticleBody, WorkflowNote } from "@kal-el/contracts";
-import { migrateDocumentToV2, QUALITY_FLAGS } from "@kal-el/contracts";
+import { migrateDocumentToV2, QUALITY_FLAGS, uuidSchema } from "@kal-el/contracts";
 
 import { badRequest, conflict, forbidden, invalidTransition, isUniqueViolation, notFound, pgConstraint, versionConflict } from "../plugins/errors.js";
 import { auditActorFields, writeAudit } from "../plugins/audit.js";
@@ -684,17 +684,24 @@ export type DecodedCursor =
   | { order: "updated"; updatedAt: Date; id: string }
   | { order: "published"; publishedAt: Date | null; id: string };
 
+/**
+ * A cursor is client input, so every part is checked, the id included: an id that is not a
+ * UUID used to reach PostgreSQL, whose uuid cast (22P02) surfaced as a 500. Any malformed
+ * cursor now gets the same 400 for its order.
+ */
+const isCursorId = (id: string | undefined): id is string => uuidSchema.safeParse(id).success;
+
 export function decodeCursor(cursor: string, order: ArticleListOrder = "updated"): DecodedCursor {
   const parts = Buffer.from(cursor, "base64url").toString("utf8").split("|");
   if (order === "published") {
     const [prefix, iso, id] = parts;
-    if (prefix !== "p" || iso === undefined || !id || (iso !== "" && Number.isNaN(Date.parse(iso)))) {
+    if (parts.length !== 3 || prefix !== "p" || iso === undefined || !isCursorId(id) || (iso !== "" && Number.isNaN(Date.parse(iso)))) {
       throw badRequest("invalid cursor for order=published");
     }
     return { order, publishedAt: iso === "" ? null : new Date(iso), id };
   }
   const [iso, id] = parts;
-  if (parts.length !== 2 || !iso || !id || Number.isNaN(Date.parse(iso))) {
+  if (parts.length !== 2 || !iso || !isCursorId(id) || Number.isNaN(Date.parse(iso))) {
     throw badRequest("invalid cursor");
   }
   return { order, updatedAt: new Date(iso), id };
