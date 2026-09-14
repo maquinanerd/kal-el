@@ -24,6 +24,8 @@ RUN pnpm install --prod --frozen-lockfile --filter "@kal-el/worker..." --config.
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+# The bundle is ESM; without a package.json saying so, Node parses it twice on every boot.
+RUN echo '{"type":"module"}' > package.json
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/apps/worker/dist ./dist
 CMD ["node", "dist/worker.js"]
