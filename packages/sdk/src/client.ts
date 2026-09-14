@@ -148,7 +148,8 @@ export class KalElClient {
     return this.request("GET", `/v1/sites/${siteId}/articles/${articleId}`);
   }
 
-  listArticles(siteId: string, query: Record<string, string | number | undefined> = {}): Promise<{ items: ArticleSummary[]; nextCursor: string | null }> {
+  /** `nextCursor` is null on the last page; `total` is present only when `offset` is sent. */
+  listArticles(siteId: string, query: Record<string, string | number | undefined> = {}): Promise<{ items: ArticleSummary[]; nextCursor: string | null; total?: number }> {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) {
       if (v !== undefined) qs.set(k, String(v));
