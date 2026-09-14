@@ -25,8 +25,12 @@ ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build /app/apps/cms/.next/standalone ./
 COPY --from=build /app/apps/cms/.next/static ./apps/cms/.next/static
-# no `public/` directory exists yet; add a COPY for it here if one is introduced, or the
-# assets in it will simply 404 with nothing saying why
+# `public/` is NOT part of the standalone trace: Next only traces what the server
+# imports, and a static asset referenced by a `src="/..."` string is not an import.
+# It has to be copied explicitly, next to `.next/static`, or every asset in it 404s
+# with nothing saying why — which is exactly what happened between 2026-08-20
+# (when `public/` was added with the login art and the brand marks) and this commit.
+COPY --from=build /app/apps/cms/public ./apps/cms/public
 EXPOSE 3000
 # standalone emits the server at the traced path of the app that produced it
 CMD ["node", "apps/cms/server.js"]
