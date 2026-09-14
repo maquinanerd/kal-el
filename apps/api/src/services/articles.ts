@@ -688,6 +688,7 @@ export async function listArticles(
     categoryId?: string;
     tagId?: string;
     externalKey?: string;
+    slug?: string;
     q?: string;
     cursor?: string;
     limit: number;
@@ -699,6 +700,8 @@ export async function listArticles(
   if (q.status) conditions.push(eq(articles.status, q.status as never));
   if (q.type) conditions.push(eq(articles.type, q.type as never));
   if (q.externalKey) conditions.push(eq(articles.externalKey, q.externalKey));
+  // Exact match, not ilike: a slug identifies exactly one article per site.
+  if (q.slug) conditions.push(eq(articles.slug, q.slug));
   if (q.q) conditions.push(ilike(articles.title, `%${q.q}%`));
 
   if (q.authorId) {
