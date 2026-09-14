@@ -57,14 +57,20 @@ The target environment described by the repository is a VPS with a panel-managed
 
 | Service | Base | Build | Runtime contents | CMD |
 |---|---|---|---|---|
-| api | `node:22-alpine` | `pnpm install --frozen-lockfile`, `pnpm --filter @kal-el/api build` (tsup) | `apps/api/dist` → `./dist`, **`packages/db/drizzle` → `./drizzle`** | `node dist/server.js` |
-| worker | `node:22-alpine` | `pnpm --filter @kal-el/worker build` | `apps/worker/dist` → `./dist` — **no migration folder** | `node dist/worker.js` |
+| api | `node:22-alpine` | `pnpm install --frozen-lockfile`, `pnpm --filter @kal-el/api build` (tsup, workspace packages bundled in) | `apps/api/dist` → `./dist`, **`packages/db/drizzle` → `./drizzle`**, production `node_modules` (hoisted, `@kal-el/api...` only) | `node dist/server.js` |
+| worker | `node:22-alpine` | `pnpm --filter @kal-el/worker build` (tsup, workspace packages bundled in) | `apps/worker/dist` → `./dist`, production `node_modules` (hoisted, `@kal-el/worker...` only) — **no migration folder** | `node dist/worker.js` |
 | cms | `node:22-alpine` | `ARG NEXT_PUBLIC_API_BASE_URL`, `ENV NEXT_OUTPUT=standalone`, `pnpm --filter @kal-el/cms build` | `.next/standalone` → `./`, `.next/static` | `node apps/cms/server.js` |
 
 All three set `ENV NODE_ENV=production`.
 
-Two consequences worth stating:
+Three consequences worth stating:
 
+- **The API and worker images carry a production `node_modules`.** tsup compiles the
+  `@kal-el/*` workspace packages into the bundle (they publish TypeScript source, which Node
+  cannot load) and leaves every third-party package external. Before this was stated, the
+  images shipped `dist` alone and both processes died on boot with `ERR_MODULE_NOT_FOUND`
+  (`@kal-el/db` in the API, `zod` in the worker). The install is hoisted so a dependency of a
+  bundled workspace package that the app does not declare, such as `pg`, still resolves.
 - **Only the API image carries the migrations.** The worker cannot apply them. Keep
   `RUN_MIGRATIONS=true` on the API, or run migrations as a separate step.
 - **`NEXT_PUBLIC_API_BASE_URL` is baked into the CMS image at build time.** Changing the
