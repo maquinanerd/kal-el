@@ -4,20 +4,22 @@
 #
 #  - No `ports:`. Coolify's proxy (Traefik) routes each generated domain to the service
 #    port named in SERVICE_URL_<SERVICE>_<PORT>; nothing is published on the host.
-#  - No secret is typed or copied by anyone to deploy. POSTGRES password, SESSION_SECRET and
-#    BOOTSTRAP_TOKEN are Coolify "magic" variables: Coolify generates them once, stores them
-#    in the resource's environment and keeps them stable across deployments.
+#  - No secret is typed or copied by anyone to deploy. The POSTGRES password and
+#    SESSION_SECRET are Coolify "magic" variables: Coolify generates them once, stores them in
+#    the resource's environment and keeps them stable across deployments.
 #  - Before the first deployment, set both domains to https in the resource's Domains
 #    (the generated sslip.io names work; a real hostname needs its DNS record first).
 #    COOKIE_SECURE is mandatory in production, and the CMS cannot log anyone in over http.
 #
-# First run, once `api` is healthy:
-#   1. Create the first site and its owner with POST {API}/v1/bootstrap/init
-#      (header x-bootstrap-token: the BOOTSTRAP value shown in the resource's environment),
-#      or `pnpm bootstrap` — see scripts/bootstrap.ts. This creates an account: it is done by
-#      the person who will own it.
-#   2. Remove the BOOTSTRAP_TOKEN line below and redeploy. The route refuses once a user
-#      exists, but a credential that mints owners has no reason to stay in the environment.
+# BOOTSTRAP_TOKEN is empty by default, which disables POST /v1/bootstrap/init. On a new
+# install, and only until the first owner exists:
+#   1. In the resource's Environment Variables, set BOOTSTRAP_TOKEN to a random value
+#      (e.g. `${SERVICE_HEX_32_BOOTSTRAP}`, which Coolify then generates) and redeploy.
+#   2. Create the first site and its owner with POST {API}/v1/bootstrap/init
+#      (header x-bootstrap-token), or `pnpm bootstrap` — see scripts/bootstrap.ts. This
+#      creates an account: it is done by the person who will own it.
+#   3. Delete BOOTSTRAP_TOKEN again and redeploy. The route refuses once a user exists, but a
+#      credential that mints owners has no reason to stay in the environment.
 #
 # The web CMS bakes NEXT_PUBLIC_API_BASE_URL at build time: changing the API domain means
 # redeploying so `cms` is rebuilt.
@@ -50,7 +52,8 @@ services:
       # SERVICE_PASSWORD_* has no symbols, so it is safe inside the URL as it is.
       - DATABASE_URL=postgresql://kalel:${SERVICE_PASSWORD_POSTGRES}@db:5432/kalel
       - SESSION_SECRET=${SERVICE_BASE64_64_SESSION}
-      - BOOTSTRAP_TOKEN=${SERVICE_HEX_32_BOOTSTRAP}
+      # Empty unless set in Coolify for a new install (see the header): empty disables the route.
+      - BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN:-}
       - COOKIE_SECURE=true
       - RUN_MIGRATIONS=true
       - MIGRATIONS_FOLDER=/app/drizzle
