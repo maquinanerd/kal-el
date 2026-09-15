@@ -83,7 +83,10 @@ function registerCorePaths() {
     summary: "Human login",
     request: { body: { content: { "application/json": { schema: loginBodySchema } } } },
     responses: {
-      200: { description: "logged in", content: { "application/json": { schema: z.object({ data: z.object({ user: z.unknown() }) }) } } },
+      200: {
+        description: "logged in; the CSRF token is also returned in the body, for a client on another host than the API",
+        content: { "application/json": { schema: z.object({ data: z.object({ user: z.unknown(), csrfToken: z.string() }) }) } },
+      },
       401: { description: "bad credentials", content: { "application/json": { schema: apiErrorSchema } } },
     },
   });

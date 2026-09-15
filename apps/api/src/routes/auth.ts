@@ -43,6 +43,20 @@ function requireValidSession(req: FastifyRequest) {
   return resolved;
 }
 
+/**
+ * The session's CSRF token, for a client that cannot read the cookie itself.
+ *
+ * A CMS on another host than the API (`cms.example.com` calling `api.example.com`) never
+ * sees `ke_csrf` in `document.cookie`: the cookie belongs to the API's host. The browser
+ * still sends it with a credentialed request, so the API hands it back - only when it matches
+ * the session, so an arbitrary cookie value is never reflected. Reading the response takes
+ * CORS permission for the caller's origin, which only the CMS has.
+ */
+function echoedCsrfToken(req: FastifyRequest, csrfTokenHash: string): string | null {
+  const cookie = req.cookies?.[CSRF_COOKIE];
+  return typeof cookie === "string" && cookie.length > 0 && hashToken(cookie) === csrfTokenHash ? cookie : null;
+}
+
 function sessionCookieOptions(app: FastifyInstance) {
   const config = app.config;
   return {
@@ -96,6 +110,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
             expiresAt: session.expiresAt.toISOString(),
             createdAt: session.createdAt.toISOString(),
           },
+          // In the body as well as the cookie: a CMS served from another host than the API
+          // cannot read a cookie set on the API's host, and needs this for x-kal-el-csrf.
+          csrfToken: csrf,
         },
       };
     },
@@ -148,7 +165,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       return { data: { kind: "service", id: row.id, name: row.name, siteId: row.siteId, scopes: row.scopes } };
     }
     const resolved = requireValidSession(req);
-    return { data: { kind: "user", user: toUserDto(resolved.user), sessionId: resolved.session.id } };
+    return {
+      data: {
+        kind: "user",
+        user: toUserDto(resolved.user),
+        sessionId: resolved.session.id,
+        csrfToken: echoedCsrfToken(req, resolved.session.csrfTokenHash),
+      },
+    };
   });
 
   app.get("/v1/me/sites", async (req) => {
