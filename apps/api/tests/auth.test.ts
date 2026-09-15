@@ -69,6 +69,41 @@ describe("auth", () => {
     expect(res.json().data.user.email).toBe("owner@kalel.test");
   });
 
+  it("returns the CSRF token in the login body, equal to the ke_csrf cookie", async () => {
+    // A CMS on another host than the API cannot read that cookie; the body is how it learns
+    // the value for x-kal-el-csrf.
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { email: "owner@kalel.test", password: "super-secure-password-123" },
+    });
+    expect(res.statusCode).toBe(200);
+    const cookie = (res.cookies ?? []).find((c) => c.name === "ke_csrf");
+    expect(cookie?.value).toBeTruthy();
+    expect(res.json().data.csrfToken).toBe(cookie?.value);
+  });
+
+  it("hands the CSRF token back through /me only when the cookie matches the session", async () => {
+    const matching = await ctx.app.inject({
+      method: "GET",
+      url: "/v1/auth/me",
+      headers: { Cookie: `${session.cookieHeader}; ke_csrf=${session.csrf}` },
+    });
+    expect(matching.statusCode).toBe(200);
+    expect(matching.json().data.csrfToken).toBe(session.csrf);
+
+    // Never a reflection of whatever cookie value arrives.
+    const forged = await ctx.app.inject({
+      method: "GET",
+      url: "/v1/auth/me",
+      headers: { Cookie: `${session.cookieHeader}; ke_csrf=not-the-token-of-this-session` },
+    });
+    expect(forged.json().data.csrfToken).toBeNull();
+
+    const absent = await ctx.app.inject({ method: "GET", url: "/v1/auth/me", headers: { Cookie: session.cookieHeader } });
+    expect(absent.json().data.csrfToken).toBeNull();
+  });
+
   it("lists the sites the user belongs to via /me/sites", async () => {
     const res = await ctx.app.inject({
       method: "GET",

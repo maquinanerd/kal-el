@@ -1,7 +1,17 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ApiError, listMySites, login as apiLogin, logout as apiLogout, me as apiMe, type MeUser, type SiteInfo } from "./api";
+import {
+  ApiError,
+  forgetCsrfToken,
+  listMySites,
+  login as apiLogin,
+  logout as apiLogout,
+  me as apiMe,
+  rememberCsrfToken,
+  type MeUser,
+  type SiteInfo,
+} from "./api";
 
 type AuthContextValue = {
   user: MeUser | null;
@@ -26,11 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const [meRes, sitesRes] = await Promise.all([apiMe(), listMySites()]);
+      // After a reload this is the only source of the token when the API is on another host.
+      rememberCsrfToken(meRes.csrfToken);
       setUser(meRes.user);
       setSites(sitesRes);
       setActiveSiteId((prev) => prev ?? sitesRes[0]?.id ?? null);
       setError(null);
     } catch {
+      forgetCsrfToken();
       setUser(null);
       setSites([]);
       setActiveSiteId(null);
@@ -47,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string) => {
       setError(null);
       try {
-        await apiLogin(email, password);
+        const session = await apiLogin(email, password);
+        rememberCsrfToken(session.csrfToken);
         await refresh();
       } catch (err) {
         const message = err instanceof ApiError && err.status === 401 ? "Credenciais inválidas" : "Falha ao entrar";
@@ -62,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiLogout();
     } finally {
+      forgetCsrfToken();
       setUser(null);
       setSites([]);
       setActiveSiteId(null);

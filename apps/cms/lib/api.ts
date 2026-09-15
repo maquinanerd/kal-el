@@ -11,7 +11,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The CSRF token, taken from the API's responses and not only from `document.cookie`.
+ *
+ * When the CMS and the API are served from different hosts, `ke_csrf` belongs to the API's
+ * host and never appears in this page's `document.cookie`, so every state-changing request
+ * went out without `x-kal-el-csrf` and was refused. Login and `/v1/auth/me` return the token
+ * and it is kept here; the cookie remains the fallback for a same-host deployment.
+ */
+let rememberedCsrf = "";
+
+export function rememberCsrfToken(token: string | null | undefined): void {
+  if (token) rememberedCsrf = token;
+}
+
+export function forgetCsrfToken(): void {
+  rememberedCsrf = "";
+}
+
 function csrfToken(): string {
+  if (rememberedCsrf) return rememberedCsrf;
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ke_csrf=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : "";
@@ -39,7 +58,11 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
 }
 
 export type MeUser = { id: string; email: string; name: string; status: string };
-export type MeResponse = { kind: "user"; user: MeUser; sessionId: string };
+/**
+ * `csrfToken` comes back from login and from `/v1/auth/me`; `/me` answers null when it could
+ * not match the browser's `ke_csrf` cookie to the session.
+ */
+export type MeResponse = { kind: "user"; user: MeUser; sessionId: string; csrfToken?: string | null };
 export type SiteInfo = {
   id: string;
   slug: string;

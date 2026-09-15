@@ -64,8 +64,15 @@ Response:
 
 ```json
 { "data": { "user": { "id": "…", "email": "…", "name": "…", "status": "active" },
-            "session": { "id": "…", "userId": "…", "expiresAt": "…", "createdAt": "…" } } }
+            "session": { "id": "…", "userId": "…", "expiresAt": "…", "createdAt": "…" },
+            "csrfToken": "…" } }
 ```
+
+`csrfToken` is the value of `ke_csrf`. It is in the body because a client served from another
+host than the API — `cms.example.com` calling `api.example.com` — cannot read a cookie the API
+set on its own host. `GET /v1/auth/me` returns it too, taken from the `ke_csrf` cookie the
+browser sent and only when it matches the session (otherwise `null`), so a page reload does not
+need a new login. Reading either response requires CORS permission for the caller's origin.
 
 A disabled account is refused with `401 UNAUTHENTICATED` ("account is disabled"). Email is
 stored and compared lower-case, so capitalisation at signup cannot lock an account out.
